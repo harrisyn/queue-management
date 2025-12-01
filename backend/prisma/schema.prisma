@@ -1,0 +1,240 @@
+// Queue Management System - Database Schema
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["debian-openssl-3.0.x"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id        String     @id @default(uuid())
+  name      String
+  email     String?
+  phone     String?
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  locations Location[]
+  users     User[]
+}
+
+model Location {
+  id             String       @id @default(uuid())
+  organizationId String
+  name           String
+  address        String?
+  timezone       String       @default("UTC")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  services       Service[]
+  publicCode     String?       @unique
+}
+
+enum ServiceType {
+  INDIVIDUAL
+  GENERAL
+}
+
+model Service {
+  id              String        @id @default(uuid())
+  locationId      String
+  name            String
+  description     String?
+  type            ServiceType   @default(GENERAL)
+  slotDuration    Int           @default(15) // minutes
+  concurrentLimit Int           @default(1)
+  activeDays      String        @default("1,2,3,4,5") // Mon-Fri
+  startTime       String        @default("09:00")
+  endTime         String        @default("17:00")
+  isActive        Boolean       @default(true)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  location        Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  queues          Queue[]
+  practitioners   Practitioner[]
+  appointments    Appointment[]
+  flowsFrom       ServiceFlow[] @relation("FromService")
+  flowsTo         ServiceFlow[] @relation("ToService")
+}
+
+model Practitioner {
+  id        String   @id @default(uuid())
+  userId    String
+  serviceId String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service   Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, serviceId])
+}
+
+enum QueueStatus {
+  ACTIVE
+  PAUSED
+  CLOSED
+}
+
+model Queue {
+  id           String        @id @default(uuid())
+  serviceId    String
+  date         DateTime
+  status       QueueStatus   @default(ACTIVE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  service      Service       @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  slots        Slot[]
+  entries      QueueEntry[]
+  
+  @@unique([serviceId, date])
+}
+
+model Slot {
+  id           String        @id @default(uuid())
+  queueId      String
+  startTime    DateTime
+  endTime      DateTime
+  capacity     Int           @default(1)
+  bookedCount  Int           @default(0)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  queue        Queue         @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  appointments Appointment[]
+}
+
+enum EntryStatus {
+  WAITING
+  SERVING
+  SERVED
+  CANCELLED
+  NO_SHOW
+}
+
+model QueueEntry {
+  id           String      @id @default(uuid())
+  queueId      String
+  userId       String
+  ticketNumber String
+  status       EntryStatus @default(WAITING)
+  priority     Int         @default(0)
+  joinedAt     DateTime    @default(now())
+  calledAt     DateTime?
+  servedAt     DateTime?
+  completedAt  DateTime?
+  notes        String?
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+  queue        Queue       @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([queueId, status])
+  @@index([userId])
+}
+
+model ServiceFlow {
+  id            String   @id @default(uuid())
+  fromServiceId String
+  toServiceId   String
+  condition     String?  // JSON condition for when to auto-transition
+  autoTransfer  Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  fromService   Service  @relation("FromService", fields: [fromServiceId], references: [id], onDelete: Cascade)
+  toService     Service  @relation("ToService", fields: [toServiceId], references: [id], onDelete: Cascade)
+  
+  @@unique([fromServiceId, toServiceId])
+}
+
+model Appointment {
+  id            String    @id @default(uuid())
+  userId        String
+  serviceId     String
+  slotId        String
+  createdBy     String
+  status        String    @default("SCHEDULED") // SCHEDULED, CONFIRMED, CANCELLED, COMPLETED
+  rescheduledAt DateTime?
+  notes         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  service       Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  slot          Slot      @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  creator       User      @relation("CreatedAppointments", fields: [createdBy], references: [id])
+  
+  @@index([userId])
+  @@index([serviceId])
+}
+
+enum UserRole {
+  SUPER_ADMIN
+  ORG_ADMIN
+  LOCATION_ADMIN
+  SERVICE_STAFF
+  RECEPTIONIST
+  PATIENT
+}
+
+model User {
+  id                    String          @id @default(uuid())
+  organizationId        String?
+  email                 String          @unique
+  password              String
+  firstName             String
+  lastName              String
+  phone                 String?
+  role                  UserRole        @default(PATIENT)
+  isActive              Boolean         @default(true)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  organization          Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  queueEntries          QueueEntry[]
+  appointments          Appointment[]
+  createdAppointments   Appointment[]   @relation("CreatedAppointments")
+  practitioners         Practitioner[]
+  notifications         Notification[]
+}
+
+enum NotificationType {
+  QUEUE_JOINED
+  TURN_APPROACHING
+  NOW_SERVING
+  APPOINTMENT_REMINDER
+  APPOINTMENT_CANCELLED
+}
+
+enum NotificationChannel {
+  EMAIL
+  SMS
+  PUSH
+  IN_APP
+}
+
+model Notification {
+  id        String              @id @default(uuid())
+  userId    String
+  type      NotificationType
+  channel   NotificationChannel
+  message   String
+  sentAt    DateTime            @default(now())
+  readAt    DateTime?
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId, readAt])
+}
+
+model Invite {
+  id            String    @id @default(uuid())
+  code          String    @unique
+  role          UserRole  @default(SERVICE_STAFF)
+  organizationId String?
+  createdBy     String?
+  used          Boolean   @default(false)
+  expiresAt     DateTime?
+  createdAt     DateTime  @default(now())
+
+  @@index([organizationId])
+}

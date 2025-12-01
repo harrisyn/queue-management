@@ -1,0 +1,63 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: qms-redis
+    ports:
+      - "6380:6379"
+    networks:
+      - qms-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    container_name: qms-backend
+    environment:
+      PORT: 9000
+      # Default to the host Postgres (use host.docker.internal -> host port 5432)
+      # In production override DATABASE_URL in environment or .env
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/postgres}
+      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      REDIS_URL: redis://redis:6379
+      FRONTEND_URL: http://localhost:8003
+    ports:
+      - "8004:9000"
+    depends_on:
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - qms-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    container_name: qms-frontend
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:8004/api/v1
+      NEXT_PUBLIC_SOCKET_URL: http://localhost:8004
+      NODE_ENV: development
+      HOST: 0.0.0.0
+    # Mount local sources for development so changes are reflected immediately
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: sh -c "npm install --silent && npm run dev -- -p 3000 -H 0.0.0.0"
+    ports:
+      - "8003:3000"
+    depends_on:
+      - backend
+    networks:
+      - qms-network
+
+networks:
+  qms-network:
+    driver: bridge

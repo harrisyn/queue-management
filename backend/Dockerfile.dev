@@ -1,0 +1,20 @@
+FROM node:20-slim
+
+WORKDIR /app
+
+# Install lightweight runtime tooling
+RUN apt-get update && apt-get install -y openssl libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Copy package files and install dependencies (faster cached installs)
+COPY package.json package-lock.json* ./
+RUN npm install --silent
+
+# Copy source (overridden by docker-compose volume in dev)
+COPY . .
+
+ENV NODE_ENV=development
+
+EXPOSE 9000
+
+# Run migrations then start dev server (ts-node-dev) for hot reload
+CMD ["/bin/sh", "-c", "npx prisma migrate deploy || true && npm run dev"]

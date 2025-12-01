@@ -1,0 +1,18 @@
+FROM node:20-alpine
+
+WORKDIR /app
+
+# Install dependencies (use cached layer for dev iteration)
+COPY package.json package-lock.json* ./
+RUN npm install --silent
+
+# Copy everything (will be overridden by docker-compose volume in dev)
+COPY . .
+
+ENV NODE_ENV=development
+ENV NEXT_TELEMETRY_DISABLED=1
+
+EXPOSE 3000
+
+# Start dev server with host 0.0.0.0 so container is reachable
+CMD ["sh", "-c", "npm run dev -- -p 3000 -H 0.0.0.0"]

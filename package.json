@@ -1,0 +1,21 @@
+{
+  "name": "queue-management-system",
+  "version": "1.0.0",
+  "description": "Multi-tenant Queue Management System",
+  "scripts": {
+    "setup": "node INIT_SYSTEM_NOW.js",
+    "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install",
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build": "cd backend && npm run build && cd ../frontend && npm run build",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "keywords": [
+    "queue",
+    "management",
+    "healthcare"
+  ],
+  "author": "",
+  "license": "MIT"
+}
