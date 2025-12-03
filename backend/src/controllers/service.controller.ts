@@ -182,3 +182,60 @@ export const getServiceFlows = async (req: Request, res: Response, next: NextFun
     next(error);
   }
 };
+
+// Public endpoint: Get services for a location (for public kiosk/tablet view)
+export const getPublicLocationServices = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { orgId, locationId } = req.params;
+
+    // Verify location belongs to organization
+    const location = await prisma.location.findFirst({
+      where: {
+        id: locationId,
+        organizationId: orgId,
+      },
+      include: {
+        organization: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+
+    if (!location) {
+      return res.status(404).json({ error: 'Location not found' });
+    }
+
+    // Get active services with queue requirements
+    const services = await prisma.service.findMany({
+      where: {
+        locationId,
+        isActive: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        type: true,
+        slotDuration: true,
+        startTime: true,
+        endTime: true,
+        requiresName: true,
+        requiresPhone: true,
+        allowAnonymous: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    res.json({
+      location: {
+        id: location.id,
+        name: location.name,
+        address: location.address,
+      },
+      organization: location.organization,
+      services,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

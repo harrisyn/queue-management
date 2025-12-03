@@ -10,16 +10,15 @@ Multi-tenant queue management system with **Express.js + Prisma backend** and **
 
 **Event-driven updates**: Backend emits Socket.IO events to room-based channels (`queue:${id}`, `user:${id}`, `service:${id}`, `location:${id}`). Frontend hooks subscribe using `useSocket()`. See `backend/src/lib/socket.ts` for event constants.
 
-**Public vs operator flows**: 
-- **Operators** register via `/auth/register` with invite codes, manage queues via authenticated APIs
-- **Patients** join anonymously via `/join/[publicCode]` pages (no registration required)
-- Locations have optional `publicCode` for patient-facing queue joins
+**Two distinct user flows**:
+- **Operators/Staff** register via `/auth/register` with invite codes, log in at `/login`, manage queues via authenticated APIs. Dashboard shows role-based navigation.
+- **Patients/Customers** join queues anonymously via `/join/[publicCode]` pages — **no login required**. They receive a ticket number and can track status.
 
 ### Core Domain Model
 
 ```
 Organization (tenant root)
-└── Location (physical branch, has optional publicCode)
+└── Location (physical branch, has optional publicCode for patient access)
     └── Service (defines queue type: INDIVIDUAL/GENERAL)
         ├── Queue (daily instance with slots)
         │   ├── Slot (time windows)
@@ -30,41 +29,99 @@ Organization (tenant root)
 
 **Queue lifecycle**: Created daily per service. Slots auto-generated from `Service.{startTime, endTime, slotDuration}`. Entries track status: `WAITING → SERVING → SERVED` (see `EntryStatus` enum).
 
-**User roles** (`backend/prisma/schema.prisma`): `SUPER_ADMIN`, `ORG_ADMIN`, `LOCATION_ADMIN`, `SERVICE_STAFF`, `RECEPTIONIST`, `PATIENT`. Auth middleware in `backend/src/middleware/auth.middleware.ts` uses `authenticate()` + `authorize(...roles)`.
+**User roles** (`backend/prisma/schema.prisma`): `SUPER_ADMIN`, `ORG_ADMIN`, `LOCATION_ADMIN`, `SERVICE_STAFF`, `RECEPTIONIST`, `PATIENT`. Auth middleware uses `authenticate()` + `authorize(...roles)`.
 
 ## Development Workflow
 
+> **IMPORTANT**: This project runs in Docker containers. All `npm`, `npx`, and `prisma` commands should be executed **inside the containers**, not on the host machine. Running commands locally may use different package versions and cause errors.
+
 **Setup & Run**:
 ```bash
-# Full Docker dev environment (hot-reload enabled)
+# Full Docker dev environment (hot-reload enabled) - THIS IS THE PRIMARY WORKFLOW
 docker-compose up -d --build
 
-# Or manual backend setup
-cd backend && npm install
-npm run prisma:generate && npm run prisma:migrate
-npm run dev  # Starts on :9000
-
-# Frontend
-cd frontend && npm install && npm run dev  # Starts on :3000
+# Containers expose:
+#   - Frontend: http://localhost:8003 (Next.js)
+#   - Backend: http://localhost:8004 (Express API)
+#   - Mailpit: http://localhost:8025 (Email testing UI)
+#   - Redis: localhost:6380
 ```
 
-**Exposed ports** (Docker): Frontend `:8003`, Backend `:8004`, Redis `:6380`. Backend expects Postgres at `host.docker.internal:5432` by default.
+**Executing Commands Inside Containers**:
+```bash
+# Backend container commands (prisma, npm, etc.)
+docker-compose exec backend npm run prisma:generate
+docker-compose exec backend npm run prisma:migrate
+docker-compose exec backend npx prisma migrate dev --name <migration_name>
+docker-compose exec backend npx prisma studio
+docker-compose exec backend npm install <package>
 
-**Database migrations**: Always run `npm run prisma:migrate` after schema changes. Use `npx prisma studio` to inspect data.
+# Frontend container commands
+docker-compose exec frontend npm install <package>
+docker-compose exec frontend npm run build
 
-## Critical Conventions
+# View logs
+docker-compose logs -f backend
+docker-compose logs -f frontend
+```
 
-**Socket.IO rooms**: Backend uses prefixed room names (`queue:${id}`, `user:${id}`, etc.). Frontend must join rooms via `socket.emit('join:queue', queueId)` before receiving updates. See `backend/src/index.ts` lines 60-85.
+**Database migrations**: Run inside the backend container:
+```bash
+docker-compose exec backend npx prisma migrate dev --name <description>
+```
 
-**Ticket generation** (`backend/src/utils/ticket.ts`): Format is `${PREFIX}${SEQUENCE}` (e.g., `A001`). Sequence increments per queue per day. QR data is JSON-encoded entry metadata.
+**Do NOT run locally** (will fail due to version mismatches):
+```bash
+# ❌ WRONG - runs with host's package versions
+cd backend && npx prisma migrate dev
 
-**Date handling** (`backend/src/utils/date.ts`): Queues use `getStartOfDay()` for date normalization. Slot generation via `generateTimeSlots()` creates non-overlapping windows. Services have `activeDays` as comma-separated weekday numbers (0=Sunday).
+# ✅ CORRECT - runs inside container with correct versions
+docker-compose exec backend npx prisma migrate dev
+```
 
-**API structure**: Controllers in `backend/src/controllers/`, routes in `backend/src/routes/`. All routes prefixed with `/api/v1`. Public endpoints (e.g., `/public/locations`) bypass auth.
+## API Structure
 
-**Frontend API client** (`frontend/src/api/client.ts`): Axios instance with auto-token injection. Token stored in `localStorage`. 401 responses trigger redirect to `/login`.
+**Authenticated endpoints** (require JWT token):
+- `/api/v1/orgs`, `/api/v1/locations`, `/api/v1/services`, `/api/v1/queues` - CRUD operations
+- `/api/v1/invites` - Create/list operator invite codes (admin only)
 
-**Error handling**: Use `next(error)` in controllers to pass to `backend/src/middleware/error.middleware.ts`. Frontend expects `{ error: string }` response format.
+**Public endpoints** (no auth required):
+- `GET /api/v1/public/locations` - List locations with public join codes
+- `GET /api/v1/public/locations/:code` - Get location details by public code
+- `POST /api/v1/public/join` - Join queue anonymously `{ serviceId, name, phone?, notes? }`
+- `GET /api/v1/public/status/:queueId/:entryId` - Get real-time queue position and status
+
+## Frontend Page Structure
+
+| Route | Access | Purpose |
+|-------|--------|---------|
+| `/login` | Public | Operator/staff login |
+| `/register` | Public | Operator registration (requires invite code) |
+| `/` | Authenticated | Dashboard with role-based quick actions |
+| `/queues` | Staff+ | Queue management, call next, serve customers |
+| `/services` | Admin | Configure services and schedules |
+| `/admin/locations` | Admin | Manage locations, assign public codes |
+| `/admin/invites` | Admin | Create invite codes for operators |
+| `/analytics` | Admin | Usage metrics and reports |
+| `/locations` | Public | Browse public locations |
+| `/join/[code]` | Public | Anonymous queue join flow for patients |
+| `/status/[queueId]/[entryId]` | Public | Real-time position tracking with notifications |
+
+## Patient Flow (Public, No Auth)
+
+1. **Browse Locations**: Visit `/locations` to see available locations with public codes
+2. **Join Queue**: Navigate to `/join/[publicCode]`, select service, enter name
+3. **Get Ticket**: Receive ticket number, position, and estimated wait time
+4. **Track Status**: Auto-redirect to `/status/[queueId]/[entryId]` for real-time updates
+5. **Get Notified**: Enable browser notifications and audio alerts when position changes
+6. **Share Ticket**: Use QR code or share link to access ticket from another device
+
+**Status page features**:
+- Real-time updates via Socket.IO (falls back to 30s polling)
+- Browser notifications when position improves or called
+- Audio alerts when position ≤3 or called
+- QR code for easy sharing
+- Visual progress ring showing position in queue
 
 ## Real-Time Communication
 
@@ -83,31 +140,27 @@ useEffect(() => {
 }, [queueId]);
 ```
 
-## Service Flows
+## Critical Conventions
 
-**Auto-transitions**: `ServiceFlow` model defines chains (e.g., Reception → Doctor → Lab). When entry marked `SERVED`, controller checks `flowsFrom` relations and optionally creates new entry in target service. See `backend/src/controllers/queue.controller.ts` `completeAndTransition()`.
+**Ticket generation** (`backend/src/utils/ticket.ts`): Format is `${PREFIX}${SEQUENCE}` (e.g., `A001`). Sequence increments per queue per day.
 
-## Testing & Debugging
+**Date handling** (`backend/src/utils/date.ts`): Queues use `getStartOfDay()` for date normalization. Services have `activeDays` as comma-separated weekday numbers (0=Sunday).
 
-**Health check**: `GET /health` returns `{ status: 'OK', timestamp, version }`.
+**Guest users**: When patients join via `/public/join`, a guest user is created with email `guest_xxx@guest.qms.local` and role `PATIENT`.
 
-**Smoke tests**: `tests/smoke-test.js` validates basic API functionality.
-
-**Common issues**:
-- Socket not receiving updates → Check room join event was emitted
-- 401 errors → Verify JWT_SECRET matches across containers
-- Prisma client errors → Regenerate client after schema changes
-- Slot booking conflicts → Check `concurrentLimit` and `bookedCount` logic
+**Auth flow**: Frontend stores JWT in `localStorage`. API client in `frontend/src/api/client.ts` auto-injects token. 401 responses redirect to `/login`.
 
 ## Key Files
 
-- `backend/src/index.ts` - Server entry, Socket.IO setup
+- `backend/src/index.ts` - Server entry, Socket.IO room handlers
 - `backend/prisma/schema.prisma` - Database schema, enums, relations
-- `backend/src/lib/socket.ts` - Socket utilities, event constants
-- `backend/src/controllers/queue.controller.ts` - Queue operations (580 lines, handles join/call/serve)
-- `frontend/src/api/client.ts` - API client with auth interceptors
+- `backend/src/routes/index.ts` - Route registration, public endpoints
+- `backend/src/controllers/queue.controller.ts` - Queue operations including `publicJoinQueue`, `getPublicStatus`
+- `frontend/src/api/client.ts` - API client with auth interceptors and public methods
 - `frontend/src/hooks/useSocket.ts` - WebSocket hook for real-time updates
-- `docker-compose.yml` - Dev environment (uses `.dev` Dockerfiles for hot-reload)
+- `frontend/src/components/Layout.tsx` - Main layout with role-based navigation
+- `frontend/src/app/join/[code]/page.tsx` - Public queue join flow
+- `frontend/src/app/status/[queueId]/[entryId]/page.tsx` - Real-time position tracking with notifications
 
 ## Environment Variables
 

@@ -21,18 +21,38 @@ services:
       PORT: 9000
       # Default to the host Postgres (use host.docker.internal -> host port 5432)
       # In production override DATABASE_URL in environment or .env
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/postgres}
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/qms_db}
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: http://localhost:8003
+      # Enable polling for file changes in Docker
+      CHOKIDAR_USEPOLLING: "true"
+      # SMTP settings — by default point to the Mailpit service in this compose setup
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_FROM: ${SMTP_FROM:-"\"QMS\" <noreply@qms.local>"}
     ports:
       - "8004:9000"
     depends_on:
       redis:
         condition: service_healthy
     volumes:
-      - ./backend:/app
-      - /app/node_modules
+      - ./backend/src:/app/src
+      - ./backend/prisma:/app/prisma
+      - ./backend/package.json:/app/package.json
+    networks:
+      - qms-network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: qms-mailpit
+    # SMTP (1025) and web UI (8025) exported for local testing
+    ports:
+      - "1025:1025" # SMTP (in container and exposed to host)
+      - "8025:8025" # Web UI
+    volumes:
+      - mailpit_data:/data
     networks:
       - qms-network
 
@@ -46,11 +66,16 @@ services:
       NEXT_PUBLIC_SOCKET_URL: http://localhost:8004
       NODE_ENV: development
       HOST: 0.0.0.0
+      # Enable polling for file changes in Docker (needed for Windows/Mac)
+      WATCHPACK_POLLING: "true"
+      CHOKIDAR_USEPOLLING: "true"
     # Mount local sources for development so changes are reflected immediately
     volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: sh -c "npm install --silent && npm run dev -- -p 3000 -H 0.0.0.0"
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/package.json:/app/package.json
+      - ./frontend/next.config.ts:/app/next.config.ts
+      - ./frontend/tsconfig.json:/app/tsconfig.json
     ports:
       - "8003:3000"
     depends_on:
@@ -61,3 +86,7 @@ services:
 networks:
   qms-network:
     driver: bridge
+
+volumes:
+  mailpit_data:
+    driver: local

@@ -26,9 +26,13 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { href: '/queues', label: 'Queues', icon: QueueIcon, show: isStaff },
     { href: '/services', label: 'Services', icon: ServicesIcon, show: isAdmin },
     { href: '/admin/locations', label: 'Locations', icon: LocationIcon, show: isAdmin },
-    { href: '/admin/invites', label: 'Invites', icon: AnalyticsIcon, show: isAdmin },
+    { href: '/admin/service-points', label: 'Service Points', icon: ServicePointIcon, show: isAdmin },
+    { href: '/admin/flow-designer', label: 'Flow Designer', icon: FlowIcon, show: isAdmin },
+    { href: '/admin/qr', label: 'QR Codes', icon: QRCodeIcon, show: isAdmin },
+    { href: '/admin/invites', label: 'Invites', icon: InviteIcon, show: isAdmin },
+    { href: '/admin/data-sources', label: 'Data Sources', icon: DataSourceIcon, show: isAdmin },
+    { href: '/admin/settings', label: 'Settings', icon: SettingsIcon, show: isAdmin },
     { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon, show: isAdmin },
-    { href: '/my-queue', label: 'My Queue', icon: TicketIcon, show: true },
   ].filter(item => item.show);
 
   const isActive = (href: string) => pathname === href;
@@ -195,6 +199,46 @@ const LocationIcon = ({ active }: { active: boolean }) => (
 const AnalyticsIcon = ({ active }: { active: boolean }) => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
     <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
+  </svg>
+);
+
+const QRCodeIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1z" clipRule="evenodd" />
+    <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100 2 1 1 0 000-2zM9 13a1 1 0 011-1h1a1 1 0 110 2v2a1 1 0 11-2 0v-3zM16 13a1 1 0 100 2h1a1 1 0 100-2h-1z" />
+  </svg>
+);
+
+const InviteIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+  </svg>
+);
+
+const DataSourceIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+    <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
+    <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
+    <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
+  </svg>
+);
+
+const SettingsIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+    <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+  </svg>
+);
+
+const ServicePointIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
+  </svg>
+);
+
+const FlowIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+    <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 100 2h.01a1 1 0 100-2H10zm-4 1a1 1 0 011-1h.01a1 1 0 110 2H7a1 1 0 01-1-1zm1-4a1 1 0 100 2h.01a1 1 0 100-2H7zm2 1a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm4-4a1 1 0 100 2h.01a1 1 0 100-2H13zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zM7 8a1 1 0 000 2h.01a1 1 0 000-2H7z" clipRule="evenodd" />
   </svg>
 );
 

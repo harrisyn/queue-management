@@ -10,27 +10,86 @@ datasource db {
 }
 
 model Organization {
-  id        String     @id @default(uuid())
-  name      String
-  email     String?
-  phone     String?
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
-  locations Location[]
-  users     User[]
+  id                    String         @id @default(uuid())
+  name                  String
+  slug                  String?        @unique
+  email                 String?
+  phone                 String?
+  // Customer identity settings - JSON with field requirements
+  identityFieldsConfig  Json?          // {mrNumber: {required: true, label: "MR Number"}, ...}
+  // Display settings for queues
+  defaultDisplayMode    String         @default("TICKET_ONLY") // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  locations             Location[]
+  users                 User[]
+  dataSources           DataSource[]
 }
 
 model Location {
-  id             String       @id @default(uuid())
-  organizationId String
-  name           String
-  address        String?
-  timezone       String       @default("UTC")
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  services       Service[]
-  publicCode     String?       @unique
+  id                String         @id @default(uuid())
+  organizationId    String
+  name              String
+  address           String?
+  timezone          String         @default("UTC")
+  externalReference String?        // External system reference ID
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+  organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  services          Service[]
+  servicePoints     ServicePoint[]
+  publicCode        String?        @unique
+}
+
+enum ServicePointType {
+  RECEPTION
+  TRIAGE
+  CONSULTATION
+  CASHIER
+  PHARMACY
+  LAB
+  IMAGING
+  OTHER
+}
+
+model ServicePoint {
+  id          String           @id @default(uuid())
+  locationId  String
+  name        String           // e.g., "Reception Desk 1", "Consultation Room A"
+  displayName String?          // Friendly name for display boards
+  type        ServicePointType @default(OTHER)
+  isActive    Boolean          @default(true)
+  capacity    Int              @default(1) // How many can be served at once
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  location    Location         @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  entries     QueueEntry[]     // Currently serving entries
+  services    ServicePointService[] // Services this point can handle
+
+  @@index([locationId, isActive])
+}
+
+// Many-to-many relation between ServicePoints and Services
+// Also tracks when an operator activates a service point for a service
+model ServicePointService {
+  id                  String       @id @default(uuid())
+  servicePointId      String
+  serviceId           String
+  isActive            Boolean      @default(true)
+  capacity            Int?         // Override capacity for this service (if null, uses servicePoint.capacity)
+  // Activation tracking - when an operator "sits at" a desk for this service
+  isOccupied          Boolean      @default(false)
+  activatedByUserId   String?
+  activatedAt         DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+  servicePoint        ServicePoint @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  service             Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  activatedBy         User?        @relation("ActivatedServicePoints", fields: [activatedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([servicePointId, serviceId])
+  @@index([serviceId])
+  @@index([activatedByUserId])
 }
 
 enum ServiceType {
@@ -50,6 +109,12 @@ model Service {
   startTime       String        @default("09:00")
   endTime         String        @default("17:00")
   isActive        Boolean       @default(true)
+  // Queue requirements for public ticket generation
+  requiresName    Boolean       @default(true)
+  requiresPhone   Boolean       @default(false)
+  allowAnonymous  Boolean       @default(false)  // If true, can get ticket without any info
+  // Display settings for this service's queue
+  displayMode     String?       // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO (null = use org default)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
   location        Location      @relation(fields: [locationId], references: [id], onDelete: Cascade)
@@ -58,6 +123,7 @@ model Service {
   appointments    Appointment[]
   flowsFrom       ServiceFlow[] @relation("FromService")
   flowsTo         ServiceFlow[] @relation("ToService")
+  servicePoints   ServicePointService[] // Service points that can handle this service
 }
 
 model Practitioner {
@@ -115,38 +181,54 @@ enum EntryStatus {
 }
 
 model QueueEntry {
-  id           String      @id @default(uuid())
-  queueId      String
-  userId       String
-  ticketNumber String
-  status       EntryStatus @default(WAITING)
-  priority     Int         @default(0)
-  joinedAt     DateTime    @default(now())
-  calledAt     DateTime?
-  servedAt     DateTime?
-  completedAt  DateTime?
-  notes        String?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
-  queue        Queue       @relation(fields: [queueId], references: [id], onDelete: Cascade)
-  user         User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id              String        @id @default(uuid())
+  queueId         String
+  userId          String
+  ticketNumber    String
+  status          EntryStatus   @default(WAITING)
+  priority        Int           @default(0)
+  sortOrder       Int           @default(0)    // For drag-and-drop reordering
+  servicePointId  String?                      // Which service point is serving this entry
+  sessionId       String?                      // Session ID for public users to track their tickets
+  journeyId       String?                      // Link to customer journey for cross-queue tracking
+  // Previous queue entry ID if transferred from another service
+  previousEntryId String?
+  joinedAt        DateTime      @default(now())
+  calledAt        DateTime?
+  servedAt        DateTime?
+  completedAt     DateTime?
+  serviceDuration Int?                         // Actual service duration in minutes (for historical data)
+  // Wait time before being called (minutes)
+  waitDuration    Int?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  queue           Queue         @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  servicePoint    ServicePoint? @relation(fields: [servicePointId], references: [id])
   
   @@index([queueId, status])
   @@index([userId])
+  @@index([sessionId])
+  @@index([journeyId])
 }
 
 model ServiceFlow {
   id            String   @id @default(uuid())
   fromServiceId String
   toServiceId   String
-  condition     String?  // JSON condition for when to auto-transition
+  priority      Int      @default(0)    // Order in the flow (lower = earlier in sequence)
+  displayName   String?                 // Optional name for this flow step
+  condition     String?                 // JSON condition for when to auto-transition
   autoTransfer  Boolean  @default(false)
+  isRequired    Boolean  @default(false) // If true, patient must go through this step
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
   fromService   Service  @relation("FromService", fields: [fromServiceId], references: [id], onDelete: Cascade)
   toService     Service  @relation("ToService", fields: [toServiceId], references: [id], onDelete: Cascade)
   
   @@unique([fromServiceId, toServiceId])
+  @@index([fromServiceId, priority])
 }
 
 model Appointment {
@@ -188,6 +270,10 @@ model User {
   phone                 String?
   role                  UserRole        @default(PATIENT)
   isActive              Boolean         @default(true)
+  // Extended identity fields stored as JSON
+  identityData          Json?           // {mrNumber: "12345", idNumber: "ABC123", ...}
+  // Browser fingerprint for session tracking (for anonymous users)
+  browserFingerprint    String?
   createdAt             DateTime        @default(now())
   updatedAt             DateTime        @updatedAt
   organization          Organization?   @relation(fields: [organizationId], references: [id], onDelete: SetNull)
@@ -196,6 +282,10 @@ model User {
   createdAppointments   Appointment[]   @relation("CreatedAppointments")
   practitioners         Practitioner[]
   notifications         Notification[]
+  activatedServicePoints ServicePointService[] @relation("ActivatedServicePoints")
+  journeys              CustomerJourney[]
+  
+  @@index([browserFingerprint])
 }
 
 enum NotificationType {
@@ -237,4 +327,68 @@ model Invite {
   createdAt     DateTime  @default(now())
 
   @@index([organizationId])
+}
+
+// Data sources for external customer data integration
+enum DataSourceType {
+  API
+  DATABASE
+  WEBHOOK
+}
+
+model DataSource {
+  id              String         @id @default(uuid())
+  organizationId  String
+  name            String
+  description     String?
+  type            DataSourceType
+  // Connection details stored as JSON
+  config          Json           // {url, headers, auth, queryParams, dbConnection, etc}
+  isActive        Boolean        @default(true)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  fieldMappings   FieldMapping[]
+  
+  @@index([organizationId])
+}
+
+// Maps data source response fields to User identity fields
+model FieldMapping {
+  id            String     @id @default(uuid())
+  dataSourceId  String
+  // Source field path in response (e.g., "data.patient.mrNumber")
+  sourcePath    String
+  // Target field in User.identityData (e.g., "mrNumber")
+  targetField   String
+  // Optional transformation function name
+  transform     String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  dataSource    DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+  
+  @@index([dataSourceId])
+}
+
+// Tracks customer journey across multiple queues
+model CustomerJourney {
+  id              String    @id @default(uuid())
+  userId          String
+  // Total time spent across all queues in this journey (minutes)
+  totalDuration   Int?
+  // Journey start (first queue entry)
+  startedAt       DateTime  @default(now())
+  // Journey end (last queue completion)
+  completedAt     DateTime?
+  // Array of queue entry IDs in order
+  queueEntryIds   String[]
+  // Journey metadata
+  metadata        Json?     // {referralSource, initialService, etc}
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@index([userId])
+  @@index([startedAt])
+  @@index([completedAt])
 }

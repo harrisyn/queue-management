@@ -271,3 +271,219 @@ export const getPeakHoursAnalysis = async (req: Request, res: Response, next: Ne
     next(error);
   }
 };
+
+// Detailed location analytics with turnaround time and journey metrics
+export const getDetailedLocationMetrics = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { locationId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    const start = startDate ? getStartOfDay(new Date(startDate as string)) : getStartOfDay(new Date());
+    const end = endDate ? getEndOfDay(new Date(endDate as string)) : getEndOfDay(new Date());
+
+    // Get all services at this location
+    const services = await prisma.service.findMany({
+      where: { locationId },
+      include: {
+        queues: {
+          where: { date: { gte: start, lte: end } },
+          include: {
+            entries: {
+              include: {
+                user: { select: { id: true, firstName: true, lastName: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    // Calculate detailed metrics per service
+    const serviceMetrics = services.map(service => {
+      const allEntries = service.queues.flatMap(q => q.entries);
+      const served = allEntries.filter(e => e.status === 'SERVED');
+      const waiting = allEntries.filter(e => e.status === 'WAITING');
+      const serving = allEntries.filter(e => e.status === 'SERVING');
+      const noShows = allEntries.filter(e => e.status === 'NO_SHOW');
+      const cancelled = allEntries.filter(e => e.status === 'CANCELLED');
+
+      // Calculate wait times
+      const waitTimes = served.map(entry => {
+        if (entry.calledAt && entry.joinedAt) {
+          return (entry.calledAt.getTime() - entry.joinedAt.getTime()) / 60000;
+        }
+        return null;
+      }).filter((t): t is number => t !== null);
+
+      // Calculate service/turnaround times
+      const serviceTimes = served.map(entry => {
+        if (entry.completedAt && entry.calledAt) {
+          return (entry.completedAt.getTime() - entry.calledAt.getTime()) / 60000;
+        }
+        return null;
+      }).filter((t): t is number => t !== null);
+
+      // Total turnaround (join to complete)
+      const turnaroundTimes = served.map(entry => {
+        if (entry.completedAt && entry.joinedAt) {
+          return (entry.completedAt.getTime() - entry.joinedAt.getTime()) / 60000;
+        }
+        return null;
+      }).filter((t): t is number => t !== null);
+
+      const avgWait = waitTimes.length > 0 ? Math.round(waitTimes.reduce((a, b) => a + b, 0) / waitTimes.length) : 0;
+      const maxWait = waitTimes.length > 0 ? Math.round(Math.max(...waitTimes)) : 0;
+      const minWait = waitTimes.length > 0 ? Math.round(Math.min(...waitTimes)) : 0;
+      
+      const avgService = serviceTimes.length > 0 ? Math.round(serviceTimes.reduce((a, b) => a + b, 0) / serviceTimes.length) : 0;
+      const avgTurnaround = turnaroundTimes.length > 0 ? Math.round(turnaroundTimes.reduce((a, b) => a + b, 0) / turnaroundTimes.length) : 0;
+
+      return {
+        serviceId: service.id,
+        serviceName: service.name,
+        counts: {
+          total: allEntries.length,
+          served: served.length,
+          waiting: waiting.length,
+          serving: serving.length,
+          noShows: noShows.length,
+          cancelled: cancelled.length,
+        },
+        waitTime: {
+          average: avgWait,
+          longest: maxWait,
+          shortest: minWait,
+        },
+        serviceTime: {
+          average: avgService,
+        },
+        turnaroundTime: {
+          average: avgTurnaround,
+        },
+        completionRate: allEntries.length > 0 ? Math.round((served.length / allEntries.length) * 100) : 0,
+        noShowRate: allEntries.length > 0 ? Math.round((noShows.length / allEntries.length) * 100) : 0,
+      };
+    });
+
+    // Calculate location-wide totals
+    const totals = serviceMetrics.reduce((acc, s) => ({
+      total: acc.total + s.counts.total,
+      served: acc.served + s.counts.served,
+      waiting: acc.waiting + s.counts.waiting,
+      serving: acc.serving + s.counts.serving,
+      noShows: acc.noShows + s.counts.noShows,
+    }), { total: 0, served: 0, waiting: 0, serving: 0, noShows: 0 });
+
+    // Get longest wait currently
+    const allCurrentWaiting = services.flatMap(s => 
+      s.queues.flatMap(q => 
+        q.entries.filter(e => e.status === 'WAITING')
+      )
+    );
+    const longestCurrentWait = allCurrentWaiting.length > 0 
+      ? Math.round(Math.max(...allCurrentWaiting.map(e => (Date.now() - e.joinedAt.getTime()) / 60000)))
+      : 0;
+
+    res.json({
+      locationId,
+      period: { start, end },
+      services: serviceMetrics,
+      totals,
+      longestCurrentWait,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Journey analytics - track patient movement across services
+export const getJourneyAnalytics = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { locationId } = req.params;
+    const { startDate, endDate } = req.query;
+
+    const start = startDate ? getStartOfDay(new Date(startDate as string)) : getStartOfDay(new Date());
+    const end = endDate ? getEndOfDay(new Date(endDate as string)) : getEndOfDay(new Date());
+
+    // Get customer journeys for this location
+    const journeys = await prisma.customerJourney.findMany({
+      where: {
+        startedAt: { gte: start, lte: end },
+        user: {
+          queueEntries: {
+            some: {
+              queue: {
+                service: { locationId },
+              },
+            },
+          },
+        },
+      },
+      include: {
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    // Get entries that have previousEntryId (transfers between services)
+    const transferredEntries = await prisma.queueEntry.findMany({
+      where: {
+        previousEntryId: { not: null },
+        queue: {
+          service: { locationId },
+          date: { gte: start, lte: end },
+        },
+      },
+      include: {
+        queue: {
+          include: { service: { select: { id: true, name: true } } },
+        },
+        user: { select: { id: true, firstName: true, lastName: true } },
+      },
+    });
+
+    // Calculate journey statistics
+    const completedJourneys = journeys.filter(j => j.completedAt);
+    const journeyDurations = completedJourneys
+      .map(j => j.totalDuration)
+      .filter((d): d is number => d !== null);
+
+    const avgJourneyDuration = journeyDurations.length > 0 
+      ? Math.round(journeyDurations.reduce((a, b) => a + b, 0) / journeyDurations.length)
+      : 0;
+    const maxJourneyDuration = journeyDurations.length > 0 
+      ? Math.round(Math.max(...journeyDurations))
+      : 0;
+
+    // Count multi-service visits
+    const multiServiceJourneys = journeys.filter(j => (j.queueEntryIds?.length || 0) > 1);
+
+    // Get individual journey details (limited to recent 50)
+    const journeyDetails = journeys.slice(0, 50).map(j => ({
+      id: j.id,
+      userId: j.userId,
+      userName: `${j.user.firstName} ${j.user.lastName}`,
+      startedAt: j.startedAt,
+      completedAt: j.completedAt,
+      totalDuration: j.totalDuration,
+      serviceCount: j.queueEntryIds?.length || 0,
+      status: j.completedAt ? 'completed' : 'in-progress',
+    }));
+
+    res.json({
+      locationId,
+      period: { start, end },
+      summary: {
+        totalJourneys: journeys.length,
+        completedJourneys: completedJourneys.length,
+        inProgressJourneys: journeys.length - completedJourneys.length,
+        multiServiceJourneys: multiServiceJourneys.length,
+        avgJourneyDuration,
+        maxJourneyDuration,
+        totalTransfers: transferredEntries.length,
+      },
+      journeys: journeyDetails,
+    });
+  } catch (error) {
+    next(error);
+  }
+};

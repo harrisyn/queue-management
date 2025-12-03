@@ -130,7 +130,17 @@ REDIS_URL="redis://localhost:6379"
 JWT_SECRET="your-secret-key-change-in-production"
 PORT=3000
 NODE_ENV=development
+
 FRONTEND_URL="http://localhost:5173"
+
+### Local Email Testing (Mailpit)
+
+When developing locally we include a Mailpit service in `docker-compose.yml` so you can capture and inspect outbound emails (OTP verification, notifications, etc.).
+
+- Mailpit SMTP server (inside Docker) – host: `mailpit`, port: `1025`
+- Mailpit Web UI (to view messages) – http://localhost:8025
+
+If you're running the app via Docker Compose (recommended for dev), the backend will default SMTP settings to `mailpit:1025` so OTP emails are captured and visible in the Mailpit UI. To override these settings set `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER` and `SMTP_PASS` in your environment (or in a `.env` file).
 
 ### Registration mode
 - `REGISTRATION_MODE` — controls who can register via `/auth/register`.

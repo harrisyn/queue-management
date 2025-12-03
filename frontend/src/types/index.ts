@@ -32,7 +32,30 @@ export interface Location {
   name: string;
   address?: string;
   timezone: string;
+  externalReference?: string;
+  publicCode?: string;
   services?: Service[];
+  servicePoints?: ServicePoint[];
+}
+
+// Service Point types
+export type ServicePointType = 'RECEPTION' | 'TRIAGE' | 'CONSULTATION' | 'CASHIER' | 'PHARMACY' | 'LAB' | 'IMAGING' | 'OTHER';
+
+export interface ServicePoint {
+  id: string;
+  locationId: string;
+  name: string;
+  displayName?: string;
+  type: ServicePointType;
+  isActive: boolean;
+  capacity: number;
+  location?: Location;
+  entries?: QueueEntry[];
+  currentlyServing?: {
+    ticketNumber: string;
+    customerName: string;
+    serviceName: string;
+  };
 }
 
 // Service types
@@ -99,13 +122,31 @@ export interface QueueEntry {
   ticketNumber: string;
   status: EntryStatus;
   priority: number;
+  sortOrder: number;
+  servicePointId?: string;
+  sessionId?: string;
   joinedAt: string;
   calledAt?: string;
   servedAt?: string;
   completedAt?: string;
   notes?: string;
   user?: User;
+  servicePoint?: ServicePoint;
   position?: number;
+}
+
+// Service Flow types
+export interface ServiceFlow {
+  id: string;
+  fromServiceId: string;
+  toServiceId: string;
+  priority: number;
+  displayName?: string;
+  condition?: string;
+  autoTransfer: boolean;
+  isRequired: boolean;
+  fromService?: Service;
+  toService?: Service;
 }
 
 // Appointment types

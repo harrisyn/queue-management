@@ -1,50 +1,135 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useAuthContext } from '@/contexts/AuthContext';
+import api from '@/api/client';
+
+// ============================================================================
+// MULTI-STEP REGISTRATION COMPONENT
+// ============================================================================
+
+interface RegistrationData {
+  organizationName: string;
+  email: string;
+  phone: string;
+  countryCode: string;
+  firstName: string;
+  lastName: string;
+  password: string;
+  confirmPassword: string;
+  otpCode: string;
+  emailVerified: boolean;
+}
+
+const COUNTRY_CODES = [
+  { code: '+1', country: 'US/CA', flag: '🇺🇸' },
+  { code: '+44', country: 'UK', flag: '🇬🇧' },
+  { code: '+233', country: 'GH', flag: '🇬🇭' },
+  { code: '+234', country: 'NG', flag: '🇳🇬' },
+  { code: '+254', country: 'KE', flag: '🇰🇪' },
+  { code: '+27', country: 'ZA', flag: '🇿🇦' },
+  { code: '+91', country: 'IN', flag: '🇮🇳' },
+  { code: '+86', country: 'CN', flag: '🇨🇳' },
+  { code: '+81', country: 'JP', flag: '🇯🇵' },
+  { code: '+49', country: 'DE', flag: '🇩🇪' },
+  { code: '+33', country: 'FR', flag: '🇫🇷' },
+  { code: '+61', country: 'AU', flag: '🇦🇺' },
+  { code: '+971', country: 'UAE', flag: '🇦🇪' },
+];
 
 const RegisterPage: React.FC = () => {
-  const [formData, setFormData] = useState({
-    email: '',
-    password: '',
-    confirmPassword: '',
-    firstName: '',
-    lastName: '',
-  });
+  const router = useRouter();
+  const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [passwordStrength, setPasswordStrength] = useState(0);
-  const { register } = useAuthContext();
-  const router = useRouter();
+  const [success, setSuccess] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
+  const [otpResendTimer, setOtpResendTimer] = useState(0);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  
+  const [formData, setFormData] = useState<RegistrationData>({
+    organizationName: '',
+    email: '',
+    phone: '',
+    countryCode: '+1',
+    firstName: '',
+    lastName: '',
+    password: '',
+    confirmPassword: '',
+    otpCode: '',
+    emailVerified: false,
+  });
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // OTP resend timer
+  useEffect(() => {
+    if (otpResendTimer > 0) {
+      const timer = setTimeout(() => setOtpResendTimer(otpResendTimer - 1), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [otpResendTimer]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    setFormData(prev => ({ ...prev, [name]: value }));
+    setError('');
+  };
+
+  // Handle OTP input
+  const handleOtpChange = (index: number, value: string) => {
+    if (!/^\d*$/.test(value)) return;
     
-    // Calculate password strength
-    if (name === 'password') {
-      let strength = 0;
-      if (value.length >= 8) strength++;
-      if (/[A-Z]/.test(value)) strength++;
-      if (/[0-9]/.test(value)) strength++;
-      if (/[^A-Za-z0-9]/.test(value)) strength++;
-      setPasswordStrength(strength);
+    const newCode = formData.otpCode.split('');
+    newCode[index] = value;
+    const code = newCode.join('').slice(0, 6);
+    setFormData(prev => ({ ...prev, otpCode: code }));
+
+    // Auto-focus next input
+    if (value && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
+    if (e.key === 'Backspace' && !formData.otpCode[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  const handleOtpPaste = (e: React.ClipboardEvent) => {
     e.preventDefault();
-    
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    setFormData(prev => ({ ...prev, otpCode: pasted }));
+    const focusIndex = Math.min(pasted.length, 5);
+    otpInputRefs.current[focusIndex]?.focus();
+  };
+
+  // Send OTP
+  const sendOTP = async () => {
+    if (!formData.email) {
+      setError('Please enter your email address');
       return;
     }
 
-    if (formData.password.length < 6) {
-      setError('Password must be at least 6 characters');
+    setLoading(true);
+    setError('');
+    
+    try {
+      await api.sendOTP(formData.email);
+      setOtpSent(true);
+      setOtpResendTimer(60);
+      setStep(3);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to send verification code');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Verify OTP
+  const verifyOTP = async () => {
+    if (formData.otpCode.length !== 6) {
+      setError('Please enter the complete 6-digit code');
       return;
     }
 
@@ -52,652 +137,1005 @@ const RegisterPage: React.FC = () => {
     setError('');
 
     try {
-      await register({
-        email: formData.email,
-        password: formData.password,
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-      });
-      router.push('/login?registered=true');
-    } catch (err: unknown) {
-      const error = err as Error;
-      setError(error.message || 'Registration failed. Please try again.');
+      await api.verifyOTP(formData.email, formData.otpCode);
+      setFormData(prev => ({ ...prev, emailVerified: true }));
+      setStep(4);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Invalid verification code');
     } finally {
       setLoading(false);
     }
   };
 
-  const getStrengthColor = () => {
-    if (passwordStrength <= 1) return '#ef4444';
-    if (passwordStrength <= 2) return '#f59e0b';
-    if (passwordStrength <= 3) return '#10b981';
-    return '#059669';
+  // Complete registration
+  const completeRegistration = async () => {
+    if (formData.password !== formData.confirmPassword) {
+      setError('Passwords do not match');
+      return;
+    }
+    if (formData.password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const fullPhone = formData.phone ? `${formData.countryCode}${formData.phone.replace(/\D/g, '')}` : undefined;
+      
+      const { token } = await api.registerOrganization({
+        organizationName: formData.organizationName,
+        email: formData.email,
+        phone: fullPhone,
+        adminFirstName: formData.firstName,
+        adminLastName: formData.lastName,
+        adminPassword: formData.password,
+        emailVerified: formData.emailVerified,
+      });
+
+      localStorage.setItem('token', token);
+      setSuccess(true);
+      
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 2000);
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Registration failed');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const getStrengthText = () => {
-    if (passwordStrength <= 1) return 'Weak';
-    if (passwordStrength <= 2) return 'Fair';
-    if (passwordStrength <= 3) return 'Good';
-    return 'Strong';
+  const nextStep = () => {
+    if (step === 1) {
+      if (!formData.organizationName.trim()) {
+        setError('Organization name is required');
+        return;
+      }
+      if (!formData.firstName.trim() || !formData.lastName.trim()) {
+        setError('Your name is required');
+        return;
+      }
+    }
+    if (step === 2) {
+      if (!formData.email.trim()) {
+        setError('Email is required');
+        return;
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+        setError('Please enter a valid email address');
+        return;
+      }
+      sendOTP();
+      return;
+    }
+    setError('');
+    setStep(step + 1);
   };
+
+  const prevStep = () => {
+    setError('');
+    if (step === 3) {
+      setStep(2);
+    } else {
+      setStep(step - 1);
+    }
+  };
+
+  // Success state
+  if (success) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.bgGradient} />
+        <div style={styles.bgPattern} />
+        <div style={styles.formContainer}>
+          <div style={styles.successCard}>
+            <div style={styles.successIconWrapper}>
+              <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
+                <circle cx="40" cy="40" r="38" stroke="#10b981" strokeWidth="4"/>
+                <path d="M24 40L35 51L56 30" stroke="#10b981" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </div>
+            <h2 style={styles.successTitle}>Welcome Aboard! 🎉</h2>
+            <p style={styles.successText}>
+              Your organization has been created successfully.
+              <br />Redirecting to your dashboard...
+            </p>
+            <div style={styles.loadingDots}>
+              <span style={styles.dot} />
+              <span style={{ ...styles.dot, animationDelay: '0.2s' }} />
+              <span style={{ ...styles.dot, animationDelay: '0.4s' }} />
+            </div>
+          </div>
+        </div>
+        <style>{keyframes}</style>
+      </div>
+    );
+  }
 
   return (
-    <div style={pageStyle}>
-      {/* Background decoration */}
-      <div style={bgPattern} />
-      <div style={bgGradient} />
-      
-      {/* Main Container */}
-      <div style={containerStyle}>
-        {/* Left Side - Form */}
-        <div style={formSection}>
-          <div style={formCard}>
-            {/* Back link */}
-            <Link href="/login" style={backLink}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M9.707 16.707a1 1 0 01-1.414 0l-6-6a1 1 0 010-1.414l6-6a1 1 0 011.414 1.414L5.414 9H17a1 1 0 110 2H5.414l4.293 4.293a1 1 0 010 1.414z" clipRule="evenodd" />
-              </svg>
-              <span>Back to login</span>
+    <div style={styles.container}>
+      {/* Background */}
+      <div style={styles.bgGradient} />
+      <div style={styles.bgPattern} />
+
+      {/* Decorative elements */}
+      <div style={styles.floatingOrb1} />
+      <div style={styles.floatingOrb2} />
+      <div style={styles.floatingOrb3} />
+
+      <div style={styles.mainWrapper}>
+        {/* Left side - Info panel */}
+        <div style={styles.infoPanel}>
+          <div style={styles.infoPanelContent}>
+            <Link href="/" style={styles.logoLink}>
+              <span style={styles.logoIcon}>🏥</span>
+              <span style={styles.logoText}>QueueFlow</span>
             </Link>
 
-            <div style={formHeader}>
-              <h2 style={formTitle}>Create operator account</h2>
-              <p style={formSubtitle}>For organization staff and administrators only — patients do not need an account.</p>
-              <p style={{ ...formSubtitle, marginTop: '0.5rem' }}>
-                Customers can join public queues at your location URL (e.g. <strong>/join/[code]</strong>) — no signup required.
-              </p>
+            <h1 style={styles.infoTitle}>
+              Streamline your<br />
+              <span style={styles.gradientText}>queue management</span>
+            </h1>
+
+            <p style={styles.infoSubtitle}>
+              Join thousands of organizations using QueueFlow to reduce wait times and improve customer satisfaction.
+            </p>
+
+            <div style={styles.featureList}>
+              <div style={styles.featureItem}>
+                <div style={styles.featureIcon}>⚡</div>
+                <div>
+                  <h4 style={styles.featureTitle}>Real-time Updates</h4>
+                  <p style={styles.featureDesc}>Customers get instant notifications</p>
+                </div>
+              </div>
+              <div style={styles.featureItem}>
+                <div style={styles.featureIcon}>📱</div>
+                <div>
+                  <h4 style={styles.featureTitle}>QR Check-in</h4>
+                  <p style={styles.featureDesc}>Scan and join in seconds</p>
+                </div>
+              </div>
+              <div style={styles.featureItem}>
+                <div style={styles.featureIcon}>📊</div>
+                <div>
+                  <h4 style={styles.featureTitle}>Analytics</h4>
+                  <p style={styles.featureDesc}>Insights to optimize flow</p>
+                </div>
+              </div>
             </div>
 
-            {error && (
-              <div style={errorAlert}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor" style={{ flexShrink: 0 }}>
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-                </svg>
-                <span>{error}</span>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} style={formStyle}>
-              {/* Name row */}
-              <div style={nameRow}>
-                <div style={fieldGroup}>
-                  <label style={labelStyle}>First name</label>
-                  <div style={inputWrapper}>
-                    <svg style={inputIconStyle} width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                    </svg>
-                    <input
-                      type="text"
-                      name="firstName"
-                      value={formData.firstName}
-                      onChange={handleChange}
-                      placeholder="John"
-                      style={inputStyle}
-                      required
-                    />
-                  </div>
-                </div>
-                <div style={fieldGroup}>
-                  <label style={labelStyle}>Last name</label>
-                  <div style={inputWrapper}>
-                    <svg style={inputIconStyle} width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
-                    </svg>
-                    <input
-                      type="text"
-                      name="lastName"
-                      value={formData.lastName}
-                      onChange={handleChange}
-                      placeholder="Doe"
-                      style={inputStyle}
-                      required
-                    />
-                  </div>
+            <div style={styles.testimonial}>
+              <p style={styles.testimonialText}>
+                &ldquo;QueueFlow reduced our wait times by 40% in the first month.&rdquo;
+              </p>
+              <div style={styles.testimonialAuthor}>
+                <div style={styles.testimonialAvatar}>JD</div>
+                <div>
+                  <strong>Dr. James Davis</strong>
+                  <span style={styles.testimonialRole}>City General Hospital</span>
                 </div>
               </div>
-
-              {/* Email */}
-              <div style={fieldGroup}>
-                <label style={labelStyle}>Email address</label>
-                <div style={inputWrapper}>
-                  <svg style={inputIconStyle} width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-                  </svg>
-                  <input
-                    type="email"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    placeholder="you@example.com"
-                    style={inputStyle}
-                    required
-                  />
-                </div>
-              </div>
-
-              {/* Password */}
-              <div style={fieldGroup}>
-                <label style={labelStyle}>Password</label>
-                <div style={inputWrapper}>
-                  <svg style={inputIconStyle} width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                  </svg>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    name="password"
-                    value={formData.password}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                    style={inputStyle}
-                    required
-                    minLength={6}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    style={togglePasswordBtn}
-                  >
-                    {showPassword ? (
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3.707 2.293a1 1 0 00-1.414 1.414l14 14a1 1 0 001.414-1.414l-1.473-1.473A10.014 10.014 0 0019.542 10C18.268 5.943 14.478 3 10 3a9.958 9.958 0 00-4.512 1.074l-1.78-1.781zm4.261 4.26l1.514 1.515a2.003 2.003 0 012.45 2.45l1.514 1.514a4 4 0 00-5.478-5.478z" clipRule="evenodd" />
-                        <path d="M12.454 16.697L9.75 13.992a4 4 0 01-3.742-3.741L2.335 6.578A9.98 9.98 0 00.458 10c1.274 4.057 5.065 7 9.542 7 .847 0 1.669-.105 2.454-.303z" />
-                      </svg>
-                    ) : (
-                      <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M10 12a2 2 0 100-4 2 2 0 000 4z" />
-                        <path fillRule="evenodd" d="M.458 10C1.732 5.943 5.522 3 10 3s8.268 2.943 9.542 7c-1.274 4.057-5.064 7-9.542 7S1.732 14.057.458 10zM14 10a4 4 0 11-8 0 4 4 0 018 0z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </button>
-                </div>
-                {/* Password strength indicator */}
-                {formData.password && (
-                  <div style={strengthContainer}>
-                    <div style={strengthBar}>
-                      {[1, 2, 3, 4].map((level) => (
-                        <div
-                          key={level}
-                          style={{
-                            ...strengthSegment,
-                            backgroundColor: passwordStrength >= level ? getStrengthColor() : '#e5e7eb',
-                          }}
-                        />
-                      ))}
-                    </div>
-                    <span style={{ ...strengthText, color: getStrengthColor() }}>
-                      {getStrengthText()}
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              {/* Confirm Password */}
-              <div style={fieldGroup}>
-                <label style={labelStyle}>Confirm password</label>
-                <div style={inputWrapper}>
-                  <svg style={inputIconStyle} width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
-                  </svg>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    name="confirmPassword"
-                    value={formData.confirmPassword}
-                    onChange={handleChange}
-                    placeholder="••••••••"
-                    style={{
-                      ...inputStyle,
-                      borderColor: formData.confirmPassword && formData.password !== formData.confirmPassword ? '#ef4444' : undefined,
-                    }}
-                    required
-                  />
-                  {formData.confirmPassword && formData.password === formData.confirmPassword && (
-                    <svg style={checkIconStyle} width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading}
-                style={submitButton}
-              >
-                {loading ? (
-                  <>
-                    <div className="spinner spinner-sm" style={{ borderTopColor: 'white' }} />
-                    <span>Creating account...</span>
-                  </>
-                ) : (
-                  <>
-                    <span>Create account</span>
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </>
-                )}
-              </button>
-            </form>
-
-            <p style={termsText}>
-              By creating an account, you agree to our{' '}
-              <Link href="/terms" style={termsLink}>Terms of Service</Link>
-              {' '}and{' '}
-              <Link href="/privacy" style={termsLink}>Privacy Policy</Link>
-            </p>
+            </div>
           </div>
         </div>
 
-        {/* Right Side - Features */}
-        <div style={featuresSection}>
-          <div style={logoContainer}>
-            <div style={logoIcon}>
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                <rect width="48" height="48" rx="12" fill="url(#gradient2)" />
-                <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-                <circle cx="24" cy="22" r="4" fill="#6366f1"/>
-                <defs>
-                  <linearGradient id="gradient2" x1="0" y1="0" x2="48" y2="48">
-                    <stop stopColor="#6366f1"/>
-                    <stop offset="1" stopColor="#8b5cf6"/>
-                  </linearGradient>
-                </defs>
-              </svg>
-            </div>
-            <span style={logoText}>QMS</span>
-          </div>
-
-          <h1 style={heroTitle}>
-            Everything you need<br />
-            to manage queues
-          </h1>
-
-          <div style={featureCards}>
-            <div style={featureCard}>
-              <div style={featureIconBox}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M12 4v1m6 11h-1.25M9.25 4v1M6 4v1m3.25 0H15m-3 5v7m4-7h-8a2 2 0 00-2 2v5a2 2 0 002 2h8a2 2 0 002-2v-5a2 2 0 00-2-2z" />
-                </svg>
+        {/* Right side - Form */}
+        <div style={styles.formPanel}>
+          <div style={styles.formContainer}>
+            {/* Progress */}
+            <div style={styles.progressContainer}>
+              <div style={styles.progressBar}>
+                <div style={{ ...styles.progressFill, width: `${(step / 4) * 100}%` }} />
               </div>
-              <div>
-                <h3 style={featureCardTitle}>QR Code Check-in</h3>
-                <p style={featureCardDesc}>Customers scan to join queues instantly</p>
+              <div style={styles.stepIndicators}>
+                {[
+                  { num: 1, label: 'Details' },
+                  { num: 2, label: 'Contact' },
+                  { num: 3, label: 'Verify' },
+                  { num: 4, label: 'Secure' },
+                ].map(s => (
+                  <div key={s.num} style={styles.stepItem}>
+                    <div style={{
+                      ...styles.stepDot,
+                      ...(s.num <= step ? styles.stepDotActive : {}),
+                      ...(s.num < step ? styles.stepDotComplete : {}),
+                    }}>
+                      {s.num < step ? '✓' : s.num}
+                    </div>
+                    <span style={s.num <= step ? styles.stepLabelActive : styles.stepLabel}>
+                      {s.label}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
 
-            <div style={featureCard}>
-              <div style={featureIconBox}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M13 10V3L4 14h7v7l9-11h-7z" />
-                </svg>
-              </div>
-              <div>
-                <h3 style={featureCardTitle}>Real-time Updates</h3>
-                <p style={featureCardDesc}>Live queue position notifications</p>
-              </div>
-            </div>
+            {/* Form Card */}
+            <div style={styles.card}>
+              {/* Step 1: Organization & Name */}
+              {step === 1 && (
+                <div style={styles.stepContent}>
+                  <h2 style={styles.stepTitle}>Let&apos;s get started</h2>
+                  <p style={styles.stepSubtitle}>Tell us about your organization</p>
 
-            <div style={featureCard}>
-              <div style={featureIconBox}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                </svg>
-              </div>
-              <div>
-                <h3 style={featureCardTitle}>Analytics Dashboard</h3>
-                <p style={featureCardDesc}>Insights to optimize your operations</p>
-              </div>
-            </div>
-          </div>
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Organization Name</label>
+                    <input
+                      type="text"
+                      name="organizationName"
+                      value={formData.organizationName}
+                      onChange={handleChange}
+                      placeholder="e.g., City General Hospital"
+                      style={styles.input}
+                      autoFocus
+                    />
+                  </div>
 
-          <div style={testimonial}>
-            <p style={testimonialText}>
-              &ldquo;QMS reduced our wait times by 40% and improved customer satisfaction scores dramatically.&rdquo;
-            </p>
-            <div style={testimonialAuthor}>
-              <div style={testimonialAvatar}>JD</div>
-              <div>
-                <div style={testimonialName}>Jane Doe</div>
-                <div style={testimonialRole}>Operations Manager</div>
+                  <div style={styles.formRow}>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Your First Name</label>
+                      <input
+                        type="text"
+                        name="firstName"
+                        value={formData.firstName}
+                        onChange={handleChange}
+                        placeholder="John"
+                        style={styles.input}
+                      />
+                    </div>
+                    <div style={styles.formGroup}>
+                      <label style={styles.label}>Your Last Name</label>
+                      <input
+                        type="text"
+                        name="lastName"
+                        value={formData.lastName}
+                        onChange={handleChange}
+                        placeholder="Doe"
+                        style={styles.input}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2: Contact Info */}
+              {step === 2 && (
+                <div style={styles.stepContent}>
+                  <h2 style={styles.stepTitle}>Contact Information</h2>
+                  <p style={styles.stepSubtitle}>We&apos;ll send a verification code to your email</p>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Email Address</label>
+                    <input
+                      type="email"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      placeholder="you@organization.com"
+                      style={styles.input}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Phone Number (Optional)</label>
+                    <div style={styles.phoneInput}>
+                      <select
+                        name="countryCode"
+                        value={formData.countryCode}
+                        onChange={handleChange}
+                        style={styles.countrySelect}
+                      >
+                        {COUNTRY_CODES.map(c => (
+                          <option key={c.code} value={c.code}>
+                            {c.flag} {c.code}
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="tel"
+                        name="phone"
+                        value={formData.phone}
+                        onChange={handleChange}
+                        placeholder="123 456 7890"
+                        style={styles.phoneNumber}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 3: OTP Verification */}
+              {step === 3 && (
+                <div style={styles.stepContent}>
+                  <div style={styles.iconLarge}>📧</div>
+                  <h2 style={styles.stepTitle}>Check your email</h2>
+                  <p style={styles.stepSubtitle}>
+                    We sent a 6-digit code to<br />
+                    <strong style={{ color: '#6366f1' }}>{formData.email}</strong>
+                  </p>
+
+                  <div style={styles.otpContainer} onPaste={handleOtpPaste}>
+                    {[0, 1, 2, 3, 4, 5].map(i => (
+                      <input
+                        key={i}
+                        ref={el => { otpInputRefs.current[i] = el; }}
+                        type="text"
+                        maxLength={1}
+                        value={formData.otpCode[i] || ''}
+                        onChange={e => handleOtpChange(i, e.target.value)}
+                        onKeyDown={e => handleOtpKeyDown(i, e)}
+                        style={{
+                          ...styles.otpInput,
+                          borderColor: formData.otpCode[i] ? '#6366f1' : 'rgba(255,255,255,0.2)',
+                        }}
+                        autoFocus={i === 0}
+                      />
+                    ))}
+                  </div>
+
+                  <div style={styles.resendSection}>
+                    {otpResendTimer > 0 ? (
+                      <span style={styles.resendTimer}>
+                        Resend code in {otpResendTimer}s
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={sendOTP}
+                        style={styles.resendButton}
+                        disabled={loading}
+                      >
+                        Resend verification code
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={styles.devNote}>
+                    <span style={styles.devNoteIcon}>💡</span>
+                    <span>In development mode, check your console for the OTP code.</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 4: Create Password */}
+              {step === 4 && (
+                <div style={styles.stepContent}>
+                  <div style={styles.iconLarge}>🔐</div>
+                  <h2 style={styles.stepTitle}>Secure your account</h2>
+                  <p style={styles.stepSubtitle}>Create a strong password</p>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Password</label>
+                    <input
+                      type="password"
+                      name="password"
+                      value={formData.password}
+                      onChange={handleChange}
+                      placeholder="At least 8 characters"
+                      style={styles.input}
+                      autoFocus
+                    />
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Confirm Password</label>
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      value={formData.confirmPassword}
+                      onChange={handleChange}
+                      placeholder="Re-enter your password"
+                      style={styles.input}
+                    />
+                  </div>
+
+                  <div style={styles.passwordHints}>
+                    <div style={formData.password.length >= 8 ? styles.hintValid : styles.hint}>
+                      ✓ At least 8 characters
+                    </div>
+                    <div style={formData.password === formData.confirmPassword && formData.confirmPassword ? styles.hintValid : styles.hint}>
+                      ✓ Passwords match
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Error message */}
+              {error && (
+                <div style={styles.errorBox}>
+                  <span style={styles.errorIcon}>⚠️</span>
+                  {error}
+                </div>
+              )}
+
+              {/* Navigation buttons */}
+              <div style={styles.buttonRow}>
+                {step > 1 && (
+                  <button
+                    type="button"
+                    onClick={prevStep}
+                    style={styles.backButton}
+                    disabled={loading}
+                  >
+                    ← Back
+                  </button>
+                )}
+                
+                <button
+                  type="button"
+                  onClick={step === 3 ? verifyOTP : step === 4 ? completeRegistration : nextStep}
+                  style={loading ? styles.primaryButtonLoading : styles.primaryButton}
+                  disabled={loading}
+                >
+                  {loading ? (
+                    <span className="spinner" style={{ width: 20, height: 20 }} />
+                  ) : step === 3 ? (
+                    'Verify Email'
+                  ) : step === 4 ? (
+                    'Create Account 🚀'
+                  ) : (
+                    'Continue →'
+                  )}
+                </button>
+              </div>
+
+              {/* Footer */}
+              <div style={styles.footer}>
+                Already have an account?{' '}
+                <Link href="/login" style={styles.loginLink}>Sign in</Link>
               </div>
             </div>
           </div>
         </div>
       </div>
+      <style>{keyframes}</style>
     </div>
   );
 };
 
-// Styles
-const pageStyle: React.CSSProperties = {
-  minHeight: '100vh',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '2rem',
-  position: 'relative',
-  overflow: 'hidden',
-  background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+// ============================================================================
+// KEYFRAMES
+// ============================================================================
+
+const keyframes = `
+  @keyframes float {
+    0%, 100% { transform: translateY(0px) rotate(0deg); }
+    50% { transform: translateY(-20px) rotate(5deg); }
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 0.5; }
+    50% { opacity: 0.8; }
+  }
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+`;
+
+// ============================================================================
+// STYLES
+// ============================================================================
+
+const styles: Record<string, React.CSSProperties> = {
+  container: {
+    minHeight: '100vh',
+    position: 'relative',
+    overflow: 'hidden',
+    background: '#0a0a0f',
+  },
+  bgGradient: {
+    position: 'absolute',
+    inset: 0,
+    background: 'radial-gradient(ellipse at 30% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 40%)',
+    zIndex: 0,
+  },
+  bgPattern: {
+    position: 'absolute',
+    inset: 0,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+    zIndex: 0,
+  },
+  floatingOrb1: {
+    position: 'absolute',
+    top: '10%',
+    left: '5%',
+    width: '300px',
+    height: '300px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%)',
+    filter: 'blur(40px)',
+    animation: 'float 8s ease-in-out infinite',
+    zIndex: 0,
+  },
+  floatingOrb2: {
+    position: 'absolute',
+    bottom: '20%',
+    right: '10%',
+    width: '250px',
+    height: '250px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+    filter: 'blur(40px)',
+    animation: 'float 10s ease-in-out infinite reverse',
+    zIndex: 0,
+  },
+  floatingOrb3: {
+    position: 'absolute',
+    top: '50%',
+    left: '50%',
+    width: '400px',
+    height: '400px',
+    borderRadius: '50%',
+    background: 'radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, transparent 70%)',
+    filter: 'blur(60px)',
+    animation: 'pulse 6s ease-in-out infinite',
+    zIndex: 0,
+  },
+  mainWrapper: {
+    display: 'flex',
+    minHeight: '100vh',
+    position: 'relative',
+    zIndex: 1,
+  },
+  infoPanel: {
+    display: 'none',
+    width: '50%',
+    padding: '3rem',
+    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)',
+    borderRight: '1px solid rgba(255,255,255,0.05)',
+  },
+  infoPanelContent: {
+    maxWidth: '480px',
+    marginLeft: 'auto',
+    marginRight: '3rem',
+    height: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    justifyContent: 'center',
+  },
+  logoLink: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    textDecoration: 'none',
+    marginBottom: '3rem',
+  },
+  logoIcon: {
+    fontSize: '2rem',
+  },
+  logoText: {
+    fontSize: '1.5rem',
+    fontWeight: 700,
+    color: 'white',
+  },
+  infoTitle: {
+    fontSize: '2.5rem',
+    fontWeight: 800,
+    color: 'white',
+    lineHeight: 1.2,
+    marginBottom: '1.5rem',
+  },
+  gradientText: {
+    background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)',
+    WebkitBackgroundClip: 'text',
+    WebkitTextFillColor: 'transparent',
+    backgroundClip: 'text',
+  },
+  infoSubtitle: {
+    fontSize: '1.1rem',
+    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 1.7,
+    marginBottom: '2.5rem',
+  },
+  featureList: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '1.25rem',
+    marginBottom: '3rem',
+  },
+  featureItem: {
+    display: 'flex',
+    alignItems: 'flex-start',
+    gap: '1rem',
+  },
+  featureIcon: {
+    width: '44px',
+    height: '44px',
+    borderRadius: '12px',
+    background: 'rgba(99, 102, 241, 0.1)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '1.25rem',
+    flexShrink: 0,
+  },
+  featureTitle: {
+    color: 'white',
+    fontWeight: 600,
+    fontSize: '0.95rem',
+    marginBottom: '0.25rem',
+  },
+  featureDesc: {
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: '0.85rem',
+    margin: 0,
+  },
+  testimonial: {
+    background: 'rgba(255,255,255,0.03)',
+    borderRadius: '16px',
+    padding: '1.5rem',
+    border: '1px solid rgba(255,255,255,0.05)',
+  },
+  testimonialText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: '1rem',
+    fontStyle: 'italic',
+    lineHeight: 1.6,
+    marginBottom: '1rem',
+  },
+  testimonialAuthor: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+  },
+  testimonialAvatar: {
+    width: '40px',
+    height: '40px',
+    borderRadius: '50%',
+    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    color: 'white',
+    fontWeight: 600,
+    fontSize: '0.85rem',
+  },
+  testimonialRole: {
+    display: 'block',
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: '0.8rem',
+  },
+  formPanel: {
+    flex: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: '2rem',
+  },
+  formContainer: {
+    width: '100%',
+    maxWidth: '460px',
+  },
+  progressContainer: {
+    marginBottom: '2rem',
+  },
+  progressBar: {
+    height: '4px',
+    background: 'rgba(255,255,255,0.1)',
+    borderRadius: '2px',
+    overflow: 'hidden',
+    marginBottom: '1.5rem',
+  },
+  progressFill: {
+    height: '100%',
+    background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+    borderRadius: '2px',
+    transition: 'width 0.4s ease',
+  },
+  stepIndicators: {
+    display: 'flex',
+    justifyContent: 'space-between',
+  },
+  stepItem: {
+    display: 'flex',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '0.5rem',
+  },
+  stepDot: {
+    width: '36px',
+    height: '36px',
+    borderRadius: '50%',
+    background: 'rgba(255,255,255,0.1)',
+    color: 'rgba(255,255,255,0.3)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    fontSize: '0.85rem',
+    fontWeight: 600,
+    transition: 'all 0.3s ease',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'transparent',
+  },
+  stepDotActive: {
+    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+    color: 'white',
+    boxShadow: '0 0 20px rgba(99, 102, 241, 0.5)',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(99, 102, 241, 0.3)',
+  },
+  stepDotComplete: {
+    background: '#10b981',
+    color: 'white',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(16, 185, 129, 0.3)',
+  },
+  stepLabel: {
+    fontSize: '0.75rem',
+    color: 'rgba(255,255,255,0.3)',
+  },
+  stepLabelActive: {
+    fontSize: '0.75rem',
+    color: 'rgba(255,255,255,0.7)',
+  },
+  card: {
+    background: 'rgba(255,255,255,0.03)',
+    backdropFilter: 'blur(20px)',
+    borderRadius: '24px',
+    border: '1px solid rgba(255,255,255,0.08)',
+    padding: '2.5rem',
+    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+  },
+  stepContent: {
+    marginBottom: '1.5rem',
+  },
+  stepTitle: {
+    fontSize: '1.5rem',
+    fontWeight: 700,
+    color: 'white',
+    marginBottom: '0.5rem',
+    textAlign: 'center',
+  },
+  stepSubtitle: {
+    color: 'rgba(255,255,255,0.6)',
+    textAlign: 'center',
+    marginBottom: '2rem',
+    lineHeight: 1.6,
+  },
+  iconLarge: {
+    fontSize: '3.5rem',
+    textAlign: 'center',
+    marginBottom: '1rem',
+  },
+  formGroup: {
+    marginBottom: '1.25rem',
+  },
+  formRow: {
+    display: 'grid',
+    gridTemplateColumns: '1fr 1fr',
+    gap: '1rem',
+  },
+  label: {
+    display: 'block',
+    marginBottom: '0.5rem',
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: '0.9rem',
+    fontWeight: 500,
+  },
+  input: {
+    width: '100%',
+    padding: '0.875rem 1rem',
+    background: 'rgba(255,255,255,0.05)',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    color: 'white',
+    fontSize: '1rem',
+    transition: 'all 0.2s ease',
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  phoneInput: {
+    display: 'flex',
+    gap: '0.5rem',
+  },
+  countrySelect: {
+    width: '120px',
+    padding: '0.875rem 0.75rem',
+    background: 'rgba(255,255,255,0.05)',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    color: 'white',
+    fontSize: '0.9rem',
+    cursor: 'pointer',
+    outline: 'none',
+  },
+  phoneNumber: {
+    flex: 1,
+    padding: '0.875rem 1rem',
+    background: 'rgba(255,255,255,0.05)',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    color: 'white',
+    fontSize: '1rem',
+    outline: 'none',
+    boxSizing: 'border-box',
+  },
+  otpContainer: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '0.75rem',
+    marginBottom: '1.5rem',
+  },
+  otpInput: {
+    width: '52px',
+    height: '60px',
+    textAlign: 'center',
+    fontSize: '1.5rem',
+    fontWeight: 700,
+    background: 'rgba(255,255,255,0.05)',
+    borderWidth: '2px',
+    borderStyle: 'solid',
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: '12px',
+    color: 'white',
+    outline: 'none',
+    transition: 'all 0.2s ease',
+  },
+  resendSection: {
+    textAlign: 'center',
+    marginBottom: '1rem',
+  },
+  resendTimer: {
+    color: 'rgba(255,255,255,0.4)',
+    fontSize: '0.9rem',
+  },
+  resendButton: {
+    background: 'none',
+    border: 'none',
+    color: '#a855f7',
+    fontSize: '0.9rem',
+    cursor: 'pointer',
+    textDecoration: 'underline',
+  },
+  devNote: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: '0.5rem',
+    padding: '0.75rem',
+    background: 'rgba(139, 92, 246, 0.1)',
+    borderRadius: '8px',
+    fontSize: '0.8rem',
+    color: 'rgba(255,255,255,0.6)',
+  },
+  devNoteIcon: {
+    fontSize: '1rem',
+  },
+  passwordHints: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '0.5rem',
+    marginTop: '0.5rem',
+  },
+  hint: {
+    fontSize: '0.85rem',
+    color: 'rgba(255,255,255,0.3)',
+  },
+  hintValid: {
+    fontSize: '0.85rem',
+    color: '#10b981',
+  },
+  errorBox: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    padding: '0.875rem 1rem',
+    background: 'rgba(239, 68, 68, 0.1)',
+    border: '1px solid rgba(239, 68, 68, 0.3)',
+    borderRadius: '12px',
+    color: '#fca5a5',
+    fontSize: '0.9rem',
+    marginBottom: '1.5rem',
+  },
+  errorIcon: {
+    fontSize: '1.1rem',
+  },
+  buttonRow: {
+    display: 'flex',
+    gap: '1rem',
+  },
+  backButton: {
+    padding: '0.875rem 1.5rem',
+    background: 'rgba(255,255,255,0.05)',
+    border: '1px solid rgba(255,255,255,0.1)',
+    borderRadius: '12px',
+    color: 'rgba(255,255,255,0.7)',
+    fontSize: '1rem',
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+  },
+  primaryButton: {
+    flex: 1,
+    padding: '0.875rem 1.5rem',
+    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+    border: 'none',
+    borderRadius: '12px',
+    color: 'white',
+    fontSize: '1rem',
+    fontWeight: 600,
+    cursor: 'pointer',
+    transition: 'all 0.2s ease',
+    boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
+  },
+  primaryButtonLoading: {
+    flex: 1,
+    padding: '0.875rem 1.5rem',
+    background: 'rgba(99, 102, 241, 0.5)',
+    border: 'none',
+    borderRadius: '12px',
+    color: 'white',
+    fontSize: '1rem',
+    fontWeight: 600,
+    cursor: 'not-allowed',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footer: {
+    textAlign: 'center',
+    marginTop: '2rem',
+    color: 'rgba(255,255,255,0.5)',
+    fontSize: '0.9rem',
+  },
+  loginLink: {
+    color: '#a855f7',
+    textDecoration: 'none',
+    fontWeight: 500,
+  },
+  successCard: {
+    background: 'rgba(255,255,255,0.03)',
+    backdropFilter: 'blur(20px)',
+    borderRadius: '24px',
+    border: '1px solid rgba(16, 185, 129, 0.3)',
+    padding: '3rem',
+    textAlign: 'center',
+    maxWidth: '400px',
+    margin: '0 auto',
+  },
+  successIconWrapper: {
+    marginBottom: '1.5rem',
+  },
+  successTitle: {
+    fontSize: '1.75rem',
+    fontWeight: 700,
+    color: 'white',
+    marginBottom: '0.75rem',
+  },
+  successText: {
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 1.6,
+    marginBottom: '1.5rem',
+  },
+  loadingDots: {
+    display: 'flex',
+    justifyContent: 'center',
+    gap: '0.5rem',
+  },
+  dot: {
+    width: '10px',
+    height: '10px',
+    borderRadius: '50%',
+    background: '#10b981',
+    animation: 'bounce 1.4s ease-in-out infinite',
+  },
 };
 
-const bgPattern: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-};
-
-const bgGradient: React.CSSProperties = {
-  position: 'absolute',
-  top: '-50%',
-  left: '-20%',
-  width: '80%',
-  height: '150%',
-  background: 'radial-gradient(ellipse, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
-  pointerEvents: 'none',
-};
-
-const containerStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '4rem',
-  maxWidth: '1200px',
-  width: '100%',
-  position: 'relative',
-  zIndex: 1,
-};
-
-const formSection: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  alignItems: 'center',
-};
-
-const formCard: React.CSSProperties = {
-  background: 'white',
-  padding: '2.5rem',
-  borderRadius: '1.5rem',
-  boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-  width: '100%',
-  maxWidth: '480px',
-};
-
-const backLink: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.5rem',
-  color: '#6b7280',
-  fontSize: '0.875rem',
-  marginBottom: '1.5rem',
-  textDecoration: 'none',
-};
-
-const formHeader: React.CSSProperties = {
-  marginBottom: '2rem',
-};
-
-const formTitle: React.CSSProperties = {
-  fontSize: '1.75rem',
-  fontWeight: 700,
-  color: '#111827',
-  marginBottom: '0.5rem',
-};
-
-const formSubtitle: React.CSSProperties = {
-  color: '#6b7280',
-};
-
-const errorAlert: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  padding: '1rem',
-  background: '#fef2f2',
-  color: '#dc2626',
-  borderRadius: '0.75rem',
-  marginBottom: '1.5rem',
-  fontSize: '0.875rem',
-};
-
-const formStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1.25rem',
-};
-
-const nameRow: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr 1fr',
-  gap: '1rem',
-};
-
-const fieldGroup: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.5rem',
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  color: '#374151',
-};
-
-const inputWrapper: React.CSSProperties = {
-  position: 'relative',
-  display: 'flex',
-  alignItems: 'center',
-};
-
-const inputIconStyle: React.CSSProperties = {
-  position: 'absolute',
-  left: '1rem',
-  color: '#9ca3af',
-  pointerEvents: 'none',
-};
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '0.875rem 1rem 0.875rem 2.75rem',
-  fontSize: '1rem',
-  border: '1px solid #e5e7eb',
-  borderRadius: '0.75rem',
-  background: '#f9fafb',
-  transition: 'all 0.2s',
-  outline: 'none',
-};
-
-const togglePasswordBtn: React.CSSProperties = {
-  position: 'absolute',
-  right: '1rem',
-  background: 'none',
-  border: 'none',
-  color: '#9ca3af',
-  cursor: 'pointer',
-  padding: '0.25rem',
-  display: 'flex',
-};
-
-const checkIconStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: '1rem',
-  color: '#10b981',
-};
-
-const strengthContainer: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  marginTop: '0.5rem',
-};
-
-const strengthBar: React.CSSProperties = {
-  display: 'flex',
-  gap: '0.25rem',
-  flex: 1,
-};
-
-const strengthSegment: React.CSSProperties = {
-  height: '4px',
-  flex: 1,
-  borderRadius: '2px',
-  transition: 'background-color 0.2s',
-};
-
-const strengthText: React.CSSProperties = {
-  fontSize: '0.75rem',
-  fontWeight: 500,
-};
-
-const submitButton: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '0.5rem',
-  width: '100%',
-  padding: '1rem',
-  fontSize: '1rem',
-  fontWeight: 600,
-  color: 'white',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-  border: 'none',
-  borderRadius: '0.75rem',
-  cursor: 'pointer',
-  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
-  transition: 'all 0.2s',
-  marginTop: '0.5rem',
-};
-
-const termsText: React.CSSProperties = {
-  textAlign: 'center',
-  fontSize: '0.75rem',
-  color: '#6b7280',
-  marginTop: '1.5rem',
-  lineHeight: 1.5,
-};
-
-const termsLink: React.CSSProperties = {
-  color: '#6366f1',
-  textDecoration: 'underline',
-};
-
-const featuresSection: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  justifyContent: 'center',
-  color: 'white',
-};
-
-const logoContainer: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  marginBottom: '2rem',
-};
-
-const logoIcon: React.CSSProperties = {
-  display: 'flex',
-};
-
-const logoText: React.CSSProperties = {
-  fontSize: '1.5rem',
-  fontWeight: 700,
-  letterSpacing: '-0.02em',
-};
-
-const heroTitle: React.CSSProperties = {
-  fontSize: 'clamp(2rem, 4vw, 2.5rem)',
-  fontWeight: 800,
-  lineHeight: 1.1,
-  marginBottom: '2rem',
-  background: 'linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
-};
-
-const featureCards: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1rem',
-  marginBottom: '2rem',
-};
-
-const featureCard: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: '1rem',
-  padding: '1rem',
-  background: 'rgba(255, 255, 255, 0.05)',
-  borderRadius: '0.75rem',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-};
-
-const featureIconBox: React.CSSProperties = {
-  width: '48px',
-  height: '48px',
-  borderRadius: '0.75rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: 'white',
-  flexShrink: 0,
-};
-
-const featureCardTitle: React.CSSProperties = {
-  fontWeight: 600,
-  marginBottom: '0.25rem',
-  color: '#ffffff',
-};
-
-const featureCardDesc: React.CSSProperties = {
-  fontSize: '0.875rem',
-  color: '#d1d5db',
-};
-
-const testimonial: React.CSSProperties = {
-  padding: '1.5rem',
-  background: 'rgba(255, 255, 255, 0.05)',
-  borderRadius: '1rem',
-  border: '1px solid rgba(255, 255, 255, 0.1)',
-};
-
-const testimonialText: React.CSSProperties = {
-  fontSize: '1rem',
-  fontStyle: 'italic',
-  marginBottom: '1rem',
-  lineHeight: 1.6,
-  color: '#e5e7eb',
-};
-
-const testimonialAuthor: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-};
-
-const testimonialAvatar: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  borderRadius: '50%',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontWeight: 600,
-  fontSize: '0.875rem',
-};
-
-const testimonialName: React.CSSProperties = {
-  fontWeight: 600,
-  fontSize: '0.875rem',
-  color: '#ffffff',
-};
-
-const testimonialRole: React.CSSProperties = {
-  fontSize: '0.75rem',
-  color: '#d1d5db',
-};
+// Add media query styles via inline check
+if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
+  styles.infoPanel = { ...styles.infoPanel, display: 'flex' };
+}
 
 export default RegisterPage;

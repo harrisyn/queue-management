@@ -115,8 +115,71 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         email: user.email,
         firstName: user.firstName,
         lastName: user.lastName,
-        role: user.role
+        role: user.role,
+        organizationId: user.organizationId
       }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Send OTP for email verification
+export const sendOTP = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email } = req.body;
+
+    if (!email) {
+      return res.status(400).json({ error: 'Email is required' });
+    }
+
+    // Check if email already registered
+    const existingUser = await prisma.user.findUnique({
+      where: { email: email.toLowerCase().trim() }
+    });
+
+    if (existingUser) {
+      return res.status(400).json({ error: 'An account with this email already exists' });
+    }
+
+    const { sendOTPEmail } = require('../utils/email');
+    const result = await sendOTPEmail(email.toLowerCase().trim());
+
+    if (!result.success) {
+      return res.status(500).json({ error: 'Failed to send verification email' });
+    }
+
+    res.json({ 
+      success: true, 
+      message: 'Verification code sent to your email',
+      // In development, include preview info
+      ...(process.env.NODE_ENV !== 'production' && { dev: true })
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Verify OTP code
+export const verifyOTPCode = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { email, code } = req.body;
+
+    if (!email || !code) {
+      return res.status(400).json({ error: 'Email and verification code are required' });
+    }
+
+    const { verifyOTP } = require('../utils/email');
+    const result = verifyOTP(email.toLowerCase().trim(), code);
+
+    if (!result.valid) {
+      return res.status(400).json({ error: result.error });
+    }
+
+    res.json({ 
+      success: true, 
+      verified: true,
+      message: 'Email verified successfully'
     });
   } catch (error) {
     next(error);

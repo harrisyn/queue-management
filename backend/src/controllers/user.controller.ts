@@ -46,6 +46,7 @@ export const getUser = async (req: Request, res: Response, next: NextFunction) =
         role: true,
         isActive: true,
         organization: true,
+        identityData: true,
         createdAt: true,
       },
     });
@@ -149,7 +150,9 @@ export const getMe = async (req: Request, res: Response, next: NextFunction) => 
         lastName: true,
         phone: true,
         role: true,
+        organizationId: true,
         organization: true,
+        isActive: true,
       },
     });
 
@@ -193,6 +196,44 @@ export const removePractitioner = async (req: Request, res: Response, next: Next
     });
 
     res.status(204).send();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Update user identity data
+export const updateUserIdentity = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { identityData } = req.body;
+
+    if (!identityData || typeof identityData !== 'object') {
+      return res.status(400).json({ error: 'identityData must be an object' });
+    }
+
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Merge with existing identity data
+    const existingData = (user.identityData as Record<string, unknown>) || {};
+    const mergedData = { ...existingData, ...identityData };
+
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: { identityData: mergedData },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        phone: true,
+        identityData: true,
+      },
+    });
+
+    res.json(updatedUser);
   } catch (error) {
     next(error);
   }

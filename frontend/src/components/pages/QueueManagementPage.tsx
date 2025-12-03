@@ -3,53 +3,259 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
-import QueueDisplay from '@/components/QueueDisplay';
-import QueueControl from '@/components/QueueControl';
-import type { Queue, Service } from '@/types';
+import { useSocket } from '@/hooks/useSocket';
+import type { Queue, Service, QueueEntry, Location } from '@/types';
+
+// localStorage keys for persistence
+const STORAGE_KEYS = {
+  LOCATION: 'qms_operator_location',
+  SERVICE: 'qms_operator_service',
+  SERVICE_POINT: 'qms_operator_service_point',
+};
+
+interface IdentityData {
+  mrNumber?: string;
+  patientId?: string;
+  insuranceId?: string;
+  nationalId?: string;
+  dateOfBirth?: string;
+  gender?: string;
+  address?: string;
+  alternatePhone?: string;
+  emergencyContact?: string;
+  allergies?: string;
+  medicalConditions?: string;
+  lastVisitDate?: string;
+  primaryPhysician?: string;
+  [key: string]: string | undefined;
+}
+
+interface LinkedServicePoint {
+  id: string;
+  name: string;
+  displayName?: string;
+  type: string;
+  capacity: number;
+  isOccupied: boolean;
+  activatedBy?: { id: string; firstName: string; lastName: string } | null;
+  activatedAt?: string | null;
+  linkId: string;
+}
+
+interface OperatorQueueData {
+  queue: Queue;
+  serving: QueueEntry[];
+  waiting: QueueEntry[];
+  nextServices: {
+    serviceId: string;
+    serviceName: string;
+    displayName: string;
+    isRequired: boolean;
+    autoTransfer: boolean;
+  }[];
+  stats: {
+    waiting: number;
+    serving: number;
+    total: number;
+  };
+}
 
 const QueueManagementPage: React.FC = () => {
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<string>('');
-  const [queue, setQueue] = useState<Queue | null>(null);
+  const [operatorData, setOperatorData] = useState<OperatorQueueData | null>(null);
+  const [servicePoints, setServicePoints] = useState<LinkedServicePoint[]>([]);
+  const [selectedServicePoint, setSelectedServicePoint] = useState<string>('');
+  const [isActivating, setIsActivating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [draggedEntry, setDraggedEntry] = useState<QueueEntry | null>(null);
+  const [showCompleteModal, setShowCompleteModal] = useState(false);
+  const [completedEntry, setCompletedEntry] = useState<QueueEntry | null>(null);
+  const [nextServiceSuggestions, setNextServiceSuggestions] = useState<any[]>([]);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Customer details modal state
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [selectedCustomer, setSelectedCustomer] = useState<QueueEntry | null>(null);
+  const [customerIdentityData, setCustomerIdentityData] = useState<IdentityData>({});
+  const [isLoadingIdentity, setIsLoadingIdentity] = useState(false);
+  const [isSavingIdentity, setIsSavingIdentity] = useState(false);
+  const [dataSources, setDataSources] = useState<any[]>([]);
+  const [isFetchingFromSource, setIsFetchingFromSource] = useState(false);
+  const [identityFieldsConfig, setIdentityFieldsConfig] = useState<Record<string, { required: boolean; label: string; type?: string }>>({});
+  
+  const { joinQueue, onQueueUpdated, onEntryStatusChanged } = useSocket();
+
+  // Persist selections to localStorage
+  useEffect(() => {
+    if (selectedLocation && isInitialized) {
+      localStorage.setItem(STORAGE_KEYS.LOCATION, selectedLocation);
+    }
+  }, [selectedLocation, isInitialized]);
 
   useEffect(() => {
-    loadServices();
+    if (selectedService && isInitialized) {
+      localStorage.setItem(STORAGE_KEYS.SERVICE, selectedService);
+    }
+  }, [selectedService, isInitialized]);
+
+  useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem(STORAGE_KEYS.SERVICE_POINT, selectedServicePoint);
+    }
+  }, [selectedServicePoint, isInitialized]);
+
+  useEffect(() => {
+    loadLocations();
   }, []);
 
   useEffect(() => {
+    if (selectedLocation) {
+      loadServices(selectedLocation);
+    }
+  }, [selectedLocation]);
+
+  useEffect(() => {
     if (selectedService) {
-      loadOrCreateQueue(selectedService);
+      loadOperatorQueue(selectedService);
+      loadServicePoints(selectedService);
     }
   }, [selectedService]);
 
-  const loadServices = async () => {
+  // Subscribe to real-time updates
+  useEffect(() => {
+    if (operatorData?.queue?.id) {
+      joinQueue(operatorData.queue.id);
+      
+      const unsubscribeQueue = onQueueUpdated(() => {
+        refreshQueue();
+      });
+
+      const unsubscribeEntry = onEntryStatusChanged(() => {
+        refreshQueue();
+      });
+
+      return () => {
+        unsubscribeQueue();
+        unsubscribeEntry();
+      };
+    }
+  }, [operatorData?.queue?.id]);
+
+  const loadLocations = async () => {
     try {
       const orgs = await api.getOrganizations();
       if (orgs.length > 0) {
-        const locations = await api.getLocations(orgs[0].id);
-        if (locations.length > 0) {
-          const serviceList = await api.getServices(locations[0].id);
+        const locs = await api.getLocations(orgs[0].id);
+        setLocations(locs);
+        
+        // Try to restore from localStorage first
+        const savedLocation = localStorage.getItem(STORAGE_KEYS.LOCATION);
+        const savedService = localStorage.getItem(STORAGE_KEYS.SERVICE);
+        const savedServicePoint = localStorage.getItem(STORAGE_KEYS.SERVICE_POINT);
+        
+        if (savedLocation && locs.some((l: Location) => l.id === savedLocation)) {
+          setSelectedLocation(savedLocation);
+          
+          // Pre-load services for saved location
+          const serviceList = await api.getServices(savedLocation);
           setServices(serviceList);
-          if (serviceList.length > 0) {
+          
+          let activeServiceId = '';
+          if (savedService && serviceList.some((s: Service) => s.id === savedService)) {
+            setSelectedService(savedService);
+            activeServiceId = savedService;
+          } else if (serviceList.length > 0) {
             setSelectedService(serviceList[0].id);
+            activeServiceId = serviceList[0].id;
           }
+          
+          // Pre-load service points for the active service
+          if (activeServiceId) {
+            try {
+              const points = await api.getServicePointsForService(activeServiceId);
+              // API returns flat structure: {id, name, displayName, type, capacity, isOccupied, linkId, ...}
+              const linkedPoints = points.map((p: any) => ({
+                id: p.id,
+                name: p.name,
+                displayName: p.displayName,
+                type: p.type,
+                capacity: p.capacity,
+                isOccupied: p.isOccupied,
+                activatedBy: p.activatedBy,
+                activatedAt: p.activatedAt,
+                linkId: p.linkId
+              }));
+              setServicePoints(linkedPoints);
+              
+              if (savedServicePoint && linkedPoints.some((p: LinkedServicePoint) => p.id === savedServicePoint)) {
+                setSelectedServicePoint(savedServicePoint);
+              }
+            } catch (err) {
+              console.error('Failed to load service points', err);
+            }
+          }
+        } else if (locs.length > 0) {
+          setSelectedLocation(locs[0].id);
         }
+        
+        setIsInitialized(true);
       }
     } catch (err) {
-      console.error('Failed to load services', err);
+      console.error('Failed to load locations', err);
     } finally {
       setLoading(false);
     }
   };
 
-  const loadOrCreateQueue = async (serviceId: string) => {
+  const loadServices = async (locationId: string) => {
+    try {
+      const serviceList = await api.getServices(locationId);
+      setServices(serviceList);
+      if (serviceList.length > 0) {
+        setSelectedService(serviceList[0].id);
+      } else {
+        setSelectedService('');
+        setOperatorData(null);
+      }
+    } catch (err) {
+      console.error('Failed to load services', err);
+    }
+  };
+
+  const loadServicePoints = async (serviceId: string) => {
+    try {
+      const points = await api.getServicePointsForService(serviceId);
+      // API returns flat structure: {id, name, displayName, type, capacity, isOccupied, linkId, ...}
+      setServicePoints(points.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        displayName: p.displayName,
+        type: p.type,
+        capacity: p.capacity,
+        isOccupied: p.isOccupied,
+        activatedBy: p.activatedBy,
+        activatedAt: p.activatedAt,
+        linkId: p.linkId
+      })));
+    } catch (err) {
+      console.error('Failed to load service points', err);
+      setServicePoints([]);
+    }
+  };
+
+  const loadOperatorQueue = async (serviceId: string) => {
     try {
       setLoading(true);
+      // First create/get queue for today
       const queueData = await api.createQueue(serviceId);
-      const fullQueue = await api.getQueue(queueData.id);
-      setQueue(fullQueue);
+      // Then get operator-specific view
+      const data = await api.getQueueForOperator(queueData.id);
+      setOperatorData(data);
+      setError('');
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       setError(error.response?.data?.error || 'Failed to load queue');
@@ -59,32 +265,269 @@ const QueueManagementPage: React.FC = () => {
   };
 
   const refreshQueue = useCallback(async () => {
-    if (queue) {
-      const fullQueue = await api.getQueue(queue.id);
-      setQueue(fullQueue);
+    if (operatorData?.queue?.id) {
+      try {
+        const data = await api.getQueueForOperator(operatorData.queue.id);
+        setOperatorData(data);
+      } catch (err) {
+        console.error('Failed to refresh queue', err);
+      }
     }
-  }, [queue]);
+  }, [operatorData?.queue?.id]);
 
-  if (loading && !queue) {
+  const handleCallNext = async () => {
+    if (!operatorData?.queue?.id) return;
+    
+    // Require a service point to be selected
+    if (!selectedServicePoint) {
+      setError('Please select a service desk before calling the next customer');
+      return;
+    }
+    
+    try {
+      await api.callNextWithServicePoint(operatorData.queue.id, selectedServicePoint);
+      await refreshQueue();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Failed to call next');
+    }
+  };
+
+  // Vacate desk - clear the service point selection and notify backend
+  const handleVacateDesk = async () => {
+    if (!selectedServicePoint || !selectedService) return;
+    
+    try {
+      await api.vacateServicePoint(selectedServicePoint, selectedService);
+      setSelectedServicePoint('');
+      localStorage.removeItem(STORAGE_KEYS.SERVICE_POINT);
+      // Reload service points to update occupancy status
+      await loadServicePoints(selectedService);
+    } catch (err) {
+      console.error('Failed to vacate desk', err);
+    }
+  };
+
+  // Activate a service point desk
+  const handleActivateDesk = async (servicePointId: string) => {
+    if (!selectedService) return;
+    
+    setIsActivating(true);
+    try {
+      await api.activateServicePoint(servicePointId, selectedService);
+      setSelectedServicePoint(servicePointId);
+      // Reload service points to update occupancy status
+      await loadServicePoints(selectedService);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Failed to activate desk');
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  const handleComplete = async (entry: QueueEntry) => {
+    if (!operatorData?.queue?.id) return;
+    
+    try {
+      const result = await api.completeEntryWithSuggestions(operatorData.queue.id, entry.id);
+      
+      if (result.autoTransferred) {
+        // Show notification that patient was auto-transferred
+        alert(`Patient transferred to ${result.nextTicket?.serviceName} - New ticket: ${result.nextTicket?.ticketNumber}`);
+      } else if (result.nextServices && result.nextServices.length > 0) {
+        // Show modal with next service suggestions
+        setCompletedEntry(entry);
+        setNextServiceSuggestions(result.nextServices);
+        setShowCompleteModal(true);
+      }
+      
+      await refreshQueue();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Failed to complete entry');
+    }
+  };
+
+  const handleNoShow = async (entry: QueueEntry) => {
+    if (!operatorData?.queue?.id) return;
+    
+    if (!confirm(`Mark ${entry.user?.firstName || entry.ticketNumber} as no-show?`)) return;
+    
+    try {
+      await api.cancelEntry(operatorData.queue.id, entry.id);
+      await refreshQueue();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Failed to mark as no-show');
+    }
+  };
+
+  // Drag and drop handlers
+  const handleDragStart = (entry: QueueEntry) => {
+    setDraggedEntry(entry);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
+
+  const handleDrop = async (e: React.DragEvent, targetEntry: QueueEntry) => {
+    e.preventDefault();
+    if (!draggedEntry || draggedEntry.id === targetEntry.id || !operatorData) return;
+    
+    // Reorder entries
+    const waiting = [...operatorData.waiting];
+    const draggedIndex = waiting.findIndex(e => e.id === draggedEntry.id);
+    const targetIndex = waiting.findIndex(e => e.id === targetEntry.id);
+    
+    if (draggedIndex === -1 || targetIndex === -1) return;
+    
+    // Remove dragged item and insert at target position
+    waiting.splice(draggedIndex, 1);
+    waiting.splice(targetIndex, 0, draggedEntry);
+    
+    // Update sort order
+    const reorderedEntries = waiting.map((entry, index) => ({
+      id: entry.id,
+      sortOrder: index + 1
+    }));
+
+    try {
+      await api.reorderQueueEntries(operatorData.queue.id, reorderedEntries);
+      await refreshQueue();
+    } catch (err) {
+      console.error('Failed to reorder', err);
+    }
+    
+    setDraggedEntry(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedEntry(null);
+  };
+
+  // Customer identity handlers
+  const handleViewCustomer = async (entry: QueueEntry) => {
+    setSelectedCustomer(entry);
+    setShowCustomerModal(true);
+    setIsLoadingIdentity(true);
+    
+    try {
+      // Load user's identity data
+      const userData = await api.getUser(entry.user?.id || '');
+      setCustomerIdentityData(userData.identityData || {});
+      
+      // Load available data sources and identity fields config from organization
+      const orgs = await api.getOrganizations();
+      if (orgs.length > 0) {
+        // Load identity fields config from organization
+        if (orgs[0].identityFieldsConfig) {
+          setIdentityFieldsConfig(orgs[0].identityFieldsConfig as Record<string, { required: boolean; label: string; type?: string }>);
+        } else {
+          setIdentityFieldsConfig({});
+        }
+        
+        try {
+          const sources = await api.getDataSources(orgs[0].id);
+          setDataSources(sources.filter((s: any) => s.isActive));
+        } catch {
+          setDataSources([]);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load customer data:', err);
+      setCustomerIdentityData({});
+    } finally {
+      setIsLoadingIdentity(false);
+    }
+  };
+
+  const handleSaveIdentityData = async () => {
+    if (!selectedCustomer?.user?.id) return;
+    
+    setIsSavingIdentity(true);
+    try {
+      await api.updateUserIdentity(selectedCustomer.user.id, customerIdentityData);
+      setShowCustomerModal(false);
+      await refreshQueue();
+    } catch (err) {
+      console.error('Failed to save identity data:', err);
+      alert('Failed to save customer data');
+    } finally {
+      setIsSavingIdentity(false);
+    }
+  };
+
+  const handleFetchFromDataSource = async (sourceId: string) => {
+    if (!selectedCustomer?.user?.phone) {
+      alert('Customer phone number is required to fetch data');
+      return;
+    }
+    
+    setIsFetchingFromSource(true);
+    try {
+      const result = await api.fetchFromDataSource(sourceId, {
+        identifier: selectedCustomer.user.phone,
+        identifierType: 'phone',
+      });
+      
+      if (result.mapped) {
+        // Merge fetched data with existing data
+        setCustomerIdentityData(prev => ({
+          ...prev,
+          ...result.mapped,
+        }));
+      }
+    } catch (err: any) {
+      console.error('Failed to fetch from data source:', err);
+      alert(err.response?.data?.error || 'Failed to fetch data');
+    } finally {
+      setIsFetchingFromSource(false);
+    }
+  };
+
+  if (loading && !operatorData) {
     return (
       <Layout>
         <div className="loading-container">
           <div className="loading-spinner" />
-          <p style={{ color: 'var(--text-secondary)', marginTop: '1rem' }}>Loading queue...</p>
+          <p>Loading queue...</p>
         </div>
+        <style jsx>{`
+          .loading-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            color: var(--text-secondary);
+          }
+          .loading-spinner {
+            width: 48px;
+            height: 48px;
+            border: 4px solid var(--border);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+          }
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
       </Layout>
     );
   }
 
   return (
     <Layout>
-      <div className="queue-management-page">
-        {/* Page Header */}
-        <div className="page-header">
+      <div className="queue-management">
+        {/* Header */}
+        <div className="header">
           <div className="header-content">
             <div className="header-left">
               <div className="header-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                   <circle cx="9" cy="7" r="4" />
                   <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
@@ -92,36 +535,82 @@ const QueueManagementPage: React.FC = () => {
                 </svg>
               </div>
               <div>
-                <h1 className="page-title">Queue Management</h1>
-                <p className="page-subtitle">Manage your service queues and serve customers</p>
+                <h1>Queue Management</h1>
+                <p>Manage queues and serve customers</p>
               </div>
             </div>
-            
-            <div className="service-selector">
-              <label className="selector-label">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <circle cx="12" cy="12" r="3" />
-                  <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                </svg>
-                Service
-              </label>
-              <select
-                value={selectedService}
-                onChange={(e) => setSelectedService(e.target.value)}
-                className="service-select"
-              >
-                {services.length === 0 && <option value="">No services available</option>}
-                {services.map((service) => (
-                  <option key={service.id} value={service.id}>
-                    {service.name}
-                  </option>
-                ))}
-              </select>
+
+            <div className="selectors">
+              <div className="selector">
+                <label>Location</label>
+                <select 
+                  value={selectedLocation} 
+                  onChange={(e) => setSelectedLocation(e.target.value)}
+                >
+                  {locations.map(loc => (
+                    <option key={loc.id} value={loc.id}>{loc.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="selector">
+                <label>Service</label>
+                <select 
+                  value={selectedService} 
+                  onChange={(e) => setSelectedService(e.target.value)}
+                >
+                  {services.length === 0 && <option value="">No services</option>}
+                  {services.map(svc => (
+                    <option key={svc.id} value={svc.id}>{svc.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div className="selector service-desk-selector">
+                <label>Your Service Desk</label>
+                <div className="service-desk-controls">
+                  <select 
+                    value={selectedServicePoint} 
+                    onChange={(e) => handleActivateDesk(e.target.value)}
+                    className={selectedServicePoint ? 'active-desk' : 'no-desk'}
+                    disabled={isActivating}
+                  >
+                    <option value="">Select desk...</option>
+                    {servicePoints.map(sp => (
+                      <option 
+                        key={sp.id} 
+                        value={sp.id}
+                        disabled={sp.isOccupied && sp.id !== selectedServicePoint}
+                      >
+                        {sp.displayName || sp.name}
+                        {sp.isOccupied && sp.id !== selectedServicePoint ? ' (Occupied)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedServicePoint && (
+                    <button 
+                      className="vacate-btn"
+                      onClick={handleVacateDesk}
+                      title="Vacate this desk"
+                    >
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                        <polyline points="16 17 21 12 16 7" />
+                        <line x1="21" y1="12" x2="9" y2="12" />
+                      </svg>
+                      Vacate
+                    </button>
+                  )}
+                </div>
+                {servicePoints.length === 0 && (
+                  <span className="desk-hint">No service desks linked to this service</span>
+                )}
+                {servicePoints.length > 0 && !selectedServicePoint && (
+                  <span className="desk-hint">Select a desk to start serving</span>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Error Alert */}
         {error && (
           <div className="error-alert">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -130,56 +619,405 @@ const QueueManagementPage: React.FC = () => {
               <line x1="12" y1="16" x2="12.01" y2="16" />
             </svg>
             {error}
+            <button onClick={() => setError('')} className="close-btn">×</button>
           </div>
         )}
 
-        {/* Main Content Grid */}
-        {queue && (
-          <div className="queue-grid">
-            <div className="queue-display-wrapper">
-              <QueueDisplay queue={queue} onRefresh={refreshQueue} />
+        {operatorData && (
+          <div className="main-content">
+            {/* Stats Bar */}
+            <div className="stats-bar">
+              <div className="stat">
+                <span className="stat-value">{operatorData.stats.waiting}</span>
+                <span className="stat-label">Waiting</span>
+              </div>
+              <div className="stat serving">
+                <span className="stat-value">{operatorData.stats.serving}</span>
+                <span className="stat-label">Serving</span>
+              </div>
+              <div className="stat">
+                <span className="stat-value">{operatorData.stats.total}</span>
+                <span className="stat-label">Total Today</span>
+              </div>
+              <div className="stat-spacer" />
+              
+              {/* Active Desk Indicator */}
+              {selectedServicePoint && (
+                <div className="active-desk-indicator">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
+                    <line x1="8" y1="21" x2="16" y2="21" />
+                    <line x1="12" y1="17" x2="12" y2="21" />
+                  </svg>
+                  <span>{filteredServicePoints.find(sp => sp.id === selectedServicePoint)?.displayName || 
+                         filteredServicePoints.find(sp => sp.id === selectedServicePoint)?.name || 'Desk'}</span>
+                </div>
+              )}
+              
+              <button 
+                className={`call-next-btn ${!selectedServicePoint ? 'disabled-no-desk' : ''}`}
+                onClick={handleCallNext}
+                disabled={operatorData.stats.waiting === 0 || !selectedServicePoint}
+                title={!selectedServicePoint ? 'Select a service desk first' : 
+                       operatorData.stats.waiting === 0 ? 'No customers waiting' : 'Call next customer'}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                </svg>
+                Call Next
+              </button>
             </div>
-            <div className="queue-control-wrapper">
-              <QueueControl queue={queue} onUpdate={refreshQueue} />
+
+            {/* No Desk Warning */}
+            {!selectedServicePoint && (
+              <div className="no-desk-warning">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                  <line x1="12" y1="9" x2="12" y2="13" />
+                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                </svg>
+                <span>Please select a service desk above to start calling customers</span>
+              </div>
+            )}
+
+            {/* Currently Serving */}
+            {operatorData.serving.length > 0 && (
+              <div className="section">
+                <h2 className="section-title">
+                  <span className="pulse-dot" />
+                  Now Serving
+                </h2>
+                <div className="serving-list">
+                  {operatorData.serving.map(entry => (
+                    <div key={entry.id} className="serving-card">
+                      <div className="ticket-number serving-ticket">{entry.ticketNumber}</div>
+                      <div className="entry-info">
+                        <div className="entry-name">
+                          {entry.user?.firstName} {entry.user?.lastName}
+                        </div>
+                        <div className="entry-details">
+                          Called at {entry.calledAt ? new Date(entry.calledAt).toLocaleTimeString() : '-'}
+                          {entry.servicePoint && (
+                            <span className="service-point-badge">
+                              @ {entry.servicePoint.displayName || entry.servicePoint.name}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="entry-actions">
+                        <button 
+                          className="action-btn info"
+                          onClick={() => handleViewCustomer(entry)}
+                          title="View customer details"
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="12" y1="16" x2="12" y2="12" />
+                            <line x1="12" y1="8" x2="12.01" y2="8" />
+                          </svg>
+                        </button>
+                        <button 
+                          className="action-btn complete"
+                          onClick={() => handleComplete(entry)}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <polyline points="20 6 9 17 4 12" />
+                          </svg>
+                          Complete
+                        </button>
+                        <button 
+                          className="action-btn no-show"
+                          onClick={() => handleNoShow(entry)}
+                        >
+                          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <circle cx="12" cy="12" r="10" />
+                            <line x1="15" y1="9" x2="9" y2="15" />
+                            <line x1="9" y1="9" x2="15" y2="15" />
+                          </svg>
+                          No-Show
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Waiting Queue */}
+            <div className="section">
+              <h2 className="section-title">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <circle cx="12" cy="12" r="10" />
+                  <polyline points="12 6 12 12 16 14" />
+                </svg>
+                Waiting Queue
+                <span className="drag-hint">Drag to reorder</span>
+              </h2>
+              
+              {operatorData.waiting.length === 0 ? (
+                <div className="empty-queue">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+                    <circle cx="9" cy="7" r="4" />
+                    <line x1="19" y1="8" x2="19" y2="14" />
+                    <line x1="22" y1="11" x2="16" y2="11" />
+                  </svg>
+                  <p>No one is waiting in the queue</p>
+                </div>
+              ) : (
+                <div className="waiting-list">
+                  {operatorData.waiting.map((entry, index) => (
+                    <div
+                      key={entry.id}
+                      className={`waiting-card ${draggedEntry?.id === entry.id ? 'dragging' : ''}`}
+                      draggable
+                      onDragStart={() => handleDragStart(entry)}
+                      onDragOver={(e) => handleDragOver(e)}
+                      onDrop={(e) => handleDrop(e, entry)}
+                      onDragEnd={handleDragEnd}
+                    >
+                      <div className="drag-handle">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="9" cy="5" r="1" />
+                          <circle cx="9" cy="12" r="1" />
+                          <circle cx="9" cy="19" r="1" />
+                          <circle cx="15" cy="5" r="1" />
+                          <circle cx="15" cy="12" r="1" />
+                          <circle cx="15" cy="19" r="1" />
+                        </svg>
+                      </div>
+                      <div className="position-badge">{index + 1}</div>
+                      <div className="ticket-number">{entry.ticketNumber}</div>
+                      <div className="entry-info">
+                        <div className="entry-name">
+                          {entry.user?.firstName} {entry.user?.lastName}
+                        </div>
+                        <div className="entry-details">
+                          Joined at {new Date(entry.joinedAt).toLocaleTimeString()}
+                          {entry.notes && <span className="notes"> • {entry.notes}</span>}
+                        </div>
+                      </div>
+                      {entry.priority > 0 && (
+                        <div className="priority-badge">Priority</div>
+                      )}
+                      <button 
+                        className="view-details-btn"
+                        onClick={(e) => { e.stopPropagation(); handleViewCustomer(entry); }}
+                        title="View customer details"
+                      >
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <circle cx="12" cy="12" r="10" />
+                          <line x1="12" y1="16" x2="12" y2="12" />
+                          <line x1="12" y1="8" x2="12.01" y2="8" />
+                        </svg>
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Next Services */}
+            {operatorData.nextServices.length > 0 && (
+              <div className="section">
+                <h2 className="section-title">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M5 12h14" />
+                    <path d="M12 5l7 7-7 7" />
+                  </svg>
+                  Patient Flow - Next Services
+                </h2>
+                <div className="next-services">
+                  {operatorData.nextServices.map(ns => (
+                    <div key={ns.serviceId} className={`next-service-card ${ns.isRequired ? 'required' : ''}`}>
+                      <span className="service-name">{ns.displayName}</span>
+                      {ns.isRequired && <span className="required-badge">Required</span>}
+                      {ns.autoTransfer && <span className="auto-badge">Auto</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Complete with Next Service Modal */}
+        {showCompleteModal && completedEntry && (
+          <div className="modal-overlay" onClick={() => setShowCompleteModal(false)}>
+            <div className="modal" onClick={e => e.stopPropagation()}>
+              <h3>Service Completed</h3>
+              <p>Patient {completedEntry.user?.firstName} has been served.</p>
+              
+              {nextServiceSuggestions.length > 0 && (
+                <>
+                  <p className="modal-subtitle">Would you like to send them to another service?</p>
+                  <div className="next-service-options">
+                    {nextServiceSuggestions.map(ns => (
+                      <button 
+                        key={ns.serviceId} 
+                        className="next-service-option"
+                        onClick={async () => {
+                          // TODO: Implement sending to next service
+                          setShowCompleteModal(false);
+                        }}
+                      >
+                        <span className="service-name">{ns.displayName}</span>
+                        {ns.queueInfo && (
+                          <span className="queue-info">
+                            {ns.queueInfo.waitingCount} waiting • ~{ns.queueInfo.estimatedWait}min
+                          </span>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+              
+              <button className="close-modal" onClick={() => setShowCompleteModal(false)}>
+                Done
+              </button>
             </div>
           </div>
         )}
 
-        {/* Empty State */}
-        {!queue && !loading && (
-          <div className="empty-state">
-            <div className="empty-icon">
-              <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                <circle cx="9" cy="7" r="4" />
-                <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-              </svg>
+        {/* Customer Details Modal */}
+        {showCustomerModal && selectedCustomer && (
+          <div className="modal-overlay" onClick={() => setShowCustomerModal(false)}>
+            <div className="customer-modal" onClick={e => e.stopPropagation()}>
+              <div className="customer-modal-header">
+                <div className="customer-header-info">
+                  <div className="customer-ticket">{selectedCustomer.ticketNumber}</div>
+                  <div className="customer-name-header">
+                    {selectedCustomer.user?.firstName} {selectedCustomer.user?.lastName}
+                  </div>
+                </div>
+                <button className="close-btn" onClick={() => setShowCustomerModal(false)}>×</button>
+              </div>
+
+              <div className="customer-modal-content">
+                {isLoadingIdentity ? (
+                  <div className="loading-identity">Loading customer data...</div>
+                ) : (
+                  <>
+                    {/* Basic Info */}
+                    <div className="identity-section">
+                      <h4>Basic Information</h4>
+                      <div className="identity-grid">
+                        <div className="identity-field">
+                          <label>Phone</label>
+                          <span>{selectedCustomer.user?.phone || '-'}</span>
+                        </div>
+                        <div className="identity-field">
+                          <label>Email</label>
+                          <span>{selectedCustomer.user?.email || '-'}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Data Sources */}
+                    {dataSources.length > 0 && (
+                      <div className="identity-section">
+                        <h4>Fetch from Data Source</h4>
+                        <div className="data-source-buttons">
+                          {dataSources.map(source => (
+                            <button
+                              key={source.id}
+                              className="fetch-btn"
+                              onClick={() => handleFetchFromDataSource(source.id)}
+                              disabled={isFetchingFromSource}
+                            >
+                              {isFetchingFromSource ? 'Fetching...' : `Fetch from ${source.name}`}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Identity Data Form - Dynamically rendered based on org config */}
+                    <div className="identity-section">
+                      <h4>Identity Data</h4>
+                      {Object.keys(identityFieldsConfig).length === 0 ? (
+                        <p className="no-fields-message">
+                          No identity fields configured. Configure fields in Admin Settings.
+                        </p>
+                      ) : (
+                        <div className="identity-grid">
+                          {Object.entries(identityFieldsConfig).map(([fieldKey, fieldConfig]) => {
+                            const inputType = fieldConfig.type || 'text';
+                            const isFullWidth = ['address', 'allergies', 'medicalConditions', 'notes'].includes(fieldKey);
+                            
+                            return (
+                              <div 
+                                key={fieldKey} 
+                                className={`identity-field editable${isFullWidth ? ' full-width' : ''}`}
+                              >
+                                <label>
+                                  {fieldConfig.label}
+                                  {fieldConfig.required && <span className="required-marker">*</span>}
+                                </label>
+                                {fieldKey === 'gender' ? (
+                                  <select
+                                    value={customerIdentityData[fieldKey] || ''}
+                                    onChange={e => setCustomerIdentityData({
+                                      ...customerIdentityData, 
+                                      [fieldKey]: e.target.value
+                                    })}
+                                  >
+                                    <option value="">Select...</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                  </select>
+                                ) : (
+                                  <input
+                                    type={inputType}
+                                    value={customerIdentityData[fieldKey] || ''}
+                                    onChange={e => setCustomerIdentityData({
+                                      ...customerIdentityData, 
+                                      [fieldKey]: e.target.value
+                                    })}
+                                    placeholder={fieldConfig.label}
+                                    required={fieldConfig.required}
+                                  />
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="customer-modal-footer">
+                <button className="cancel-btn" onClick={() => setShowCustomerModal(false)}>
+                  Cancel
+                </button>
+                <button 
+                  className="save-btn" 
+                  onClick={handleSaveIdentityData}
+                  disabled={isSavingIdentity}
+                >
+                  {isSavingIdentity ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
             </div>
-            <h3>No Queue Available</h3>
-            <p>Select a service from the dropdown above to start managing its queue</p>
           </div>
         )}
 
         <style jsx>{`
-          .queue-management-page {
-            max-width: 1400px;
+          .queue-management {
+            max-width: 1200px;
             margin: 0 auto;
-            animation: fadeIn 0.3s ease-out;
           }
 
-          @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-
-          .page-header {
+          .header {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 2rem;
+            padding: 1.5rem 2rem;
+            margin-bottom: 1.5rem;
             color: white;
-            box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
           }
 
           .header-content {
@@ -197,183 +1035,806 @@ const QueueManagementPage: React.FC = () => {
           }
 
           .header-icon {
-            width: 56px;
-            height: 56px;
+            width: 48px;
+            height: 48px;
             background: rgba(255, 255, 255, 0.2);
             border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            backdrop-filter: blur(10px);
           }
 
-          .page-title {
+          .header h1 {
             margin: 0;
-            font-size: 1.75rem;
-            font-weight: 700;
+            font-size: 1.5rem;
+            font-weight: 600;
           }
 
-          .page-subtitle {
+          .header p {
             margin: 0.25rem 0 0;
             opacity: 0.9;
-            font-size: 0.95rem;
+            font-size: 0.9rem;
           }
 
-          .service-selector {
+          .selectors {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+          }
+
+          .selector {
             display: flex;
             flex-direction: column;
-            gap: 0.5rem;
+            gap: 0.25rem;
           }
 
-          .selector-label {
+          .selector label {
+            font-size: 0.75rem;
+            opacity: 0.9;
+          }
+
+          .selector select {
+            padding: 0.5rem 1rem;
+            font-size: 0.9rem;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.95);
+            color: var(--text);
+            min-width: 160px;
+            cursor: pointer;
+          }
+
+          .service-desk-selector {
+            min-width: 200px;
+          }
+
+          .service-desk-controls {
             display: flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.85rem;
-            font-weight: 500;
-            opacity: 0.9;
           }
 
-          .service-select {
-            padding: 0.75rem 1rem;
-            font-size: 1rem;
+          .service-desk-controls select {
+            flex: 1;
+          }
+
+          .service-desk-controls select.active-desk {
+            border: 2px solid #10b981;
+            background: rgba(16, 185, 129, 0.1);
+          }
+
+          .service-desk-controls select.no-desk {
+            border: 2px solid rgba(255, 255, 255, 0.3);
+          }
+
+          .vacate-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+            padding: 0.5rem 0.75rem;
+            background: rgba(239, 68, 68, 0.9);
+            color: white;
             border: none;
-            border-radius: 10px;
-            background: rgba(255, 255, 255, 0.95);
-            color: var(--text);
-            min-width: 220px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 500;
             cursor: pointer;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
             transition: all 0.2s;
+            white-space: nowrap;
           }
 
-          .service-select:hover {
-            background: white;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.15);
+          .vacate-btn:hover {
+            background: #dc2626;
           }
 
-          .service-select:focus {
-            outline: none;
-            box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.5);
+          .desk-hint {
+            font-size: 0.7rem;
+            opacity: 0.8;
+            color: #fbbf24;
           }
 
           .error-alert {
             display: flex;
             align-items: center;
             gap: 0.75rem;
-            background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-            border: 1px solid #fecaca;
+            background: #fef2f2;
+            border-width: 1px;
+            border-style: solid;
+            border-color: #fecaca;
             color: #dc2626;
-            padding: 1rem 1.25rem;
+            padding: 1rem;
             border-radius: 12px;
             margin-bottom: 1.5rem;
-            font-weight: 500;
-            animation: slideDown 0.3s ease-out;
           }
 
-          @keyframes slideDown {
-            from { opacity: 0; transform: translateY(-10px); }
-            to { opacity: 1; transform: translateY(0); }
+          .close-btn {
+            margin-left: auto;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: inherit;
+            padding: 0;
+            line-height: 1;
           }
 
-          .queue-grid {
-            display: grid;
-            grid-template-columns: 1fr 400px;
-            gap: 2rem;
-          }
-
-          @media (max-width: 1024px) {
-            .queue-grid {
-              grid-template-columns: 1fr;
-            }
-          }
-
-          .queue-display-wrapper,
-          .queue-control-wrapper {
-            animation: slideUp 0.4s ease-out;
-          }
-
-          .queue-control-wrapper {
-            animation-delay: 0.1s;
-          }
-
-          @keyframes slideUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
-          }
-
-          .empty-state {
-            text-align: center;
-            padding: 4rem 2rem;
-            background: white;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-          }
-
-          .empty-icon {
-            width: 100px;
-            height: 100px;
-            background: linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%);
-            border-radius: 50%;
+          .stats-bar {
             display: flex;
             align-items: center;
-            justify-content: center;
-            margin: 0 auto 1.5rem;
-            color: var(--primary);
+            gap: 2rem;
+            background: white;
+            padding: 1.25rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+            margin-bottom: 1.5rem;
           }
 
-          .empty-state h3 {
-            margin: 0 0 0.5rem;
+          .stat {
+            text-align: center;
+          }
+
+          .stat-value {
+            display: block;
+            font-size: 1.75rem;
+            font-weight: 700;
             color: var(--text);
-            font-size: 1.25rem;
           }
 
-          .empty-state p {
-            margin: 0;
+          .stat.serving .stat-value {
+            color: #059669;
+          }
+
+          .stat-label {
+            font-size: 0.85rem;
             color: var(--text-secondary);
           }
 
-          .loading-container {
+          .stat-spacer {
+            flex: 1;
+          }
+
+          .call-next-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.875rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+
+          .call-next-btn:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+          }
+
+          .call-next-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
+          .call-next-btn.disabled-no-desk {
+            background: #9ca3af;
+          }
+
+          .active-desk-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border: 1px solid #10b981;
+            border-radius: 8px;
+            color: #059669;
+            font-weight: 600;
+            font-size: 0.9rem;
+          }
+
+          .active-desk-indicator svg {
+            color: #059669;
+          }
+
+          .no-desk-warning {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(135deg, #fefce8 0%, #fef9c3 100%);
+            border: 1px solid #facc15;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
+            color: #854d0e;
+            font-size: 0.95rem;
+          }
+
+          .no-desk-warning svg {
+            flex-shrink: 0;
+            color: #ca8a04;
+          }
+
+          .section {
+            background: white;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+          }
+
+          .section-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin: 0 0 1.25rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: var(--text);
+          }
+
+          .pulse-dot {
+            width: 10px;
+            height: 10px;
+            background: #059669;
+            border-radius: 50%;
+            animation: pulse 2s ease-in-out infinite;
+          }
+
+          @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+          }
+
+          .drag-hint {
+            margin-left: auto;
+            font-size: 0.8rem;
+            font-weight: 400;
+            color: var(--text-secondary);
+          }
+
+          .serving-list {
             display: flex;
             flex-direction: column;
+            gap: 1rem;
+          }
+
+          .serving-card {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            padding: 1rem 1.25rem;
+            background: linear-gradient(135deg, #ecfdf5 0%, #d1fae5 100%);
+            border-width: 1px;
+            border-style: solid;
+            border-color: #6ee7b7;
+            border-radius: 12px;
+          }
+
+          .ticket-number {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+            min-width: 70px;
+          }
+
+          .serving-ticket {
+            color: #059669;
+          }
+
+          .entry-info {
+            flex: 1;
+          }
+
+          .entry-name {
+            font-weight: 600;
+            color: var(--text);
+          }
+
+          .entry-details {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            margin-top: 0.25rem;
+          }
+
+          .service-point-badge {
+            display: inline-block;
+            margin-left: 0.5rem;
+            padding: 0.125rem 0.5rem;
+            background: rgba(5, 150, 105, 0.1);
+            color: #059669;
+            border-radius: 4px;
+            font-size: 0.8rem;
+          }
+
+          .entry-actions {
+            display: flex;
+            gap: 0.5rem;
+          }
+
+          .action-btn {
+            display: flex;
+            align-items: center;
+            gap: 0.375rem;
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: 8px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+
+          .action-btn.complete {
+            background: #059669;
+            color: white;
+          }
+
+          .action-btn.complete:hover {
+            background: #047857;
+          }
+
+          .action-btn.no-show {
+            background: #f3f4f6;
+            color: var(--text-secondary);
+          }
+
+          .action-btn.no-show:hover {
+            background: #fee2e2;
+            color: #dc2626;
+          }
+
+          .empty-queue {
+            text-align: center;
+            padding: 3rem 2rem;
+            color: var(--text-secondary);
+          }
+
+          .empty-queue svg {
+            margin-bottom: 1rem;
+            opacity: 0.5;
+          }
+
+          .waiting-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+          }
+
+          .waiting-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.875rem 1rem;
+            background: #f8fafc;
+            border-width: 1px;
+            border-style: solid;
+            border-color: var(--border);
+            border-radius: 10px;
+            cursor: grab;
+            transition: all 0.2s;
+          }
+
+          .waiting-card:hover {
+            background: #f1f5f9;
+            border-color: var(--primary);
+          }
+
+          .waiting-card.dragging {
+            opacity: 0.5;
+            background: #e0e7ff;
+          }
+
+          .drag-handle {
+            color: var(--text-secondary);
+            opacity: 0.5;
+          }
+
+          .position-badge {
+            width: 28px;
+            height: 28px;
+            display: flex;
             align-items: center;
             justify-content: center;
-            min-height: 300px;
-          }
-
-          .loading-spinner {
-            width: 40px;
-            height: 40px;
-            border: 3px solid var(--border);
-            border-top-color: var(--primary);
+            background: var(--primary);
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 600;
             border-radius: 50%;
-            animation: spin 1s linear infinite;
           }
 
-          @keyframes spin {
-            to { transform: rotate(360deg); }
+          .priority-badge {
+            padding: 0.25rem 0.5rem;
+            background: #fef3c7;
+            color: #d97706;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border-radius: 4px;
+          }
+
+          .notes {
+            font-style: italic;
+          }
+
+          .next-services {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem;
+          }
+
+          .next-service-card {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1rem;
+            background: #f8fafc;
+            border-width: 1px;
+            border-style: solid;
+            border-color: var(--border);
+            border-radius: 8px;
+          }
+
+          .next-service-card.required {
+            border-color: #f59e0b;
+            background: #fffbeb;
+          }
+
+          .service-name {
+            font-weight: 500;
+          }
+
+          .required-badge,
+          .auto-badge {
+            font-size: 0.7rem;
+            padding: 0.125rem 0.375rem;
+            border-radius: 4px;
+            font-weight: 600;
+          }
+
+          .required-badge {
+            background: #fef3c7;
+            color: #d97706;
+          }
+
+          .auto-badge {
+            background: #dbeafe;
+            color: #2563eb;
+          }
+
+          /* Modal */
+          .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+          }
+
+          .modal {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            max-width: 400px;
+            width: 90%;
+          }
+
+          .modal h3 {
+            margin: 0 0 0.5rem;
+          }
+
+          .modal p {
+            color: var(--text-secondary);
+            margin: 0 0 1rem;
+          }
+
+          .modal-subtitle {
+            font-weight: 500;
+            color: var(--text) !important;
+          }
+
+          .next-service-options {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            margin-bottom: 1.5rem;
+          }
+
+          .next-service-option {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            padding: 1rem;
+            background: #f8fafc;
+            border-width: 1px;
+            border-style: solid;
+            border-color: var(--border);
+            border-radius: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-align: left;
+          }
+
+          .next-service-option:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+          }
+
+          .queue-info {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            margin-top: 0.25rem;
+          }
+
+          .close-modal {
+            width: 100%;
+            padding: 0.75rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+          }
+
+          /* Customer Modal Styles */
+          .customer-modal {
+            background: white;
+            border-radius: 16px;
+            width: 100%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+          }
+
+          .customer-modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            color: white;
+            border-radius: 16px 16px 0 0;
+          }
+
+          .customer-header-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+          }
+
+          .customer-ticket {
+            font-size: 1.5rem;
+            font-weight: 800;
+            background: rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+          }
+
+          .customer-name-header {
+            font-size: 1.25rem;
+            font-weight: 600;
+          }
+
+          .close-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 1.5rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+
+          .customer-modal-content {
+            padding: 1.5rem;
+          }
+
+          .loading-identity {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+          }
+
+          .identity-section {
+            margin-bottom: 1.5rem;
+          }
+
+          .identity-section h4 {
+            margin: 0 0 1rem;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+          }
+
+          .identity-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+          }
+
+          .identity-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.25rem;
+          }
+
+          .identity-field.full-width {
+            grid-column: span 2;
+          }
+
+          .identity-field label {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.25rem;
+          }
+
+          .identity-field span {
+            font-size: 1rem;
+            color: var(--text);
+          }
+
+          .identity-field .required-marker {
+            color: #dc2626;
+            font-size: 0.9rem;
+          }
+
+          .identity-field.editable input,
+          .identity-field.editable select {
+            padding: 0.5rem 0.75rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.95rem;
+          }
+
+          .identity-field.editable input:focus,
+          .identity-field.editable select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+          }
+
+          .no-fields-message {
+            text-align: center;
+            color: var(--text-secondary);
+            padding: 1rem;
+            background: var(--surface);
+            border-radius: 8px;
+            font-size: 0.9rem;
+          }
+
+          .data-source-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+          }
+
+          .fetch-btn {
+            padding: 0.5rem 1rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: all 0.2s;
+          }
+
+          .fetch-btn:hover {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+          }
+
+          .fetch-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
+          .customer-modal-footer {
+            display: flex;
+            justify-content: flex-end;
+            gap: 1rem;
+            padding: 1rem 1.5rem;
+            border-top: 1px solid var(--border);
+          }
+
+          .cancel-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 1rem;
+            cursor: pointer;
+          }
+
+          .save-btn {
+            padding: 0.75rem 1.5rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+          }
+
+          .save-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+          }
+
+          .action-btn.info {
+            background: rgba(59, 130, 246, 0.1);
+            color: #3b82f6;
+          }
+
+          .action-btn.info:hover {
+            background: rgba(59, 130, 246, 0.2);
+          }
+
+          .view-details-btn {
+            padding: 0.5rem;
+            background: rgba(99, 102, 241, 0.1);
+            border: none;
+            border-radius: 8px;
+            color: var(--primary);
+            cursor: pointer;
+            transition: all 0.2s;
+            flex-shrink: 0;
+          }
+
+          .view-details-btn:hover {
+            background: rgba(99, 102, 241, 0.2);
           }
 
           @media (max-width: 768px) {
-            .page-header {
-              padding: 1.5rem;
-            }
-
             .header-content {
               flex-direction: column;
               align-items: stretch;
             }
 
-            .service-selector {
-              width: 100%;
+            .selectors {
+              flex-direction: column;
             }
 
-            .service-select {
-              width: 100%;
+            .stats-bar {
+              flex-wrap: wrap;
+              gap: 1rem;
             }
 
-            .page-title {
-              font-size: 1.5rem;
+            .stat-spacer {
+              display: none;
+            }
+
+            .call-next-btn {
+              width: 100%;
+              justify-content: center;
+            }
+
+            .serving-card {
+              flex-wrap: wrap;
+            }
+
+            .entry-actions {
+              width: 100%;
+              justify-content: flex-end;
             }
           }
         `}</style>

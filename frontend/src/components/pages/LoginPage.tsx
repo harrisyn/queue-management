@@ -20,8 +20,13 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      await login(email, password);
-      router.push('/');
+      const success = await login(email, password);
+      console.log('Login success:', success);
+      if (success) {
+        router.push('/');
+      } else {
+        setError('Login failed. Please check your credentials.');
+      }
     } catch (err: unknown) {
       const error = err as Error;
       setError(error.message || 'Login failed. Please check your credentials.');

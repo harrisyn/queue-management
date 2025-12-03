@@ -7,6 +7,8 @@ RUN apt-get update && apt-get install -y openssl libssl-dev ca-certificates && r
 
 # Copy package files and install dependencies (faster cached installs)
 COPY package.json package-lock.json* ./
+# Ensure Prisma schema exists during build so postinstall/prisma generate can run
+COPY prisma ./prisma
 RUN npm install --silent
 
 # Copy source (overridden by docker-compose volume in dev)
@@ -17,4 +19,4 @@ ENV NODE_ENV=development
 EXPOSE 9000
 
 # Run migrations then start dev server (ts-node-dev) for hot reload
-CMD ["/bin/sh", "-c", "npx prisma migrate deploy || true && npm run dev"]
+CMD ["/bin/sh", "-c", "npx prisma migrate deploy || true && npx prisma generate || true && npm run dev"]

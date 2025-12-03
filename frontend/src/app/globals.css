@@ -101,6 +101,13 @@
   --transition-base: 200ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-slow: 300ms cubic-bezier(0.4, 0, 0.2, 1);
   --transition-bounce: 500ms cubic-bezier(0.68, -0.55, 0.265, 1.55);
+
+  /* Backwards-compatible aliases used by components */
+  --primary: var(--primary-500);
+  --primary-dark: var(--primary-700);
+  --text: var(--gray-900);
+  --text-secondary: var(--gray-500);
+  --border: var(--gray-200);
 }
 
 /* Reset & Base Styles */

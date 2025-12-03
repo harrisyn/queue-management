@@ -9,20 +9,85 @@ import notificationRoutes from './notification.routes';
 import userRoutes from './user.routes';
 import analyticsRoutes from './analytics.routes';
 import inviteRoutes from './invite.routes';
+import servicepointRoutes from './servicepoint.routes';
+import serviceflowRoutes from './serviceflow.routes';
+import datasourceRoutes from './datasource.routes';
 
 const router = Router();
 
 router.use('/auth', authRoutes);
-// Public endpoints (no auth)
+
+// Public endpoints (no auth required)
 router.get('/public/locations', (req, res, next) => {
-	// lazy import to avoid circular deps
 	const { getPublicLocations } = require('../controllers/location.controller');
 	return getPublicLocations(req, res, next as any);
 });
+router.get('/public/locations/:code', (req, res, next) => {
+	const { getLocationByCode } = require('../controllers/location.controller');
+	return getLocationByCode(req, res, next as any);
+});
+router.post('/public/join', (req, res, next) => {
+	const { publicJoinQueueWithSession } = require('../controllers/queue.controller');
+	return publicJoinQueueWithSession(req, res, next as any);
+});
+router.get('/public/status/:queueId/:entryId', (req, res, next) => {
+	const { getPublicStatus } = require('../controllers/queue.controller');
+	return getPublicStatus(req, res, next as any);
+});
+router.get('/public/session/:sessionId/tickets', (req, res, next) => {
+	const { getSessionTickets } = require('../controllers/queue.controller');
+	return getSessionTickets(req, res, next as any);
+});
+router.get('/public/display/:locationId', (req, res, next) => {
+	const { getActiveServicePoints } = require('../controllers/servicepoint.controller');
+	return getActiveServicePoints(req, res, next as any);
+});
+router.get('/public/location-info/:locationId', (req, res, next) => {
+	const { getPublicLocationInfo } = require('../controllers/location.controller');
+	return getPublicLocationInfo(req, res, next as any);
+});
+router.get('/public/queues/:locationId', (req, res, next) => {
+	const { getLocationQueues } = require('../controllers/queue.controller');
+	return getLocationQueues(req, res, next as any);
+});
+router.post('/public/register-org', (req, res, next) => {
+	const { registerOrganization } = require('../controllers/organization.controller');
+	return registerOrganization(req, res, next as any);
+});
+router.patch('/public/entries/:entryId/identity', (req, res, next) => {
+	const { updatePublicEntryIdentity } = require('../controllers/queue.controller');
+	return updatePublicEntryIdentity(req, res, next as any);
+});
+router.get('/public/entries/:entryId/identity', (req, res, next) => {
+	const { getPublicEntryIdentity } = require('../controllers/queue.controller');
+	return getPublicEntryIdentity(req, res, next as any);
+});
+router.get('/public/orgs/:orgId', (req, res, next) => {
+	const { getPublicOrganization } = require('../controllers/organization.controller');
+	return getPublicOrganization(req, res, next as any);
+});
+router.get('/public/orgs/:orgId/locations/:locationId/services', (req, res, next) => {
+	const { getPublicLocationServices } = require('../controllers/service.controller');
+	return getPublicLocationServices(req, res, next as any);
+});
+
+// OTP Verification endpoints
+router.post('/public/send-otp', (req, res, next) => {
+	const { sendOTP } = require('../controllers/auth.controller');
+	return sendOTP(req, res, next as any);
+});
+router.post('/public/verify-otp', (req, res, next) => {
+	const { verifyOTPCode } = require('../controllers/auth.controller');
+	return verifyOTPCode(req, res, next as any);
+});
+
 router.use('/orgs', organizationRoutes);
 router.use('/locations', locationRoutes);
 router.use('/invites', inviteRoutes);
 router.use('/services', serviceRoutes);
+router.use('/service-points', servicepointRoutes);
+router.use('/service-flows', serviceflowRoutes);
+router.use('/', datasourceRoutes);
 router.use('/queues', queueRoutes);
 router.use('/appointments', appointmentRoutes);
 router.use('/notifications', notificationRoutes);

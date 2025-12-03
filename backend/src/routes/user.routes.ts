@@ -8,6 +8,7 @@ import {
   getMe,
   assignPractitioner,
   removePractitioner,
+  updateUserIdentity,
 } from '../controllers/user.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 
@@ -20,6 +21,7 @@ router.get('/', authorize('SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN'), getUser
 router.post('/', authorize('SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN'), createUser);
 router.get('/:id', getUser);
 router.put('/:id', authorize('SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN'), updateUser);
+router.put('/:id/identity', authorize('SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN', 'SERVICE_STAFF', 'RECEPTIONIST'), updateUserIdentity);
 router.delete('/:id', authorize('SUPER_ADMIN', 'ORG_ADMIN'), deleteUser);
 
 // Practitioner management

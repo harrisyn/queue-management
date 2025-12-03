@@ -111,3 +111,72 @@ export const getPublicLocations = async (req: Request, res: Response, next: Next
     next(error);
   }
 };
+
+// Get location by public code (for public join page)
+export const getLocationByCode = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { code } = req.params;
+
+    const location = await prisma.location.findUnique({
+      where: { publicCode: code },
+      include: {
+        organization: { 
+          select: { 
+            id: true, 
+            name: true,
+            identityFieldsConfig: true,  // Include identity fields config for public join form
+          } 
+        },
+        services: {
+          where: { isActive: true },
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            type: true,
+            slotDuration: true,
+            startTime: true,
+            endTime: true,
+            activeDays: true,
+          },
+        },
+      },
+    });
+
+    if (!location) {
+      return res.status(404).json({ error: 'Location not found or join code is invalid' });
+    }
+
+    res.json(location);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get public location info by internal ID (for display boards)
+export const getPublicLocationInfo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { locationId } = req.params;
+
+    const location = await prisma.location.findUnique({
+      where: { id: locationId },
+      select: {
+        id: true,
+        name: true,
+        address: true,
+        timezone: true,
+        publicCode: true,
+        organization: { select: { id: true, name: true } },
+        _count: { select: { services: true, servicePoints: true } },
+      },
+    });
+
+    if (!location) {
+      return res.status(404).json({ error: 'Location not found' });
+    }
+
+    res.json(location);
+  } catch (error) {
+    next(error);
+  }
+};

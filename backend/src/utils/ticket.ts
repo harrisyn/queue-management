@@ -1,5 +1,4 @@
 const prefixes = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-
 export const generateTicketNumber = (
   servicePrefix: string | null,
   sequenceNumber: number
