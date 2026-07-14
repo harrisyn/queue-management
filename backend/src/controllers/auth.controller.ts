@@ -15,12 +15,6 @@ function generateRefreshToken(): string {
 }
 
 async function createRefreshToken(userId: string): Promise<string> {
-  // Revoke any existing non-revoked tokens for the user to enforce single session
-  await prisma.refreshToken.updateMany({
-    where: { userId, revoked: false },
-    data: { revoked: true },
-  });
-
   const token = generateRefreshToken();
   await prisma.refreshToken.create({
     data: {

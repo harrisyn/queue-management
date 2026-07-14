@@ -5,6 +5,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/a
 
 class ApiClient {
   private client: AxiosInstance;
+  /** Shared promise while a refresh is in-flight; prevents concurrent refresh calls. */
+  private refreshPromise: Promise<string> | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -38,14 +40,22 @@ class ApiClient {
             const storedRefresh = localStorage.getItem('refreshToken');
             if (storedRefresh) {
               try {
-                // Attempt silent token refresh
-                const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
-                  refreshToken: storedRefresh,
-                });
-                localStorage.setItem('token', data.token);
-                localStorage.setItem('refreshToken', data.refreshToken);
+                // Coalesce concurrent 401s into a single refresh request
+                if (!this.refreshPromise) {
+                  this.refreshPromise = axios
+                    .post(`${API_BASE_URL}/auth/refresh`, { refreshToken: storedRefresh })
+                    .then(({ data }) => {
+                      localStorage.setItem('token', data.token);
+                      localStorage.setItem('refreshToken', data.refreshToken);
+                      return data.token as string;
+                    })
+                    .finally(() => {
+                      this.refreshPromise = null;
+                    });
+                }
+                const newToken = await this.refreshPromise;
                 if (originalRequest.headers) {
-                  originalRequest.headers.Authorization = 'Bearer ' + data.token;
+                  originalRequest.headers.Authorization = 'Bearer ' + newToken;
                 }
                 return this.client(originalRequest);
               } catch {

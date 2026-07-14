@@ -11,12 +11,17 @@ export interface AuditContext {
 /**
  * Factory that returns an Express middleware which records an audit log entry
  * after the response has been sent (non-blocking).
+ * Logs all responses for auth-sensitive operations (including failures),
+ * and only successful (2xx) responses for general resource mutations.
  */
-export const auditLog = (context: AuditContext) => {
+export const auditLog = (context: AuditContext, options: { logFailures?: boolean } = {}) => {
+  const logFailures = options.logFailures ?? false;
+
   return (req: Request, res: Response, next: NextFunction) => {
     res.on('finish', () => {
-      // Only log successful mutations (2xx responses)
-      if (res.statusCode < 200 || res.statusCode >= 300) return;
+      const isSuccess = res.statusCode >= 200 && res.statusCode < 300;
+      // Skip non-2xx unless this middleware is configured to log failures
+      if (!isSuccess && !logFailures) return;
 
       const userId = req.user?.userId;
       const resourceId =
@@ -31,6 +36,11 @@ export const auditLog = (context: AuditContext) => {
         req.socket.remoteAddress ||
         undefined;
 
+      const details = {
+        ...context.details,
+        ...(isSuccess ? {} : { failed: true, statusCode: res.statusCode }),
+      };
+
       prisma.auditLog
         .create({
           data: {
@@ -38,7 +48,7 @@ export const auditLog = (context: AuditContext) => {
             action: context.action,
             resource: context.resource,
             resourceId,
-            details: context.details ? JSON.stringify(context.details) : undefined,
+            details: Object.keys(details).length > 0 ? JSON.stringify(details) : undefined,
             ipAddress,
           },
         })

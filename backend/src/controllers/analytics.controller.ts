@@ -71,7 +71,9 @@ export const getDashboardSummary = async (req: Request, res: Response, next: Nex
       ticketNumber: entry.ticketNumber,
       status: entry.status,
       joinedAt: entry.joinedAt,
-      userName: `${entry.user.firstName} ${entry.user.lastName}`,
+      userName: entry.user
+        ? `${entry.user.firstName} ${entry.user.lastName}`
+        : 'Anonymous',
       serviceName: entry.queue.service.name,
     }));
 

@@ -75,7 +75,7 @@ export const useAuth = () => {
       localStorage.removeItem('refreshToken');
       // Best-effort server-side revocation
       if (refreshToken) {
-        api.logout(refreshToken).catch(() => {});
+        api.logout(refreshToken).catch((err) => console.warn('Token revocation failed:', err));
       }
     }
     setUser(null);

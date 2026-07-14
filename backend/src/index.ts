@@ -1,12 +1,12 @@
 import 'dotenv/config';
 import express, { Application } from 'express';
 import cors from 'cors';
-import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import routes from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { setSocketIO } from './lib/socket';
+import { generalLimiter } from './middleware/rateLimiter';
 
 // dotenv is loaded above via import 'dotenv/config'
 // This ensures environment variables (DATABASE_URL) are available
@@ -32,23 +32,6 @@ const io = new Server(httpServer, {
 
 // Initialize socket
 setSocketIO(io);
-
-// Rate limiting
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many requests, please try again later.' },
-});
-
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { error: 'Too many authentication attempts, please try again later.' },
-});
 
 // Middleware
 app.use(cors({
