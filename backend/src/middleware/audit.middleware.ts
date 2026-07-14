@@ -13,6 +13,9 @@ export interface AuditContext {
  * after the response has been sent (non-blocking).
  * Logs all responses for auth-sensitive operations (including failures),
  * and only successful (2xx) responses for general resource mutations.
+ *
+ * Note: the `details` column in AuditLog is stored as a JSON-encoded string.
+ * Consumers querying this column must parse it with JSON.parse().
  */
 export const auditLog = (context: AuditContext, options: { logFailures?: boolean } = {}) => {
   const logFailures = options.logFailures ?? false;

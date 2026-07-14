@@ -40,7 +40,9 @@ class ApiClient {
             const storedRefresh = localStorage.getItem('refreshToken');
             if (storedRefresh) {
               try {
-                // Coalesce concurrent 401s into a single refresh request
+                // Coalesce concurrent 401s into a single refresh request.
+                // Uses the global axios instance directly (not this.client) to avoid
+                // triggering this same response interceptor recursively.
                 if (!this.refreshPromise) {
                   this.refreshPromise = axios
                     .post(`${API_BASE_URL}/auth/refresh`, { refreshToken: storedRefresh })

@@ -6,7 +6,6 @@ import { getStartOfDay, getEndOfDay } from '../utils/date';
 export const getDashboardSummary = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.userId;
-    const role = req.user?.role;
 
     const user = userId
       ? await prisma.user.findUnique({

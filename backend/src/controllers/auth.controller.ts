@@ -167,7 +167,8 @@ export const refreshToken = async (req: Request, res: Response, next: NextFuncti
       return res.status(401).json({ error: 'User not found or deactivated' });
     }
 
-    // Rotate: revoke the old token and issue a new pair
+    // Rotate: revoke the consumed token and issue a new pair
+    await prisma.refreshToken.update({ where: { token }, data: { revoked: true } });
     const newAccessToken = jwt.sign(
       { userId: user.id, role: user.role },
       JWT_SECRET,

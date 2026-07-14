@@ -20,7 +20,7 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:8003',
   'http://localhost:5173',
-].filter((o): o is string => Boolean(o));
+].filter((o): o is string => o !== undefined);
 
 const io = new Server(httpServer, {
   cors: {
