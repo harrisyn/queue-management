@@ -2,6 +2,91 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { getStartOfDay, getEndOfDay } from '../utils/date';
 
+// Dashboard summary — aggregated stats for the authenticated user's scope
+export const getDashboardSummary = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.userId;
+    const role = req.user?.role;
+
+    const user = userId
+      ? await prisma.user.findUnique({
+          where: { id: userId },
+          select: { organizationId: true },
+        })
+      : null;
+
+    const organizationId = user?.organizationId;
+
+    const todayStart = getStartOfDay();
+    const todayEnd = getEndOfDay();
+
+    // Build location filter based on role/org scope
+    const locationWhere = organizationId ? { organizationId } : {};
+    const serviceWhere = organizationId
+      ? { location: { organizationId } }
+      : {};
+
+    const [totalServices, totalQueues, activeQueues, todayTickets, recentEntries] =
+      await Promise.all([
+        prisma.service.count({ where: { ...serviceWhere, isActive: true } }),
+        prisma.queue.count({
+          where: {
+            date: { gte: todayStart, lte: todayEnd },
+            ...(organizationId ? { service: { location: { organizationId } } } : {}),
+          },
+        }),
+        prisma.queue.count({
+          where: {
+            status: 'ACTIVE',
+            date: { gte: todayStart, lte: todayEnd },
+            ...(organizationId ? { service: { location: { organizationId } } } : {}),
+          },
+        }),
+        prisma.queueEntry.count({
+          where: {
+            joinedAt: { gte: todayStart, lte: todayEnd },
+            ...(organizationId ? { queue: { service: { location: { organizationId } } } } : {}),
+          },
+        }),
+        // Recent activity: last 10 queue entries with user & service info
+        prisma.queueEntry.findMany({
+          where: {
+            ...(organizationId ? { queue: { service: { location: { organizationId } } } } : {}),
+          },
+          orderBy: { joinedAt: 'desc' },
+          take: 10,
+          select: {
+            id: true,
+            ticketNumber: true,
+            status: true,
+            joinedAt: true,
+            user: { select: { firstName: true, lastName: true } },
+            queue: { select: { service: { select: { name: true } } } },
+          },
+        }),
+      ]);
+
+    const recentActivity = recentEntries.map((entry) => ({
+      id: entry.id,
+      ticketNumber: entry.ticketNumber,
+      status: entry.status,
+      joinedAt: entry.joinedAt,
+      userName: `${entry.user.firstName} ${entry.user.lastName}`,
+      serviceName: entry.queue.service.name,
+    }));
+
+    res.json({
+      totalServices,
+      totalQueues,
+      activeQueues,
+      todayTickets,
+      recentActivity,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Queue metrics for a specific date
 export const getQueueMetrics = async (req: Request, res: Response, next: NextFunction) => {
   try {

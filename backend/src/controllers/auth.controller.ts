@@ -2,8 +2,35 @@ import { Request, Response, NextFunction } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
 
 const prisma = new PrismaClient();
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+const ACCESS_TOKEN_EXPIRY = '15m';
+const REFRESH_TOKEN_EXPIRY_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function generateRefreshToken(): string {
+  return crypto.randomBytes(40).toString('hex');
+}
+
+async function createRefreshToken(userId: string): Promise<string> {
+  // Revoke any existing non-revoked tokens for the user to enforce single session
+  await prisma.refreshToken.updateMany({
+    where: { userId, revoked: false },
+    data: { revoked: true },
+  });
+
+  const token = generateRefreshToken();
+  await prisma.refreshToken.create({
+    data: {
+      token,
+      userId,
+      expiresAt: new Date(Date.now() + REFRESH_TOKEN_EXPIRY_MS),
+    },
+  });
+  return token;
+}
 
 export const register = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -25,10 +52,6 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
       if (inviteRecord.expiresAt && inviteRecord.expiresAt.getTime() < Date.now()) return res.status(403).json({ error: 'Invite token expired' });
       if (inviteRecord.role && role && inviteRecord.role !== role) {
         return res.status(403).json({ error: 'Invite does not allow requested role' });
-      }
-      // attach organizationId from invite if present
-      if (invite.organizationId) {
-        // ensure role assignment will include organizationId
       }
     }
 
@@ -101,15 +124,19 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate token
+    // Generate short-lived access token + long-lived refresh token
     const token = jwt.sign(
       { userId: user.id, role: user.role },
-      process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      JWT_SECRET,
+      { expiresIn: ACCESS_TOKEN_EXPIRY }
     );
+
+    const refresh = await createRefreshToken(user.id);
 
     res.json({
       token,
+      refreshToken: refresh,
+      expiresIn: 15 * 60, // seconds
       user: {
         id: user.id,
         email: user.email,
@@ -118,6 +145,64 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
         role: user.role
       }
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const refreshToken = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { refreshToken: token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Refresh token required' });
+    }
+
+    const stored = await prisma.refreshToken.findUnique({ where: { token } });
+
+    if (!stored || stored.revoked || stored.expiresAt < new Date()) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: stored.userId },
+      select: { id: true, email: true, firstName: true, lastName: true, role: true, isActive: true },
+    });
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({ error: 'User not found or deactivated' });
+    }
+
+    // Rotate: revoke the old token and issue a new pair
+    const newAccessToken = jwt.sign(
+      { userId: user.id, role: user.role },
+      JWT_SECRET,
+      { expiresIn: ACCESS_TOKEN_EXPIRY }
+    );
+    const newRefreshToken = await createRefreshToken(user.id);
+
+    res.json({
+      token: newAccessToken,
+      refreshToken: newRefreshToken,
+      expiresIn: 15 * 60,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const logout = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { refreshToken: token } = req.body;
+
+    if (token) {
+      await prisma.refreshToken.updateMany({
+        where: { token },
+        data: { revoked: true },
+      });
+    }
+
+    res.status(204).send();
   } catch (error) {
     next(error);
   }

@@ -12,7 +12,15 @@ interface Stats {
   activeQueues?: number;
   totalServices?: number;
   todayTickets?: number;
-  avgWaitTime?: number;
+}
+
+interface SummaryActivity {
+  id: string;
+  ticketNumber: string;
+  status: string;
+  joinedAt: string;
+  userName: string;
+  serviceName: string;
 }
 
 interface ActivityItem {
@@ -22,15 +30,19 @@ interface ActivityItem {
   time: string;
 }
 
+function timeAgo(dateStr: string): string {
+  const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+  if (diff < 60) return `${diff}s ago`;
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hour${Math.floor(diff / 3600) > 1 ? 's' : ''} ago`;
+  return `${Math.floor(diff / 86400)} day${Math.floor(diff / 86400) > 1 ? 's' : ''} ago`;
+}
+
 const DashboardPage: React.FC = () => {
   const { user, isAdmin, isStaff } = useAuthContext();
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [recentActivity] = useState<ActivityItem[]>([
-    { id: '1', type: 'ticket', message: 'New ticket issued for General Consultation', time: '2 min ago' },
-    { id: '2', type: 'queue', message: 'Queue A completed serving customer', time: '5 min ago' },
-    { id: '3', type: 'service', message: 'Pharmacy service updated', time: '1 hour ago' },
-  ]);
+  const [recentActivity, setRecentActivity] = useState<ActivityItem[]>([]);
 
   useEffect(() => {
     loadDashboard();
@@ -38,19 +50,33 @@ const DashboardPage: React.FC = () => {
 
   const loadDashboard = async () => {
     try {
+      const [summary, orgs] = await Promise.allSettled([
+        api.getDashboardSummary(),
+        isAdmin ? api.getOrganizations() : Promise.resolve(null),
+      ]);
+
       const statsData: Stats = {};
-      
-      if (isAdmin) {
-        try {
-          const orgs = await api.getOrganizations();
-          statsData.organizations = orgs.length;
-        } catch { /* ignore */ }
+
+      if (summary.status === 'fulfilled') {
+        statsData.totalQueues = summary.value.totalQueues ?? 0;
+        statsData.activeQueues = summary.value.activeQueues ?? 0;
+        statsData.totalServices = summary.value.totalServices ?? 0;
+        statsData.todayTickets = summary.value.todayTickets ?? 0;
+
+        if (summary.value.recentActivity?.length) {
+          const activities: ActivityItem[] = (summary.value.recentActivity as SummaryActivity[]).map((a) => ({
+            id: a.id,
+            type: 'ticket' as const,
+            message: `Ticket ${a.ticketNumber} — ${a.userName} joined ${a.serviceName}`,
+            time: timeAgo(a.joinedAt),
+          }));
+          setRecentActivity(activities);
+        }
       }
 
-      // Set placeholder stats for demo
-      statsData.totalQueues = 5;
-      statsData.activeQueues = 2;
-      statsData.totalServices = 8;
+      if (orgs.status === 'fulfilled' && orgs.value) {
+        statsData.organizations = orgs.value.length;
+      }
 
       setStats(statsData);
     } catch (err) {
@@ -125,8 +151,9 @@ const DashboardPage: React.FC = () => {
   const statCards = [
     { label: 'Total Queues', value: stats?.totalQueues ?? 0, icon: '📋', color: '#6366f1', show: isStaff || isAdmin },
     { label: 'Active Queues', value: stats?.activeQueues ?? 0, icon: '⚡', color: '#10b981', show: isStaff || isAdmin },
+    { label: 'Today\'s Tickets', value: stats?.todayTickets ?? 0, icon: '🎟️', color: '#f59e0b', show: isStaff || isAdmin },
     { label: 'Services', value: stats?.totalServices ?? 0, icon: '🏥', color: '#8b5cf6', show: isAdmin },
-    { label: 'Organizations', value: stats?.organizations ?? 0, icon: '🏢', color: '#f59e0b', show: isAdmin },
+    { label: 'Organizations', value: stats?.organizations ?? 0, icon: '🏢', color: '#06b6d4', show: isAdmin },
   ].filter(stat => stat.show);
 
   return (

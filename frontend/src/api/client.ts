@@ -28,11 +28,36 @@ class ApiClient {
     // Response interceptor - handle errors
     this.client.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
-        if (error.response?.status === 401) {
+      async (error: AxiosError) => {
+        const originalRequest = error.config as typeof error.config & { _retry?: boolean };
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
+            const storedRefresh = localStorage.getItem('refreshToken');
+            if (storedRefresh) {
+              try {
+                // Attempt silent token refresh
+                const { data } = await axios.post(`${API_BASE_URL}/auth/refresh`, {
+                  refreshToken: storedRefresh,
+                });
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('refreshToken', data.refreshToken);
+                if (originalRequest.headers) {
+                  originalRequest.headers.Authorization = 'Bearer ' + data.token;
+                }
+                return this.client(originalRequest);
+              } catch {
+                // Refresh failed — clear session and redirect
+                localStorage.removeItem('token');
+                localStorage.removeItem('refreshToken');
+                window.location.href = '/login';
+              }
+            } else {
+              localStorage.removeItem('token');
+              window.location.href = '/login';
+            }
           }
         }
         return Promise.reject(error);
@@ -49,6 +74,15 @@ class ApiClient {
   async register(userData: { email: string; password: string; firstName: string; lastName: string }) {
     const { data } = await this.client.post('/auth/register', userData);
     return data;
+  }
+
+  async refreshToken(refreshToken: string) {
+    const { data } = await this.client.post('/auth/refresh', { refreshToken });
+    return data;
+  }
+
+  async logout(refreshToken?: string) {
+    await this.client.post('/auth/logout', { refreshToken });
   }
 
   // Organizations
@@ -208,6 +242,11 @@ class ApiClient {
   }
 
   // Analytics
+  async getDashboardSummary() {
+    const { data } = await this.client.get('/analytics/summary');
+    return data;
+  }
+
   async getQueueMetrics(queueId: string) {
     const { data } = await this.client.get(`/analytics/queue/${queueId}`);
     return data;
