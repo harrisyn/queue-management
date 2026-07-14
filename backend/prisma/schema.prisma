@@ -196,6 +196,7 @@ model User {
   createdAppointments   Appointment[]   @relation("CreatedAppointments")
   practitioners         Practitioner[]
   notifications         Notification[]
+  refreshTokens         RefreshToken[]
 }
 
 enum NotificationType {
@@ -237,4 +238,31 @@ model Invite {
   createdAt     DateTime  @default(now())
 
   @@index([organizationId])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  token     String   @unique
+  userId    String
+  expiresAt DateTime
+  revoked   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  userId     String?
+  action     String
+  resource   String
+  resourceId String?
+  details    String?  // JSON string with extra context
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+  @@index([resource, resourceId])
+  @@index([createdAt])
 }

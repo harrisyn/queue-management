@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import routes from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { setSocketIO } from './lib/socket';
+import { generalLimiter } from './middleware/rateLimiter';
 
 // dotenv is loaded above via import 'dotenv/config'
 // This ensures environment variables (DATABASE_URL) are available
@@ -19,7 +20,7 @@ const allowedOrigins = [
   'http://localhost:3000',
   'http://localhost:8003',
   'http://localhost:5173',
-].filter(Boolean);
+].filter((o): o is string => o !== undefined);
 
 const io = new Server(httpServer, {
   cors: {
@@ -46,6 +47,9 @@ app.use(cors({
 }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Apply general rate limit to all API routes
+app.use('/api/', generalLimiter);
 
 // API Routes
 app.use('/api/v1', routes);

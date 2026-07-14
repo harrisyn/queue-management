@@ -41,6 +41,9 @@ export const useAuth = () => {
       const response: AuthResponse = await api.login(email, password);
       if (typeof window !== 'undefined') {
         localStorage.setItem('token', response.token);
+        if (response.refreshToken) {
+          localStorage.setItem('refreshToken', response.refreshToken);
+        }
       }
       setUser(response.user);
       return response.user;
@@ -67,7 +70,13 @@ export const useAuth = () => {
 
   const logout = useCallback(() => {
     if (typeof window !== 'undefined') {
+      const refreshToken = localStorage.getItem('refreshToken');
       localStorage.removeItem('token');
+      localStorage.removeItem('refreshToken');
+      // Best-effort server-side revocation
+      if (refreshToken) {
+        api.logout(refreshToken).catch((err) => console.warn('Token revocation failed:', err));
+      }
     }
     setUser(null);
   }, []);

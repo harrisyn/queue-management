@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  getDashboardSummary,
   getQueueMetrics,
   getServiceMetrics,
   getLocationMetrics,
@@ -11,6 +12,9 @@ import { authenticate, authorize } from '../middleware/auth.middleware';
 const router = Router();
 
 router.use(authenticate);
+
+router.get('/summary', getDashboardSummary);
+
 router.use(authorize('SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN'));
 
 router.get('/queue/:id', getQueueMetrics);

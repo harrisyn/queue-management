@@ -5,6 +5,8 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/a
 
 class ApiClient {
   private client: AxiosInstance;
+  /** Shared promise while a refresh is in-flight; prevents concurrent refresh calls. */
+  private refreshPromise: Promise<string> | null = null;
 
   constructor() {
     this.client = axios.create({
@@ -28,11 +30,46 @@ class ApiClient {
     // Response interceptor - handle errors
     this.client.interceptors.response.use(
       (response) => response,
-      (error: AxiosError) => {
-        if (error.response?.status === 401) {
+      async (error: AxiosError) => {
+        const originalRequest = error.config as typeof error.config & { _retry?: boolean };
+
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+
           if (typeof window !== 'undefined') {
-            localStorage.removeItem('token');
-            window.location.href = '/login';
+            const storedRefresh = localStorage.getItem('refreshToken');
+            if (storedRefresh) {
+              try {
+                // Coalesce concurrent 401s into a single refresh request.
+                // Uses the global axios instance directly (not this.client) to avoid
+                // triggering this same response interceptor recursively.
+                if (!this.refreshPromise) {
+                  this.refreshPromise = axios
+                    .post(`${API_BASE_URL}/auth/refresh`, { refreshToken: storedRefresh })
+                    .then(({ data }) => {
+                      localStorage.setItem('token', data.token);
+                      localStorage.setItem('refreshToken', data.refreshToken);
+                      return data.token as string;
+                    })
+                    .finally(() => {
+                      this.refreshPromise = null;
+                    });
+                }
+                const newToken = await this.refreshPromise;
+                if (originalRequest.headers) {
+                  originalRequest.headers.Authorization = 'Bearer ' + newToken;
+                }
+                return this.client(originalRequest);
+              } catch {
+                // Refresh failed — clear session and redirect
+                localStorage.removeItem('token');
+                localStorage.removeItem('refreshToken');
+                window.location.href = '/login';
+              }
+            } else {
+              localStorage.removeItem('token');
+              window.location.href = '/login';
+            }
           }
         }
         return Promise.reject(error);
@@ -49,6 +86,15 @@ class ApiClient {
   async register(userData: { email: string; password: string; firstName: string; lastName: string }) {
     const { data } = await this.client.post('/auth/register', userData);
     return data;
+  }
+
+  async refreshToken(refreshToken: string) {
+    const { data } = await this.client.post('/auth/refresh', { refreshToken });
+    return data;
+  }
+
+  async logout(refreshToken?: string) {
+    await this.client.post('/auth/logout', { refreshToken });
   }
 
   // Organizations
@@ -208,6 +254,11 @@ class ApiClient {
   }
 
   // Analytics
+  async getDashboardSummary() {
+    const { data } = await this.client.get('/analytics/summary');
+    return data;
+  }
+
   async getQueueMetrics(queueId: string) {
     const { data } = await this.client.get(`/analytics/queue/${queueId}`);
     return data;
