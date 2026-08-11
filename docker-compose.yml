@@ -64,6 +64,8 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8004/api/v1
       NEXT_PUBLIC_SOCKET_URL: http://localhost:8004
+      NEXT_PUBLIC_APP_DOMAIN: ${NEXT_PUBLIC_APP_DOMAIN:-localhost:8003}
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://backend:9000/api/v1}
       NODE_ENV: development
       HOST: 0.0.0.0
       # Enable polling for file changes in Docker (needed for Windows/Mac)
