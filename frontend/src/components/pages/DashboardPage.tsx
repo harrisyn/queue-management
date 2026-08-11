@@ -45,13 +45,10 @@ const DashboardPage: React.FC = () => {
         const statsData = await api.getDashboardStats(user.organizationId);
         setStats(statsData);
       } else {
-        // Super admin or no org - show all orgs
-        const orgs = await api.getOrganizations();
-        if (orgs.length > 0) {
-          setOrganization(orgs[0]);
-          const statsData = await api.getDashboardStats(orgs[0].id);
-          setStats(statsData);
-        }
+        // No organization on this account (e.g. a superadmin browsing the
+        // regular tenant app shell by mistake). Never guess an org - render
+        // the empty state instead of leaking another tenant's data.
+        setOrganization(null);
       }
     } catch (err: any) {
       console.error('Failed to load dashboard', err);
@@ -67,6 +64,16 @@ const DashboardPage: React.FC = () => {
         <div style={loadingContainer}>
           <div className="spinner" />
           <p style={loadingText}>Loading dashboard...</p>
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!loading && !organization) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
         </div>
       </Layout>
     );
