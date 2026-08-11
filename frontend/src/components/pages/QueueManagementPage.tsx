@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
 import { useSocket } from '@/hooks/useSocket';
+import { useAuthContext } from '@/contexts/AuthContext';
 import type { Queue, Service, QueueEntry, Location } from '@/types';
 
 // localStorage keys for persistence
@@ -73,6 +74,7 @@ interface OperatorQueueData {
 }
 
 const QueueManagementPage: React.FC = () => {
+  const { user } = useAuthContext();
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [services, setServices] = useState<Service[]>([]);
@@ -132,7 +134,7 @@ const QueueManagementPage: React.FC = () => {
 
   useEffect(() => {
     loadLocations();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (selectedLocation) {
@@ -168,10 +170,16 @@ const QueueManagementPage: React.FC = () => {
   }, [operatorData?.queue?.id]);
 
   const loadLocations = async () => {
+    if (!user?.organizationId) {
+      // No organization on this account (e.g. a superadmin). Never guess an
+      // org - render the empty state instead of leaking another tenant's data.
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const locs = await api.getLocations(orgs[0].id);
+      {
+        const locs = await api.getLocations(user.organizationId);
         setLocations(locs);
         
         // Try to restore from localStorage first
@@ -517,22 +525,26 @@ const QueueManagementPage: React.FC = () => {
       const userData = await api.getUser(entry.user?.id || '');
       setCustomerIdentityData(userData.identityData || {});
       
-      // Load available data sources and identity fields config from organization
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        // Load identity fields config from organization
-        if (orgs[0].identityFieldsConfig) {
-          setIdentityFieldsConfig(orgs[0].identityFieldsConfig as Record<string, { required: boolean; label: string; type?: string }>);
+      // Load available data sources and identity fields config from organization.
+      // Never guess an org from a global org list - only load for the
+      // logged-in user's own organization.
+      if (user?.organizationId) {
+        const org = await api.getOrganization(user.organizationId);
+        if (org.identityFieldsConfig) {
+          setIdentityFieldsConfig(org.identityFieldsConfig as Record<string, { required: boolean; label: string; type?: string }>);
         } else {
           setIdentityFieldsConfig({});
         }
-        
+
         try {
-          const sources = await api.getDataSources(orgs[0].id);
+          const sources = await api.getDataSources(user.organizationId);
           setDataSources(sources.filter((s: any) => s.isActive));
         } catch {
           setDataSources([]);
         }
+      } else {
+        setIdentityFieldsConfig({});
+        setDataSources([]);
       }
     } catch (err) {
       console.error('Failed to load customer data:', err);
@@ -614,6 +626,16 @@ const QueueManagementPage: React.FC = () => {
             to { transform: rotate(360deg); }
           }
         `}</style>
+      </Layout>
+    );
+  }
+
+  if (!loading && !user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
       </Layout>
     );
   }

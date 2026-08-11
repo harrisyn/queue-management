@@ -47,7 +47,7 @@ export default function AdminLocationsPage() {
     } else {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   const loadOrgs = async () => {
     setLoading(true);
@@ -57,9 +57,10 @@ export default function AdminLocationsPage() {
         setOrgs([org]);
         setOrgId(org.id);
       } else {
-        const data = await api.getOrganizations();
-        setOrgs(data);
-        if (data.length) setOrgId(data[0].id);
+        // No organization on this account (e.g. a superadmin). Never guess an
+        // org - render the empty state instead of leaking another tenant's data.
+        setOrgs([]);
+        setOrgId(null);
       }
     } catch (err) {
       console.error(err);
@@ -196,6 +197,16 @@ export default function AdminLocationsPage() {
     return (
       <Layout>
         <div style={{ padding: 20 }}>Admins only</div>
+      </Layout>
+    );
+  }
+
+  if (!loading && !user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
       </Layout>
     );
   }

@@ -63,8 +63,6 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (isAdmin && user?.organizationId) {
       loadOrganization();
-    } else if (isAdmin) {
-      loadFirstOrg();
     } else {
       setLoading(false);
     }
@@ -99,43 +97,6 @@ export default function AdminSettingsPage() {
       }
       
       setDisplayMode(org.defaultDisplayMode || 'TICKET_ONLY');
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadFirstOrg = async () => {
-    try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const org = orgs[0];
-        setOrganization(org);
-        setFormData({
-          name: org.name || '',
-          slug: org.slug || '',
-          email: org.email || '',
-          phone: org.phone || '',
-        });
-        
-        if (org.identityFieldsConfig) {
-          const fields = Object.entries(org.identityFieldsConfig).map(([key, config]: [string, any]) => ({
-            key,
-            label: config.label || key,
-            type: config.type || 'text',
-            required: config.required || false,
-          }));
-          setIdentityFields(fields);
-        } else {
-          setIdentityFields(DEFAULT_IDENTITY_FIELDS.slice(0, 3).map(f => ({
-            ...f,
-            required: false,
-          })));
-        }
-        
-        setDisplayMode(org.defaultDisplayMode || 'TICKET_ONLY');
-      }
     } catch (err) {
       console.error(err);
     } finally {
@@ -230,6 +191,16 @@ export default function AdminSettingsPage() {
       <Layout>
         <div style={{ padding: '3rem', textAlign: 'center' }}>
           <div className="spinner" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!user?.organizationId && !organization) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
         </div>
       </Layout>
     );

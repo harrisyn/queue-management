@@ -69,7 +69,7 @@ const DashboardPage: React.FC = () => {
     );
   }
 
-  if (!loading && !organization) {
+  if (!loading && !user?.organizationId && !organization) {
     return (
       <Layout>
         <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
