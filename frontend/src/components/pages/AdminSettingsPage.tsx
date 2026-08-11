@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { buildTenantUrl } from '@/lib/subdomain';
+import { isReservedSlug } from '@/lib/reservedSlugs';
 
 interface IdentityField {
   key: string;
@@ -107,6 +109,11 @@ export default function AdminSettingsPage() {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization) return;
+
+    if (formData.slug && isReservedSlug(formData.slug)) {
+      setMessage({ type: 'error', text: 'This slug is reserved and cannot be used.' });
+      return;
+    }
 
     setSaving(true);
     setMessage(null);
@@ -328,8 +335,10 @@ export default function AdminSettingsPage() {
                     </button>
                   </div>
                   <p style={helpText}>
-                    {formData.slug ? (
-                      <>Your public URL will be: <strong>yourdomain.com/{formData.slug}</strong></>
+                    {formData.slug && isReservedSlug(formData.slug) ? (
+                      <span style={{ color: '#dc2626' }}>This slug is reserved and can&apos;t be used.</span>
+                    ) : formData.slug ? (
+                      <>Your workspace URL will be: <strong>{buildTenantUrl(formData.slug).replace(/^https?:\/\//, '')}</strong></>
                     ) : (
                       'Create a memorable URL slug for your organization'
                     )}
