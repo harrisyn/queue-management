@@ -16,14 +16,16 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  // Admin subdomain: rewrite everything under /superadmin/*.
+  // Admin subdomain: only rewrite the bare root to the superadmin dashboard.
+  // Everything else (e.g. /login, or /superadmin/* which already carries
+  // the full prefix per the superadmin nav) passes through unmodified.
   if (subdomain === 'admin') {
-    if (pathname.startsWith('/superadmin')) {
-      return NextResponse.next();
+    if (pathname === '/') {
+      const url = req.nextUrl.clone();
+      url.pathname = '/superadmin';
+      return NextResponse.rewrite(url);
     }
-    const url = req.nextUrl.clone();
-    url.pathname = `/superadmin${pathname === '/' ? '' : pathname}`;
-    return NextResponse.rewrite(url);
+    return NextResponse.next();
   }
 
   // Any other subdomain: treat as a tenant slug and resolve it.
