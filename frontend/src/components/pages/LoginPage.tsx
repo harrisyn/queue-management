@@ -1,9 +1,10 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { extractSubdomain } from '@/lib/subdomain';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -11,8 +12,15 @@ const LoginPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [subdomain, setSubdomain] = useState<string | null>(null);
   const { login } = useAuthContext();
   const router = useRouter();
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      setSubdomain(extractSubdomain(window.location.host));
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,8 +28,12 @@ const LoginPage: React.FC = () => {
     setError('');
 
     try {
-      const success = await login(email, password);
-      console.log('Login success:', success);
+      const options = subdomain === 'admin'
+        ? { adminLogin: true }
+        : subdomain
+          ? { slug: subdomain }
+          : undefined;
+      const success = await login(email, password, options);
       if (success) {
         router.push('/');
       } else {
@@ -92,8 +104,12 @@ const LoginPage: React.FC = () => {
         <div style={formSection}>
           <div style={formCard}>
             <div style={formHeader}>
-              <h2 style={formTitle}>Operator sign in</h2>
-                <p style={formSubtitle}>Sign in to your staff/admin account to manage queues and services.</p>
+              <h2 style={formTitle}>{subdomain === 'admin' ? 'Superadmin sign in' : 'Operator sign in'}</h2>
+              <p style={formSubtitle}>
+                {subdomain === 'admin'
+                  ? 'Sign in with your superadmin account to manage organizations and plans.'
+                  : 'Sign in to your staff/admin account to manage queues and services.'}
+              </p>
             </div>
 
             {error && (
