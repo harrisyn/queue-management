@@ -2,14 +2,17 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import { slugify, generateUniqueSlug } from '../utils/slug';
+import { isReservedSlug } from '../constants/reservedSlugs';
 
 // Public endpoint: Register a new organization with first admin user
 export const registerOrganization = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { 
-      organizationName, 
+    const {
+      organizationName,
       email,           // Organization email (optional)
       phone,           // Organization phone (optional)
+      slug,            // Optional caller-chosen subdomain slug
       adminEmail,      // Admin email - or use 'email' if adminEmail not provided
       adminPassword,   // Admin password
       adminFirstName,  // Admin first name
@@ -39,6 +42,26 @@ export const registerOrganization = async (req: Request, res: Response, next: Ne
       return res.status(400).json({ error: 'A user with this email already exists' });
     }
 
+    // Resolve the org's subdomain slug: use the caller's choice if valid,
+    // otherwise auto-generate one from the org name.
+    let resolvedSlug: string;
+    if (slug) {
+      const normalized = slugify(slug);
+      if (normalized !== slug.toLowerCase()) {
+        return res.status(400).json({ error: 'Slug must be lowercase letters, numbers, and hyphens only' });
+      }
+      if (isReservedSlug(normalized)) {
+        return res.status(400).json({ error: 'This slug is reserved and cannot be used' });
+      }
+      const existingOrgWithSlug = await prisma.organization.findUnique({ where: { slug: normalized } });
+      if (existingOrgWithSlug) {
+        return res.status(400).json({ error: 'This slug is already taken' });
+      }
+      resolvedSlug = normalized;
+    } else {
+      resolvedSlug = await generateUniqueSlug(organizationName);
+    }
+
     // Create organization and admin user in a transaction
     const result = await prisma.$transaction(async (tx) => {
       // Create organization
@@ -47,6 +70,7 @@ export const registerOrganization = async (req: Request, res: Response, next: Ne
           name: organizationName,
           email: actualAdminEmail, // Use admin email as org email
           phone: phone || null,
+          slug: resolvedSlug,
         },
       });
 
@@ -217,6 +241,9 @@ export const updateOrganization = async (req: Request, res: Response, next: Next
       const slugRegex = /^[a-z0-9-]+$/;
       if (!slugRegex.test(slug)) {
         return res.status(400).json({ error: 'Slug must be lowercase alphanumeric with hyphens only' });
+      }
+      if (isReservedSlug(slug)) {
+        return res.status(400).json({ error: 'This slug is reserved and cannot be used' });
       }
       // Check if slug is already taken by another org. Use findUnique for the slug
       // (slug is unique in the schema) and ensure the found org isn't the one being updated.
