@@ -131,6 +131,26 @@ export const getPublicOrganization = async (req: Request, res: Response, next: N
   }
 };
 
+// Public endpoint: resolve an organization by its subdomain slug
+export const getPublicOrganizationBySlug = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { slug } = req.params;
+
+    const organization = await prisma.organization.findUnique({
+      where: { slug },
+      select: { id: true, name: true, slug: true },
+    });
+
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    res.json(organization);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const createOrganization = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { name, email, phone } = req.body;
