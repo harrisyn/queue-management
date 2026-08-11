@@ -38,6 +38,17 @@ async function run() {
   }
   console.log('Non-superadmin correctly rejected on adminLogin');
 
+  // SUPER_ADMIN should be rejected from slug-scoped login (organizationId mismatch)
+  const superadminSlugRes = await fetch(`${API_BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'superadmin@qms.local', password: '12345678', slug: 'nyaho' }),
+  });
+  if (superadminSlugRes.status !== 401) {
+    throw new Error(`Expected 401 for superadmin slug-scoped login, got ${superadminSlugRes.status}`);
+  }
+  console.log('SUPER_ADMIN correctly rejected from slug-scoped login');
+
   console.log('login-scoping smoke test passed');
   process.exit(0);
 }
