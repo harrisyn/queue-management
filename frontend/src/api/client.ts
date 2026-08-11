@@ -517,6 +517,7 @@ class ApiClient {
     adminLastName: string;
     adminPassword: string;
     emailVerified?: boolean;
+    slug?: string;
   }) {
     const { data } = await this.client.post('/public/register-org', payload);
     return data;

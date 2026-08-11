@@ -4,6 +4,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api from '@/api/client';
+import { isReservedSlug } from '@/lib/reservedSlugs';
+import { buildTenantUrl } from '@/lib/subdomain';
 
 // ============================================================================
 // MULTI-STEP REGISTRATION COMPONENT
@@ -11,6 +13,7 @@ import api from '@/api/client';
 
 interface RegistrationData {
   organizationName: string;
+  slug?: string;
   email: string;
   phone: string;
   countryCode: string;
@@ -164,7 +167,7 @@ const RegisterPage: React.FC = () => {
     try {
       const fullPhone = formData.phone ? `${formData.countryCode}${formData.phone.replace(/\D/g, '')}` : undefined;
       
-      const { token } = await api.registerOrganization({
+      const { token, organization } = await api.registerOrganization({
         organizationName: formData.organizationName,
         email: formData.email,
         phone: fullPhone,
@@ -172,13 +175,13 @@ const RegisterPage: React.FC = () => {
         adminLastName: formData.lastName,
         adminPassword: formData.password,
         emailVerified: formData.emailVerified,
+        slug: formData.slug || undefined,
       });
 
-      localStorage.setItem('token', token);
       setSuccess(true);
-      
+
       setTimeout(() => {
-        window.location.href = '/';
+        window.location.href = buildTenantUrl(organization.slug);
       }, 2000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed');
@@ -195,6 +198,10 @@ const RegisterPage: React.FC = () => {
       }
       if (!formData.firstName.trim() || !formData.lastName.trim()) {
         setError('Your name is required');
+        return;
+      }
+      if (formData.slug && isReservedSlug(formData.slug)) {
+        setError('This workspace name is reserved. Please choose another.');
         return;
       }
     }
@@ -372,6 +379,23 @@ const RegisterPage: React.FC = () => {
                       style={styles.input}
                       autoFocus
                     />
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Workspace URL</label>
+                    <input
+                      type="text"
+                      name="slug"
+                      value={formData.slug || ''}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                      placeholder="your-org"
+                      style={styles.input}
+                    />
+                    <p style={styles.hint}>
+                      {formData.slug && isReservedSlug(formData.slug)
+                        ? <span style={{ color: '#dc2626' }}>This name is reserved — pick another.</span>
+                        : <>Your workspace will be at <strong>{buildTenantUrl(formData.slug || 'your-org').replace(/^https?:\/\//, '')}</strong></>}
+                    </p>
                   </div>
 
                   <div style={styles.formRow}>
