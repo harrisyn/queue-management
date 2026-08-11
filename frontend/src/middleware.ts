@@ -29,19 +29,26 @@ export async function middleware(req: NextRequest) {
   }
 
   // Any other subdomain: treat as a tenant slug and resolve it.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s budget
   try {
-    const lookupRes = await fetch(`${API_INTERNAL_URL}/public/orgs/by-slug/${subdomain}`);
+    const lookupRes = await fetch(`${API_INTERNAL_URL}/public/orgs/by-slug/${subdomain}`, {
+      signal: controller.signal,
+    });
     if (!lookupRes.ok) {
       const url = req.nextUrl.clone();
       url.pathname = '/workspace-not-found';
       return NextResponse.rewrite(url);
     }
   } catch {
-    // Backend unreachable — fail open to the not-found page rather than
-    // a hard error, so a transient backend hiccup doesn't 500 every tenant.
+    // Backend unreachable, or the lookup took too long and was aborted —
+    // fail open to the not-found page rather than a hard error/hang, so a
+    // transient backend hiccup doesn't 500 or wedge every tenant request.
     const url = req.nextUrl.clone();
     url.pathname = '/workspace-not-found';
     return NextResponse.rewrite(url);
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   const response = NextResponse.next();
