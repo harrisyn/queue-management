@@ -49,6 +49,7 @@ export interface ServicePoint {
   type: ServicePointType;
   isActive: boolean;
   capacity: number;
+  displayMode?: string; // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
   location?: Location;
   entries?: QueueEntry[];
   currentlyServing?: {

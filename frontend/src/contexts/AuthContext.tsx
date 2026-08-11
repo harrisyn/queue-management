@@ -12,6 +12,7 @@ interface AuthContextType {
   register: (userData: { email: string; password: string; firstName: string; lastName: string }) => Promise<User>;
   logout: () => void;
   isAuthenticated: boolean;
+  isSuperAdmin: boolean;
   isAdmin: boolean;
   isStaff: boolean;
 }

@@ -16,6 +16,7 @@ interface QueueSwimlane {
   serviceId: string;
   serviceName: string;
   serviceType: string;
+  displayMode: string; // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
   queueId: string | null;
   queueStatus: string;
   activeServicePoints: number;
@@ -260,6 +261,11 @@ const TVDisplayPage: React.FC = () => {
   // Get selected swimlane for single-queue view
   const selectedSwimlane = swimlanes.find(s => s.queueId === selectedQueueId);
 
+  // Helper to check if customer names should be shown based on displayMode
+  const shouldShowName = (displayMode: string) => {
+    return displayMode === 'NAME_AND_TICKET' || displayMode === 'FULL_INFO';
+  };
+
   if (loading) {
     return (
       <div className="display-container loading">
@@ -463,7 +469,7 @@ const TVDisplayPage: React.FC = () => {
                         {lane.currentlyServing.map(entry => (
                           <div key={entry.id} className="serving-ticket">
                             <span className="ticket-num">{entry.ticketNumber}</span>
-                            <span className="customer">{entry.customerName}</span>
+                            {shouldShowName(lane.displayMode) && <span className="customer">{entry.customerName}</span>}
                             {entry.servicePoint && <span className="counter">→ {entry.servicePoint}</span>}
                           </div>
                         ))}
@@ -513,7 +519,9 @@ const TVDisplayPage: React.FC = () => {
                     {selectedSwimlane.currentlyServing.map(entry => (
                       <div key={entry.id} className="big-ticket serving">
                         <div className="big-ticket-number">{entry.ticketNumber}</div>
-                        <div className="big-ticket-name">{entry.customerName}</div>
+                        {shouldShowName(selectedSwimlane.displayMode) && (
+                          <div className="big-ticket-name">{entry.customerName}</div>
+                        )}
                         {entry.servicePoint && (
                           <div className="big-ticket-counter">Counter: {entry.servicePoint}</div>
                         )}
@@ -538,7 +546,9 @@ const TVDisplayPage: React.FC = () => {
                       <div key={entry.id} className="waiting-card">
                         <span className="position">#{entry.position}</span>
                         <span className="ticket">{entry.ticketNumber}</span>
-                        <span className="name">{entry.customerName}</span>
+                        {shouldShowName(selectedSwimlane.displayMode) && (
+                          <span className="name">{entry.customerName}</span>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -555,7 +565,7 @@ const TVDisplayPage: React.FC = () => {
         {/* Service Points View (original) */}
         {viewMode === 'service-points' && (
           <>
-            {!error && hasServicePoints === false && (
+            {!error && servicePoints.length === 0 && hasServicePoints === false && (
               <div className="empty-display admin-warning">
                 <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
@@ -568,7 +578,7 @@ const TVDisplayPage: React.FC = () => {
               </div>
             )}
 
-            {!error && hasServicePoints !== false && activePoints.length === 0 && (
+            {!error && servicePoints.length > 0 && activePoints.length === 0 && (
               <div className="empty-display">
                 <svg width="120" height="120" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1">
                   <circle cx="12" cy="12" r="10" />
@@ -595,7 +605,9 @@ const TVDisplayPage: React.FC = () => {
                       <div className="now-serving">
                         <div className="ticket-label">NOW SERVING</div>
                         <div className="ticket-number">{sp.currentlyServing.ticketNumber}</div>
-                        <div className="customer-name">{sp.currentlyServing.customerName}</div>
+                        {shouldShowName(sp.displayMode || 'TICKET_ONLY') && (
+                          <div className="customer-name">{sp.currentlyServing.customerName}</div>
+                        )}
                         <div className="service-name">{sp.currentlyServing.serviceName}</div>
                       </div>
                     ) : (

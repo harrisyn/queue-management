@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
 
 interface Location {
@@ -22,6 +23,7 @@ interface Organization {
 
 export default function AdminLocationsPage() {
   const { user, isAdmin } = useAuthContext();
+  const { canCreate, limits, refresh: refreshSubscription } = useSubscription();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -102,6 +104,7 @@ export default function AdminLocationsPage() {
       }
       
       await loadLocations(orgId);
+      await refreshSubscription(); // Refresh subscription to update limits
       resetForm();
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to create location');
@@ -212,10 +215,23 @@ export default function AdminLocationsPage() {
               </div>
               <div>
                 <h1 style={pageTitle}>Locations</h1>
-                <p style={pageSubtitle}>Manage your physical locations and their public access codes</p>
+                <p style={pageSubtitle}>
+                  Manage your physical locations and their public access codes
+                  <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
+                    ({limits.locations.current}/{limits.locations.limit} used)
+                  </span>
+                </p>
               </div>
             </div>
-            <button onClick={() => { resetForm(); setShowForm(true); }} style={addButton}>
+            <button 
+              onClick={() => { resetForm(); setShowForm(true); }} 
+              style={{
+                ...addButton,
+                ...(canCreate('locations') ? {} : { opacity: 0.5, cursor: 'not-allowed' }),
+              }}
+              disabled={!canCreate('locations')}
+              title={canCreate('locations') ? 'Add a new location' : 'Location limit reached. Upgrade to add more.'}
+            >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                 <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
               </svg>
@@ -223,6 +239,13 @@ export default function AdminLocationsPage() {
             </button>
           </div>
         </div>
+
+        {/* Upgrade prompt if limit reached */}
+        {!canCreate('locations') && (
+          <div style={{ padding: '0 24px' }}>
+            <UpgradePrompt resource="locations" />
+          </div>
+        )}
 
         {/* Org selector - only show if multiple orgs */}
         {orgs.length > 1 && (

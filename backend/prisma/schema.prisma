@@ -10,20 +10,23 @@ datasource db {
 }
 
 model Organization {
-  id                    String         @id @default(uuid())
+  id                    String                   @id @default(uuid())
   name                  String
-  slug                  String?        @unique
+  slug                  String?                  @unique
   email                 String?
   phone                 String?
   // Customer identity settings - JSON with field requirements
-  identityFieldsConfig  Json?          // {mrNumber: {required: true, label: "MR Number"}, ...}
+  identityFieldsConfig  Json?                    // {mrNumber: {required: true, label: "MR Number"}, ...}
   // Display settings for queues
-  defaultDisplayMode    String         @default("TICKET_ONLY") // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
+  defaultDisplayMode    String                   @default("TICKET_ONLY") // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
+  // Subscription
+  subscriptionId        String?
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
   locations             Location[]
   users                 User[]
   dataSources           DataSource[]
+  subscription          OrganizationSubscription? @relation(fields: [subscriptionId], references: [id])
 }
 
 model Location {
@@ -55,18 +58,43 @@ enum ServicePointType {
 model ServicePoint {
   id          String           @id @default(uuid())
   locationId  String
-  name        String           // e.g., "Reception Desk 1", "Consultation Room A"
+  name        String           // e.g., "Reception Desk", "Consultation Room"
   displayName String?          // Friendly name for display boards
   type        ServicePointType @default(OTHER)
   isActive    Boolean          @default(true)
-  capacity    Int              @default(1) // How many can be served at once
+  capacity    Int              @default(1) // Number of physical instances/desks
   createdAt   DateTime         @default(now())
   updatedAt   DateTime         @updatedAt
   location    Location         @relation(fields: [locationId], references: [id], onDelete: Cascade)
   entries     QueueEntry[]     // Currently serving entries
   services    ServicePointService[] // Services this point can handle
+  instances   ServicePointInstance[] // Physical desk instances (Reception 1, Reception 2, etc.)
 
   @@index([locationId, isActive])
+}
+
+// Physical instance of a service point (e.g., "Reception 1", "Reception 2")
+// Each instance can be independently occupied by an operator
+model ServicePointInstance {
+  id                String       @id @default(uuid())
+  servicePointId    String
+  instanceNumber    Int          // 1, 2, 3... for naming (Reception 1, Reception 2)
+  displayName       String?      // Display name for the instance (e.g., "Reception 1")
+  isActive          Boolean      @default(true)
+  isOccupied        Boolean      @default(false)
+  occupiedByUserId  String?
+  occupiedAt        DateTime?
+  currentServiceId  String?      // Which service this instance is currently serving
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  servicePoint      ServicePoint @relation(fields: [servicePointId], references: [id], onDelete: Cascade)
+  occupiedBy        User?        @relation("OccupiedInstances", fields: [occupiedByUserId], references: [id], onDelete: SetNull)
+  currentService    Service?     @relation("CurrentServiceInstances", fields: [currentServiceId], references: [id], onDelete: SetNull)
+  servingEntries    QueueEntry[] @relation("InstanceServingEntries") // Entries being served at this instance
+
+  @@unique([servicePointId, instanceNumber])
+  @@index([servicePointId, isActive])
+  @@index([occupiedByUserId])
 }
 
 // Many-to-many relation between ServicePoints and Services
@@ -124,6 +152,7 @@ model Service {
   flowsFrom       ServiceFlow[] @relation("FromService")
   flowsTo         ServiceFlow[] @relation("ToService")
   servicePoints   ServicePointService[] // Service points that can handle this service
+  currentInstances ServicePointInstance[] @relation("CurrentServiceInstances") // Instances currently serving this service
 }
 
 model Practitioner {
@@ -181,36 +210,39 @@ enum EntryStatus {
 }
 
 model QueueEntry {
-  id              String        @id @default(uuid())
-  queueId         String
-  userId          String
-  ticketNumber    String
-  status          EntryStatus   @default(WAITING)
-  priority        Int           @default(0)
-  sortOrder       Int           @default(0)    // For drag-and-drop reordering
-  servicePointId  String?                      // Which service point is serving this entry
-  sessionId       String?                      // Session ID for public users to track their tickets
-  journeyId       String?                      // Link to customer journey for cross-queue tracking
+  id                     String                @id @default(uuid())
+  queueId                String
+  userId                 String
+  ticketNumber           String
+  status                 EntryStatus           @default(WAITING)
+  priority               Int                   @default(0)
+  sortOrder              Int                   @default(0)    // For drag-and-drop reordering
+  servicePointId         String?               // Which service point is serving this entry
+  servicePointInstanceId String?               // Which specific instance is serving this entry
+  sessionId              String?               // Session ID for public users to track their tickets
+  journeyId              String?               // Link to customer journey for cross-queue tracking
   // Previous queue entry ID if transferred from another service
-  previousEntryId String?
-  joinedAt        DateTime      @default(now())
-  calledAt        DateTime?
-  servedAt        DateTime?
-  completedAt     DateTime?
-  serviceDuration Int?                         // Actual service duration in minutes (for historical data)
+  previousEntryId        String?
+  joinedAt               DateTime              @default(now())
+  calledAt               DateTime?
+  servedAt               DateTime?
+  completedAt            DateTime?
+  serviceDuration        Int?                  // Actual service duration in minutes (for historical data)
   // Wait time before being called (minutes)
-  waitDuration    Int?
-  notes           String?
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  queue           Queue         @relation(fields: [queueId], references: [id], onDelete: Cascade)
-  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  servicePoint    ServicePoint? @relation(fields: [servicePointId], references: [id])
+  waitDuration           Int?
+  notes                  String?
+  createdAt              DateTime              @default(now())
+  updatedAt              DateTime              @updatedAt
+  queue                  Queue                 @relation(fields: [queueId], references: [id], onDelete: Cascade)
+  user                   User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  servicePoint           ServicePoint?         @relation(fields: [servicePointId], references: [id])
+  servicePointInstance   ServicePointInstance? @relation("InstanceServingEntries", fields: [servicePointInstanceId], references: [id])
   
   @@index([queueId, status])
   @@index([userId])
   @@index([sessionId])
   @@index([journeyId])
+  @@index([servicePointInstanceId])
 }
 
 model ServiceFlow {
@@ -283,6 +315,7 @@ model User {
   practitioners         Practitioner[]
   notifications         Notification[]
   activatedServicePoints ServicePointService[] @relation("ActivatedServicePoints")
+  occupiedInstances     ServicePointInstance[] @relation("OccupiedInstances")
   journeys              CustomerJourney[]
   
   @@index([browserFingerprint])
@@ -391,4 +424,87 @@ model CustomerJourney {
   @@index([userId])
   @@index([startedAt])
   @@index([completedAt])
+}
+
+// =====================================================
+// SUBSCRIPTION MANAGEMENT
+// =====================================================
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIAL
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+// Defines subscription tiers with feature limits
+model SubscriptionPlan {
+  id                    String                   @id @default(uuid())
+  name                  String                   // "Free", "Starter", "Professional", "Enterprise"
+  code                  String                   @unique // "free", "starter", "pro", "enterprise"
+  description           String?
+  
+  // Pricing
+  priceMonthly          Decimal                  @default(0)
+  priceYearly           Decimal                  @default(0)
+  currency              String                   @default("USD")
+  
+  // Feature limits (null = unlimited)
+  maxLocations          Int?                     // Max number of locations
+  maxServicesPerLoc     Int?                     // Max services per location
+  maxUsersPerOrg        Int?                     // Max staff users
+  maxQueueEntriesPerDay Int?                     // Max daily queue entries across all queues
+  
+  // Feature flags
+  features              Json                     @default("{}") // {"analytics": true, "customBranding": false, "apiAccess": true, etc}
+  
+  // Display order
+  displayOrder          Int                      @default(0)
+  isActive              Boolean                  @default(true)
+  isDefault             Boolean                  @default(false) // Default plan for new orgs
+  
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  subscriptions         OrganizationSubscription[]
+  
+  @@index([code])
+  @@index([isActive])
+}
+
+// Links organization to subscription plan with billing info
+model OrganizationSubscription {
+  id                    String             @id @default(uuid())
+  planId                String
+  
+  // Billing info
+  status                SubscriptionStatus @default(TRIAL)
+  billingCycle          String             @default("monthly") // "monthly" or "yearly"
+  
+  // Trial period
+  trialEndsAt           DateTime?
+  
+  // Current billing period
+  currentPeriodStart    DateTime           @default(now())
+  currentPeriodEnd      DateTime
+  
+  // Cancellation info
+  cancelledAt           DateTime?
+  cancelReason          String?
+  
+  // External payment reference (e.g., Stripe subscription ID)
+  externalPaymentId     String?
+  
+  // Usage tracking (updated periodically)
+  usageStats            Json?              // {"locationsUsed": 2, "usersUsed": 5, "entriesThisMonth": 1234}
+  
+  createdAt             DateTime           @default(now())
+  updatedAt             DateTime           @updatedAt
+  
+  plan                  SubscriptionPlan   @relation(fields: [planId], references: [id])
+  organizations         Organization[]
+  
+  @@index([planId])
+  @@index([status])
+  @@index([currentPeriodEnd])
 }

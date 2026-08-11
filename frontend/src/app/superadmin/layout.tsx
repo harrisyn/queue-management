@@ -1,0 +1,218 @@
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { useAuth } from '@/hooks/useAuth';
+
+export default function SuperadminLayout({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
+  const { user, loading } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+
+  useEffect(() => {
+    if (!loading && (!user || user.role !== 'SUPER_ADMIN')) {
+      router.push('/login');
+    }
+  }, [user, loading, router]);
+
+  if (loading) {
+    return (
+      <div style={loadingContainer}>
+        <div style={spinner} />
+        <p>Loading...</p>
+      </div>
+    );
+  }
+
+  if (!user || user.role !== 'SUPER_ADMIN') {
+    return null;
+  }
+
+  const navItems = [
+    { href: '/superadmin', label: 'Dashboard', icon: '📊' },
+    { href: '/superadmin/organizations', label: 'Organizations', icon: '🏢' },
+    { href: '/superadmin/plans', label: 'Subscription Plans', icon: '💳' },
+  ];
+
+  return (
+    <div style={layoutContainer}>
+      {/* Sidebar */}
+      <aside style={{ ...sidebar, width: sidebarOpen ? '260px' : '60px' }}>
+        <div style={sidebarHeader}>
+          <div style={logoSection}>
+            <span style={logoIcon}>⚡</span>
+            {sidebarOpen && <span style={logoText}>SuperAdmin</span>}
+          </div>
+          <button 
+            onClick={() => setSidebarOpen(!sidebarOpen)} 
+            style={toggleBtn}
+            title={sidebarOpen ? 'Collapse' : 'Expand'}
+          >
+            {sidebarOpen ? '◀' : '▶'}
+          </button>
+        </div>
+
+        <nav style={navContainer}>
+          {navItems.map(item => (
+            <Link
+              key={item.href}
+              href={item.href}
+              style={{
+                ...navLink,
+                ...(pathname === item.href ? activeNavLink : {}),
+              }}
+            >
+              <span style={navIcon}>{item.icon}</span>
+              {sidebarOpen && <span>{item.label}</span>}
+            </Link>
+          ))}
+        </nav>
+
+        <div style={sidebarFooter}>
+          <Link href="/" style={backLink}>
+            <span style={navIcon}>🏠</span>
+            {sidebarOpen && <span>Back to App</span>}
+          </Link>
+        </div>
+      </aside>
+
+      {/* Main Content */}
+      <main style={{ ...mainContent, marginLeft: sidebarOpen ? '260px' : '60px' }}>
+        {children}
+      </main>
+    </div>
+  );
+}
+
+// Styles
+const loadingContainer: React.CSSProperties = {
+  display: 'flex',
+  flexDirection: 'column',
+  alignItems: 'center',
+  justifyContent: 'center',
+  height: '100vh',
+  gap: '1rem',
+};
+
+const spinner: React.CSSProperties = {
+  width: '40px',
+  height: '40px',
+  border: '4px solid #e2e8f0',
+  borderTop: '4px solid #6366f1',
+  borderRadius: '50%',
+  animation: 'spin 1s linear infinite',
+};
+
+const layoutContainer: React.CSSProperties = {
+  minHeight: '100vh',
+  background: '#0f172a',
+};
+
+const sidebar: React.CSSProperties = {
+  position: 'fixed',
+  top: 0,
+  left: 0,
+  height: '100vh',
+  background: 'linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%)',
+  borderRight: '1px solid rgba(99, 102, 241, 0.2)',
+  display: 'flex',
+  flexDirection: 'column',
+  transition: 'width 0.3s ease',
+  zIndex: 100,
+};
+
+const sidebarHeader: React.CSSProperties = {
+  padding: '1.5rem 1rem',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
+};
+
+const logoSection: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.75rem',
+};
+
+const logoIcon: React.CSSProperties = {
+  fontSize: '1.5rem',
+};
+
+const logoText: React.CSSProperties = {
+  fontSize: '1.25rem',
+  fontWeight: 700,
+  color: '#fff',
+  whiteSpace: 'nowrap',
+};
+
+const toggleBtn: React.CSSProperties = {
+  background: 'rgba(99, 102, 241, 0.2)',
+  border: 'none',
+  color: '#a5b4fc',
+  padding: '0.5rem',
+  borderRadius: '6px',
+  cursor: 'pointer',
+  fontSize: '0.875rem',
+};
+
+const navContainer: React.CSSProperties = {
+  flex: 1,
+  padding: '1rem 0.75rem',
+  display: 'flex',
+  flexDirection: 'column',
+  gap: '0.5rem',
+};
+
+const navLink: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.75rem',
+  padding: '0.875rem 1rem',
+  color: '#94a3b8',
+  textDecoration: 'none',
+  borderRadius: '8px',
+  fontSize: '0.9375rem',
+  transition: 'all 0.2s ease',
+  whiteSpace: 'nowrap',
+};
+
+const activeNavLink: React.CSSProperties = {
+  background: 'rgba(99, 102, 241, 0.2)',
+  color: '#a5b4fc',
+};
+
+const navIcon: React.CSSProperties = {
+  fontSize: '1.25rem',
+  minWidth: '1.5rem',
+  textAlign: 'center' as const,
+};
+
+const sidebarFooter: React.CSSProperties = {
+  padding: '1rem 0.75rem',
+  borderTop: '1px solid rgba(99, 102, 241, 0.2)',
+};
+
+const backLink: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '0.75rem',
+  padding: '0.875rem 1rem',
+  color: '#64748b',
+  textDecoration: 'none',
+  borderRadius: '8px',
+  fontSize: '0.875rem',
+  whiteSpace: 'nowrap',
+};
+
+const mainContent: React.CSSProperties = {
+  minHeight: '100vh',
+  padding: '2rem',
+  transition: 'margin-left 0.3s ease',
+};

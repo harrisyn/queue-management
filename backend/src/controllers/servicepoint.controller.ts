@@ -142,6 +142,18 @@ export const getActiveServicePoints = async (req: Request, res: Response, next: 
   try {
     const { locationId } = req.params;
 
+    // Get location with organization's default display mode
+    const location = await prisma.location.findUnique({
+      where: { id: locationId },
+      include: {
+        organization: {
+          select: { defaultDisplayMode: true }
+        }
+      }
+    });
+    
+    const orgDefaultDisplayMode = location?.organization?.defaultDisplayMode || 'TICKET_ONLY';
+
     const servicePoints = await prisma.servicePoint.findMany({
       where: { 
         locationId,
@@ -157,7 +169,7 @@ export const getActiveServicePoints = async (req: Request, res: Response, next: 
             queue: {
               include: {
                 service: {
-                  select: { name: true },
+                  select: { name: true, displayMode: true },
                 },
               },
             },
@@ -168,17 +180,24 @@ export const getActiveServicePoints = async (req: Request, res: Response, next: 
     });
 
     // Format response for display boards
-    const displayData = servicePoints.map((sp: typeof servicePoints[number]) => ({
-      id: sp.id,
-      name: sp.name,
-      displayName: sp.displayName || sp.name,
-      type: sp.type,
-      currentlyServing: sp.entries.length > 0 ? {
-        ticketNumber: sp.entries[0].ticketNumber,
-        customerName: `${sp.entries[0].user.firstName} ${sp.entries[0].user.lastName}`,
-        serviceName: sp.entries[0].queue.service.name,
-      } : null,
-    }));
+    const displayData = servicePoints.map((sp: typeof servicePoints[number]) => {
+      const entry = sp.entries[0];
+      const serviceDisplayMode = entry?.queue?.service?.displayMode;
+      const displayMode = serviceDisplayMode || orgDefaultDisplayMode;
+      
+      return {
+        id: sp.id,
+        name: sp.name,
+        displayName: sp.displayName || sp.name,
+        type: sp.type,
+        displayMode,
+        currentlyServing: entry ? {
+          ticketNumber: entry.ticketNumber,
+          customerName: `${entry.user.firstName} ${entry.user.lastName}`,
+          serviceName: entry.queue.service.name,
+        } : null,
+      };
+    });
 
     res.json(displayData);
   } catch (error) {
@@ -438,6 +457,360 @@ export const updateServicePointLink = async (req: Request, res: Response, next: 
       activatedAt: updated.activatedAt,
       linkId: updated.id
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ==========================================
+// Service Point Instances
+// ==========================================
+
+// Get all instances for a service point
+export const getServicePointInstances = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { servicePointId } = req.params;
+
+    const instances = await prisma.servicePointInstance.findMany({
+      where: { servicePointId },
+      include: {
+        occupiedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        },
+        currentService: {
+          select: { id: true, name: true }
+        }
+      },
+      orderBy: { instanceNumber: 'asc' }
+    });
+
+    res.json(instances);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Sync instances based on service point capacity
+// This ensures the right number of instances exist
+export const syncServicePointInstances = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { servicePointId } = req.params;
+
+    const servicePoint = await prisma.servicePoint.findUnique({
+      where: { id: servicePointId },
+      include: { instances: true }
+    });
+
+    if (!servicePoint) {
+      return res.status(404).json({ error: 'Service point not found' });
+    }
+
+    const currentCount = servicePoint.instances.length;
+    const targetCount = servicePoint.capacity;
+
+    // Create missing instances
+    if (currentCount < targetCount) {
+      for (let i = currentCount + 1; i <= targetCount; i++) {
+        await prisma.servicePointInstance.create({
+          data: {
+            servicePointId,
+            instanceNumber: i,
+            displayName: `${servicePoint.displayName || servicePoint.name} ${i}`,
+            isActive: servicePoint.isActive, // Inherit parent's active state
+          }
+        });
+      }
+    }
+
+    // Deactivate excess instances (don't delete to preserve history)
+    if (currentCount > targetCount) {
+      await prisma.servicePointInstance.updateMany({
+        where: {
+          servicePointId,
+          instanceNumber: { gt: targetCount }
+        },
+        data: { isActive: false }
+      });
+    }
+
+    // Get updated instances
+    const instances = await prisma.servicePointInstance.findMany({
+      where: { servicePointId },
+      include: {
+        occupiedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        },
+        currentService: {
+          select: { id: true, name: true }
+        }
+      },
+      orderBy: { instanceNumber: 'asc' }
+    });
+
+    res.json(instances);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Activate an instance (operator claims a desk instance)
+export const activateServicePointInstance = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { instanceId } = req.params;
+    const { serviceId } = req.body;
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Check if instance exists and is active
+    const instance = await prisma.servicePointInstance.findUnique({
+      where: { id: instanceId },
+      include: { servicePoint: true }
+    });
+
+    if (!instance) {
+      return res.status(404).json({ error: 'Instance not found' });
+    }
+
+    if (!instance.isActive) {
+      return res.status(400).json({ error: 'Instance is not active' });
+    }
+
+    if (!instance.servicePoint.isActive) {
+      return res.status(400).json({ error: 'Service point is not active' });
+    }
+
+    if (instance.isOccupied) {
+      return res.status(400).json({ error: 'Instance is already occupied' });
+    }
+
+    // Update instance
+    const updated = await prisma.servicePointInstance.update({
+      where: { id: instanceId },
+      data: {
+        isOccupied: true,
+        occupiedByUserId: userId,
+        currentServiceId: serviceId || null,
+        occupiedAt: new Date()
+      },
+      include: {
+        occupiedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        },
+        currentService: {
+          select: { id: true, name: true }
+        },
+        servicePoint: true
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Vacate an instance (operator releases a desk instance)
+export const vacateServicePointInstance = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { instanceId } = req.params;
+    const userId = (req as any).user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const instance = await prisma.servicePointInstance.findUnique({
+      where: { id: instanceId }
+    });
+
+    if (!instance) {
+      return res.status(404).json({ error: 'Instance not found' });
+    }
+
+    // Only the user who activated it can vacate it (or admin)
+    const user = await prisma.user.findUnique({
+      where: { id: userId }
+    });
+
+    const isAdmin = ['SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN'].includes(user?.role || '');
+    if (instance.occupiedByUserId !== userId && !isAdmin) {
+      return res.status(403).json({ error: 'You can only vacate your own instance' });
+    }
+
+    const updated = await prisma.servicePointInstance.update({
+      where: { id: instanceId },
+      data: {
+        isOccupied: false,
+        occupiedByUserId: null,
+        currentServiceId: null,
+        occupiedAt: null
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get all instances for a location (for display board)
+export const getLocationInstances = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { locationId } = req.params;
+
+    const instances = await prisma.servicePointInstance.findMany({
+      where: {
+        isActive: true,
+        servicePoint: {
+          locationId,
+          isActive: true
+        }
+      },
+      include: {
+        servicePoint: true,
+        occupiedBy: {
+          select: { id: true, firstName: true, lastName: true }
+        },
+        currentService: {
+          select: { id: true, name: true, displayMode: true }
+        },
+        servingEntries: {
+          where: { status: 'SERVING' },
+          include: {
+            user: {
+              select: { firstName: true, lastName: true }
+            }
+          }
+        }
+      },
+      orderBy: [
+        { servicePoint: { type: 'asc' } },
+        { servicePoint: { name: 'asc' } },
+        { instanceNumber: 'asc' }
+      ]
+    });
+
+    // Get location with organization's default display mode
+    const location = await prisma.location.findUnique({
+      where: { id: locationId },
+      include: {
+        organization: {
+          select: { defaultDisplayMode: true }
+        }
+      }
+    });
+    
+    const orgDefaultDisplayMode = location?.organization?.defaultDisplayMode || 'TICKET_ONLY';
+
+    // Format response for display boards
+    const displayData = instances.map((inst: typeof instances[number]) => {
+      const entry = inst.servingEntries[0];
+      const serviceDisplayMode = inst.currentService?.displayMode;
+      const displayMode = serviceDisplayMode || orgDefaultDisplayMode;
+      
+      return {
+        id: inst.id,
+        servicePointId: inst.servicePointId,
+        instanceNumber: inst.instanceNumber,
+        displayName: inst.displayName,
+        servicePointType: inst.servicePoint.type,
+        displayMode,
+        isOccupied: inst.isOccupied,
+        currentService: inst.currentService,
+        occupiedBy: inst.occupiedBy,
+        currentlyServing: entry ? {
+          ticketNumber: entry.ticketNumber,
+          customerName: `${entry.user.firstName} ${entry.user.lastName}`,
+        } : null,
+      };
+    });
+
+    res.json(displayData);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Toggle instance active state (admin only)
+export const toggleInstanceActive = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { instanceId } = req.params;
+    const { isActive } = req.body;
+
+    const instance = await prisma.servicePointInstance.findUnique({
+      where: { id: instanceId }
+    });
+
+    if (!instance) {
+      return res.status(404).json({ error: 'Instance not found' });
+    }
+
+    // If deactivating, also vacate
+    const updated = await prisma.servicePointInstance.update({
+      where: { id: instanceId },
+      data: {
+        isActive,
+        ...(isActive === false ? {
+          isOccupied: false,
+          occupiedByUserId: null,
+          currentServiceId: null,
+          occupiedAt: null
+        } : {})
+      }
+    });
+
+    res.json(updated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Get instances by service (for operator's desk selection)
+export const getServiceInstances = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { serviceId } = req.params;
+
+    // Get service points linked to this service
+    const servicePointLinks = await prisma.servicePointService.findMany({
+      where: {
+        serviceId,
+        isActive: true,
+        servicePoint: { isActive: true }
+      },
+      include: {
+        servicePoint: {
+          include: {
+            instances: {
+              where: { isActive: true },
+              include: {
+                occupiedBy: {
+                  select: { id: true, firstName: true, lastName: true }
+                }
+              },
+              orderBy: { instanceNumber: 'asc' }
+            }
+          }
+        }
+      }
+    });
+
+    // Flatten to list of available instances
+    const instances = servicePointLinks.flatMap((link: typeof servicePointLinks[number]) => 
+      link.servicePoint.instances.map((inst: typeof link.servicePoint.instances[number]) => ({
+        id: inst.id,
+        servicePointId: inst.servicePointId,
+        servicePointName: link.servicePoint.displayName || link.servicePoint.name,
+        instanceNumber: inst.instanceNumber,
+        displayName: inst.displayName,
+        isOccupied: inst.isOccupied,
+        occupiedBy: inst.occupiedBy
+      }))
+    );
+
+    res.json(instances);
   } catch (error) {
     next(error);
   }

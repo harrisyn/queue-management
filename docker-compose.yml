@@ -44,17 +44,17 @@ services:
     networks:
       - qms-network
 
-  mailpit:
-    image: axllent/mailpit:latest
-    container_name: qms-mailpit
-    # SMTP (1025) and web UI (8025) exported for local testing
-    ports:
-      - "1025:1025" # SMTP (in container and exposed to host)
-      - "8025:8025" # Web UI
-    volumes:
-      - mailpit_data:/data
-    networks:
-      - qms-network
+  # mailpit:
+  #   image: axllent/mailpit:latest
+  #   container_name: qms-mailpit
+  #   # SMTP (1025) and web UI (8025) exported for local testing
+  #   ports:
+  #     - "1025:1025" # SMTP (in container and exposed to host)
+  #     - "8025:8025" # Web UI
+  #   volumes:
+  #     - mailpit_data:/data
+  #   networks:
+  #     - qms-network
 
   frontend:
     build:

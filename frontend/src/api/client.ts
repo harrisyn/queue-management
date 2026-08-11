@@ -190,6 +190,12 @@ class ApiClient {
     return data;
   }
 
+  // Subscription
+  async getMySubscription() {
+    const { data } = await this.client.get('/subscription');
+    return data;
+  }
+
   async getUsers(params?: { organizationId?: string; role?: string }) {
     const { data } = await this.client.get('/users', { params });
     return data;
@@ -382,7 +388,7 @@ class ApiClient {
     return data;
   }
 
-  // Service point activation (operator desk management)
+  // Service point activation (operator desk management) - legacy
   async activateServicePoint(servicePointId: string, serviceId: string) {
     const { data } = await this.client.post('/service-points/activate', { servicePointId, serviceId });
     return data;
@@ -390,6 +396,42 @@ class ApiClient {
 
   async vacateServicePoint(servicePointId: string, serviceId: string) {
     const { data } = await this.client.post('/service-points/vacate', { servicePointId, serviceId });
+    return data;
+  }
+
+  // Service Point Instances
+  async getServicePointInstances(servicePointId: string) {
+    const { data } = await this.client.get(`/service-points/${servicePointId}/instances`);
+    return data;
+  }
+
+  async syncServicePointInstances(servicePointId: string) {
+    const { data } = await this.client.post(`/service-points/${servicePointId}/instances/sync`);
+    return data;
+  }
+
+  async getServiceInstances(serviceId: string) {
+    const { data } = await this.client.get(`/service-points/service/${serviceId}/instances`);
+    return data;
+  }
+
+  async getLocationInstances(locationId: string) {
+    const { data } = await this.client.get(`/service-points/location/${locationId}/instances`);
+    return data;
+  }
+
+  async activateServicePointInstance(instanceId: string, serviceId?: string) {
+    const { data } = await this.client.post(`/service-points/instances/${instanceId}/activate`, { serviceId });
+    return data;
+  }
+
+  async vacateServicePointInstance(instanceId: string) {
+    const { data } = await this.client.post(`/service-points/instances/${instanceId}/vacate`);
+    return data;
+  }
+
+  async toggleInstanceActive(instanceId: string, isActive: boolean) {
+    const { data } = await this.client.patch(`/service-points/instances/${instanceId}/toggle`, { isActive });
     return data;
   }
 
@@ -453,8 +495,11 @@ class ApiClient {
     return data;
   }
 
-  async callNextWithServicePoint(queueId: string, servicePointId?: string) {
-    const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, { servicePointId });
+  async callNextWithServicePoint(queueId: string, servicePointId?: string, servicePointInstanceId?: string) {
+    const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, { 
+      servicePointId, 
+      servicePointInstanceId 
+    });
     return data;
   }
 
@@ -636,6 +681,102 @@ class ApiClient {
       activeQueues,
       todayServed
     };
+  }
+
+  // =====================================================
+  // SUPERADMIN API
+  // =====================================================
+
+  // Dashboard
+  async getSuperadminDashboard() {
+    const { data } = await this.client.get('/superadmin/dashboard');
+    return data;
+  }
+
+  // Organizations
+  async getSuperadminOrganizations(params?: { search?: string; status?: string; planId?: string; page?: number; limit?: number }) {
+    const { data } = await this.client.get('/superadmin/organizations', { params });
+    return data;
+  }
+
+  async getSuperadminOrganization(id: string) {
+    const { data } = await this.client.get(`/superadmin/organizations/${id}`);
+    return data;
+  }
+
+  async getSuperadminOrganizationUsage(id: string) {
+    const { data } = await this.client.get(`/superadmin/organizations/${id}/usage`);
+    return data;
+  }
+
+  async updateOrganizationSubscription(id: string, payload: {
+    planId?: string;
+    status?: string;
+    billingCycle?: string;
+    trialEndsAt?: string;
+    externalPaymentId?: string;
+  }) {
+    const { data } = await this.client.patch(`/superadmin/organizations/${id}/subscription`, payload);
+    return data;
+  }
+
+  async cancelOrganizationSubscription(id: string, reason?: string) {
+    const { data } = await this.client.post(`/superadmin/organizations/${id}/cancel`, { reason });
+    return data;
+  }
+
+  async deleteSuperadminOrganization(id: string) {
+    const { data } = await this.client.delete(`/superadmin/organizations/${id}`, { data: { confirm: 'DELETE' } });
+    return data;
+  }
+
+  // Subscription Plans
+  async getSubscriptionPlans(includeInactive?: boolean) {
+    const { data } = await this.client.get('/superadmin/plans', { params: { includeInactive } });
+    return data;
+  }
+
+  async createSubscriptionPlan(payload: {
+    name: string;
+    code: string;
+    description?: string;
+    priceMonthly?: number;
+    priceYearly?: number;
+    currency?: string;
+    maxLocations?: number | null;
+    maxServicesPerLoc?: number | null;
+    maxUsersPerOrg?: number | null;
+    maxQueueEntriesPerDay?: number | null;
+    features?: Record<string, boolean>;
+    displayOrder?: number;
+    isDefault?: boolean;
+  }) {
+    const { data } = await this.client.post('/superadmin/plans', payload);
+    return data;
+  }
+
+  async updateSubscriptionPlan(id: string, payload: {
+    name?: string;
+    description?: string;
+    priceMonthly?: number;
+    priceYearly?: number;
+    currency?: string;
+    maxLocations?: number | null;
+    maxServicesPerLoc?: number | null;
+    maxUsersPerOrg?: number | null;
+    maxQueueEntriesPerDay?: number | null;
+    features?: Record<string, boolean>;
+    displayOrder?: number;
+    isActive?: boolean;
+    isDefault?: boolean;
+  }) {
+    const { data } = await this.client.patch(`/superadmin/plans/${id}`, payload);
+    return data;
+  }
+
+  async deleteSubscriptionPlan(id: string) {
+    const { data } = await this.client.delete(`/superadmin/plans/${id}`);
+    return data;
   }
 }
 

@@ -12,6 +12,7 @@ import inviteRoutes from './invite.routes';
 import servicepointRoutes from './servicepoint.routes';
 import serviceflowRoutes from './serviceflow.routes';
 import datasourceRoutes from './datasource.routes';
+import superadminRoutes from './superadmin.routes';
 
 const router = Router();
 
@@ -81,6 +82,11 @@ router.post('/public/verify-otp', (req, res, next) => {
 	return verifyOTPCode(req, res, next as any);
 });
 
+// Subscription info endpoint (requires auth)
+import { authenticate } from '../middleware/auth.middleware';
+import { getMySubscription } from '../middleware/subscription.middleware';
+router.get('/subscription', authenticate, getMySubscription);
+
 router.use('/orgs', organizationRoutes);
 router.use('/locations', locationRoutes);
 router.use('/invites', inviteRoutes);
@@ -93,5 +99,6 @@ router.use('/appointments', appointmentRoutes);
 router.use('/notifications', notificationRoutes);
 router.use('/users', userRoutes);
 router.use('/analytics', analyticsRoutes);
+router.use('/superadmin', superadminRoutes);
 
 export default router;

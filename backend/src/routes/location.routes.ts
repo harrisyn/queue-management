@@ -7,13 +7,14 @@ import {
   deleteLocation,
 } from '../controllers/location.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
+import { enforceLimit } from '../middleware/subscription.middleware';
 
 const router = Router();
 
 router.use(authenticate);
 
 // Nested under organizations
-router.post('/orgs/:organizationId/locations', authorize('SUPER_ADMIN', 'ORG_ADMIN'), createLocation);
+router.post('/orgs/:organizationId/locations', authorize('SUPER_ADMIN', 'ORG_ADMIN'), enforceLimit('locations'), createLocation);
 router.get('/orgs/:organizationId/locations', getLocations);
 
 // Direct location access

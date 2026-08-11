@@ -73,6 +73,7 @@ export const useAuth = () => {
   }, []);
 
   const isAuthenticated = !!user;
+  const isSuperAdmin = user?.role === 'SUPER_ADMIN';
   const isAdmin = user?.role === 'SUPER_ADMIN' || user?.role === 'ORG_ADMIN' || user?.role === 'LOCATION_ADMIN';
   const isStaff = isAdmin || user?.role === 'SERVICE_STAFF' || user?.role === 'RECEPTIONIST';
 
@@ -84,6 +85,7 @@ export const useAuth = () => {
     register,
     logout,
     isAuthenticated,
+    isSuperAdmin,
     isAdmin,
     isStaff,
   };

@@ -10,13 +10,14 @@ import {
   getServiceFlows,
 } from '../controllers/service.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
+import { enforceLimit } from '../middleware/subscription.middleware';
 
 const router = Router();
 
 router.use(authenticate);
 
 // Nested under locations
-router.post('/locations/:locationId/services', authorize('SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN'), createService);
+router.post('/locations/:locationId/services', authorize('SUPER_ADMIN', 'ORG_ADMIN', 'LOCATION_ADMIN'), enforceLimit('services'), createService);
 router.get('/locations/:locationId/services', getServices);
 
 // Direct service access

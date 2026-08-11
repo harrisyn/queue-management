@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import type { Service, Location, Organization, ServiceType } from '@/types';
 
 interface ServicePoint {
@@ -42,6 +43,7 @@ interface ServiceFormData {
 
 const ServicesPage: React.FC = () => {
   const { user, isAdmin } = useAuthContext();
+  const { canCreate, limits, refresh: refreshSubscription } = useSubscription();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -132,6 +134,7 @@ const ServicesPage: React.FC = () => {
     try {
       await api.createService(selectedLocation, formData);
       await loadServices(selectedLocation);
+      await refreshSubscription(); // Refresh subscription to update limits
       resetForm();
     } catch (err) {
       console.error(err);
@@ -292,10 +295,23 @@ const ServicesPage: React.FC = () => {
               </div>
               <div>
                 <h1 style={pageTitle}>Services</h1>
-                <p style={pageSubtitle}>Configure and manage your queue services</p>
+                <p style={pageSubtitle}>
+                  Configure and manage your queue services
+                  <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
+                    ({limits.services.current}/{limits.services.limit} used)
+                  </span>
+                </p>
               </div>
             </div>
-            <button onClick={() => { resetForm(); setShowForm(true); }} style={addButton} disabled={!selectedLocation}>
+            <button 
+              onClick={() => { resetForm(); setShowForm(true); }} 
+              style={{
+                ...addButton,
+                ...(!selectedLocation || !canCreate('services') ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
+              }} 
+              disabled={!selectedLocation || !canCreate('services')}
+              title={!canCreate('services') ? 'Service limit reached. Upgrade to add more.' : !selectedLocation ? 'Select a location first' : 'Add a new service'}
+            >
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
@@ -304,6 +320,13 @@ const ServicesPage: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Upgrade prompt if limit reached */}
+        {!canCreate('services') && (
+          <div style={{ padding: '0 24px' }}>
+            <UpgradePrompt resource="services" />
+          </div>
+        )}
 
         {/* Filters */}
         <div style={filtersBar}>

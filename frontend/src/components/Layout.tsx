@@ -10,7 +10,7 @@ interface LayoutProps {
 }
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
-  const { user, logout, isAdmin, isStaff } = useAuthContext();
+  const { user, logout, isAdmin, isStaff, isSuperAdmin } = useAuthContext();
   const router = useRouter();
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -33,9 +33,14 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { href: '/admin/data-sources', label: 'Data Sources', icon: DataSourceIcon, show: isAdmin },
     { href: '/admin/settings', label: 'Settings', icon: SettingsIcon, show: isAdmin },
     { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon, show: isAdmin },
+    { href: '/superadmin', label: 'Super Admin', icon: SuperAdminIcon, show: isSuperAdmin },
   ].filter(item => item.show);
 
-  const isActive = (href: string) => pathname === href;
+  const isActive = (href: string) => {
+    if (href === '/') return pathname === '/';
+    if (href === '/superadmin') return pathname?.startsWith('/superadmin') || false;
+    return pathname === href;
+  };
 
   return (
     <div style={layoutContainer}>
@@ -245,6 +250,12 @@ const FlowIcon = ({ active }: { active: boolean }) => (
 const TicketIcon = ({ active }: { active: boolean }) => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
     <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2a2 2 0 100-4V6z" />
+  </svg>
+);
+
+const SuperAdminIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
   </svg>
 );
 

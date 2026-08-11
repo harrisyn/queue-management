@@ -1,9 +1,18 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
-import { emitToQueue, emitToService, SOCKET_EVENTS } from '../lib/socket';
+import { emitToQueue, emitToService, emitToLocation, emitToQueueAndLocation, SOCKET_EVENTS } from '../lib/socket';
 import { generateTicketNumber, getNextSequence, generateQRData } from '../utils/ticket';
 import { getStartOfDay, generateTimeSlots } from '../utils/date';
 import { v4 as uuidv4 } from 'uuid';
+
+// Helper to get locationId from a queue
+const getLocationIdFromQueue = async (queueId: string): Promise<string | null> => {
+  const queue = await prisma.queue.findUnique({
+    where: { id: queueId },
+    include: { service: { select: { locationId: true } } }
+  });
+  return queue?.service?.locationId || null;
+};
 
 // Create or get queue for a service on a specific date
 export const createQueue = async (req: Request, res: Response, next: NextFunction) => {
@@ -138,7 +147,11 @@ export const joinQueue = async (req: Request, res: Response, next: NextFunction)
 
     const queue = await prisma.queue.findUnique({
       where: { id },
-      include: { service: true },
+      include: { 
+        service: {
+          include: { location: true }
+        } 
+      },
     });
 
     if (!queue) {
@@ -198,12 +211,14 @@ export const joinQueue = async (req: Request, res: Response, next: NextFunction)
       },
     });
 
-    // Emit real-time update
-    emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, {
+    // Emit real-time update to both queue and location rooms
+    const updateData = {
       queueId: id,
       action: 'joined',
       entry: { ...entry, position: position + 1 },
-    });
+    };
+    emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+    emitToLocation(queue.service.location.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
 
     res.status(201).json({
       ...entry,
@@ -247,8 +262,9 @@ export const callNext = async (req: Request, res: Response, next: NextFunction) 
       },
     });
 
-    // Emit real-time update
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    // Emit real-time update to both queue and location rooms
+    const locationId = await getLocationIdFromQueue(id);
+    emitToQueueAndLocation(id, locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
       queueId: id,
       entryId: entry.id,
       status: 'SERVING',
@@ -297,8 +313,9 @@ export const markServed = async (req: Request, res: Response, next: NextFunction
       },
     });
 
-    // Emit real-time update
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    // Emit real-time update to both queue and location rooms
+    const locationId = await getLocationIdFromQueue(id);
+    emitToQueueAndLocation(id, locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
       queueId: id,
       entryId: entry.id,
       status: 'SERVED',
@@ -339,11 +356,17 @@ export const markServed = async (req: Request, res: Response, next: NextFunction
           },
         });
 
-        emitToQueue(nextQueue.id, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, {
+        // Emit to both queue and location rooms
+        const nextLocationId = await getLocationIdFromQueue(nextQueue.id);
+        const transitionData = {
           fromQueueId: id,
           toQueueId: nextQueue.id,
           entry: newEntry,
-        });
+        };
+        emitToQueue(nextQueue.id, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
+        if (nextLocationId) {
+          emitToLocation(nextLocationId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
+        }
       }
     }
 
@@ -358,6 +381,12 @@ export const cancelEntry = async (req: Request, res: Response, next: NextFunctio
   try {
     const { id, entryId } = req.params;
 
+    // Get queue to find locationId
+    const queue = await prisma.queue.findUnique({
+      where: { id },
+      select: { service: { select: { locationId: true } } }
+    });
+
     const entry = await prisma.queueEntry.update({
       where: { id: entryId },
       data: {
@@ -366,11 +395,16 @@ export const cancelEntry = async (req: Request, res: Response, next: NextFunctio
       },
     });
 
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    // Emit to both queue and location rooms
+    const updateData = {
       queueId: id,
       entryId: entry.id,
       status: 'CANCELLED',
-    });
+    };
+    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
+    if (queue?.service?.locationId) {
+      emitToLocation(queue.service.locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
+    }
 
     res.json(entry);
   } catch (error) {
@@ -383,6 +417,12 @@ export const markNoShow = async (req: Request, res: Response, next: NextFunction
   try {
     const { id, entryId } = req.params;
 
+    // Get queue to find locationId
+    const queue = await prisma.queue.findUnique({
+      where: { id },
+      select: { service: { select: { locationId: true } } }
+    });
+
     const entry = await prisma.queueEntry.update({
       where: { id: entryId },
       data: {
@@ -391,11 +431,16 @@ export const markNoShow = async (req: Request, res: Response, next: NextFunction
       },
     });
 
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    // Emit to both queue and location rooms
+    const updateData = {
       queueId: id,
       entryId: entry.id,
       status: 'NO_SHOW',
-    });
+    };
+    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
+    if (queue?.service?.locationId) {
+      emitToLocation(queue.service.locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
+    }
 
     res.json(entry);
   } catch (error) {
@@ -412,7 +457,7 @@ export const moveEntry = async (req: Request, res: Response, next: NextFunction)
     // Get original entry
     const originalEntry = await prisma.queueEntry.findUnique({
       where: { id: entryId },
-      include: { queue: { include: { service: true } } },
+      include: { queue: { include: { service: { include: { location: true } } } } },
     });
 
     if (!originalEntry) {
@@ -422,7 +467,7 @@ export const moveEntry = async (req: Request, res: Response, next: NextFunction)
     // Get target queue
     const targetQueue = await prisma.queue.findUnique({
       where: { id: targetQueueId },
-      include: { service: true },
+      include: { service: { include: { location: true } } },
     });
 
     if (!targetQueue) {
@@ -459,19 +504,26 @@ export const moveEntry = async (req: Request, res: Response, next: NextFunction)
       },
     });
 
-    // Emit events
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    // Emit events to source queue and its location
+    const sourceLocationId = originalEntry.queue.service.location.id;
+    const sourceUpdateData = {
       queueId: id,
       entryId,
       status: 'SERVED',
       action: 'transferred',
-    });
+    };
+    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, sourceUpdateData);
+    emitToLocation(sourceLocationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, sourceUpdateData);
 
-    emitToQueue(targetQueueId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, {
+    // Emit events to target queue and its location
+    const targetLocationId = targetQueue.service.location.id;
+    const targetUpdateData = {
       fromQueueId: id,
       toQueueId: targetQueueId,
       entry: newEntry,
-    });
+    };
+    emitToQueue(targetQueueId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, targetUpdateData);
+    emitToLocation(targetLocationId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, targetUpdateData);
 
     res.json(newEntry);
   } catch (error) {
@@ -526,13 +578,17 @@ export const updateQueueStatus = async (req: Request, res: Response, next: NextF
     const queue = await prisma.queue.update({
       where: { id },
       data: { status },
+      include: { service: { select: { locationId: true } } },
     });
 
-    emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, {
+    // Emit to both queue and location rooms
+    const updateData = {
       queueId: id,
       action: 'status_changed',
       status,
-    });
+    };
+    emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+    emitToLocation(queue.service.locationId, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
 
     res.json(queue);
   } catch (error) {
@@ -543,7 +599,12 @@ export const updateQueueStatus = async (req: Request, res: Response, next: NextF
 // Public join queue - creates a guest user and adds to queue (no auth required)
 export const publicJoinQueue = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { serviceId, name, phone, notes } = req.body;
+    const { serviceId, phone, notes, ...otherFields } = req.body;
+    
+    // Extract name from various possible fields (supports custom identity field configs)
+    const name = req.body.name || req.body.fullName || 
+      (req.body.firstName && req.body.lastName ? `${req.body.firstName} ${req.body.lastName}` : null) ||
+      req.body.firstName || req.body.customerName || req.body.patientName;
 
     if (!serviceId || !name) {
       return res.status(400).json({ error: 'Service ID and name are required' });
@@ -638,12 +699,14 @@ export const publicJoinQueue = async (req: Request, res: Response, next: NextFun
     // Estimate wait time (rough: position * average slot duration)
     const estimatedWait = (position + 1) * service.slotDuration;
 
-    // Emit real-time update
-    emitToQueue(queue.id, SOCKET_EVENTS.QUEUE_UPDATED, {
+    // Emit real-time update to both queue and location rooms
+    const updateData = {
       queueId: queue.id,
       action: 'entry_joined',
       entry: { id: entry.id, ticketNumber, status: entry.status },
-    });
+    };
+    emitToQueue(queue.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+    emitToLocation(service.location.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
 
     res.status(201).json({
       ticketNumber: entry.ticketNumber,
@@ -811,6 +874,12 @@ export const reorderEntries = async (req: Request, res: Response, next: NextFunc
       return res.status(400).json({ error: 'entries must be an array' });
     }
 
+    // Get queue to find locationId
+    const queue = await prisma.queue.findUnique({
+      where: { id },
+      select: { service: { select: { locationId: true } } }
+    });
+
     // Update all entries in a transaction
     await prisma.$transaction(
       entries.map(({ id: entryId, sortOrder }: { id: string; sortOrder: number }) =>
@@ -821,11 +890,15 @@ export const reorderEntries = async (req: Request, res: Response, next: NextFunc
       )
     );
 
-    // Emit update to all connected clients
-    emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, {
+    // Emit update to both queue and location rooms
+    const updateData = {
       queueId: id,
       action: 'reordered',
-    });
+    };
+    emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+    if (queue?.service?.locationId) {
+      emitToLocation(queue.service.locationId, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+    }
 
     res.json({ success: true });
   } catch (error) {
@@ -837,7 +910,7 @@ export const reorderEntries = async (req: Request, res: Response, next: NextFunc
 export const callNextWithServicePoint = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { servicePointId } = req.body;
+    const { servicePointId, servicePointInstanceId } = req.body;
 
     // Get the queue to know which service it belongs to
     const queue = await prisma.queue.findUnique({
@@ -849,8 +922,43 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
       return res.status(404).json({ error: 'Queue not found' });
     }
 
-    // Verify service point exists, is active, and is linked to this service
-    if (servicePointId) {
+    let resolvedServicePointId = servicePointId;
+
+    // If instanceId is provided, validate it and get the service point
+    if (servicePointInstanceId) {
+      const instance = await prisma.servicePointInstance.findUnique({
+        where: { id: servicePointInstanceId },
+        include: {
+          servicePoint: {
+            include: {
+              services: {
+                where: { 
+                  serviceId: queue.serviceId,
+                  isActive: true 
+                }
+              }
+            }
+          }
+        }
+      });
+
+      if (!instance || !instance.isActive) {
+        return res.status(400).json({ error: 'Invalid or inactive service point instance' });
+      }
+
+      if (!instance.servicePoint.isActive) {
+        return res.status(400).json({ error: 'Invalid or inactive service point' });
+      }
+
+      if (instance.servicePoint.services.length === 0) {
+        return res.status(400).json({ 
+          error: 'Service point is not authorized for this service. Please link the service point to this service in admin settings.' 
+        });
+      }
+
+      resolvedServicePointId = instance.servicePointId;
+    } else if (servicePointId) {
+      // Verify service point exists, is active, and is linked to this service (legacy path)
       const servicePoint = await prisma.servicePoint.findUnique({
         where: { id: servicePointId },
         include: {
@@ -892,29 +1000,33 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
       return res.status(404).json({ error: 'No waiting entries in queue' });
     }
 
-    // Update status to serving with service point
+    // Update status to serving with service point and instance
     const entry = await prisma.queueEntry.update({
       where: { id: nextEntry.id },
       data: {
         status: 'SERVING',
         calledAt: new Date(),
-        servicePointId: servicePointId || null,
+        servicePointId: resolvedServicePointId || null,
+        servicePointInstanceId: servicePointInstanceId || null,
       },
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true, phone: true },
         },
         servicePoint: true,
+        servicePointInstance: true,
       },
     });
 
-    // Emit real-time update
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    // Emit real-time update to both queue and location rooms
+    const locationId = await getLocationIdFromQueue(id);
+    emitToQueueAndLocation(id, locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
       queueId: id,
       entryId: entry.id,
       status: 'SERVING',
       entry,
       servicePoint: entry.servicePoint,
+      servicePointInstance: entry.servicePointInstance,
     });
 
     res.json(entry);
@@ -1003,7 +1115,12 @@ export const getQueueEntriesForOperator = async (req: Request, res: Response, ne
 // Public join with session tracking
 export const publicJoinQueueWithSession = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { serviceId, name, phone, notes, sessionId } = req.body;
+    const { serviceId, phone, notes, sessionId, ...otherFields } = req.body;
+    
+    // Extract name from various possible fields (supports custom identity field configs)
+    const name = req.body.name || req.body.fullName || 
+      (req.body.firstName && req.body.lastName ? `${req.body.firstName} ${req.body.lastName}` : null) ||
+      req.body.firstName || req.body.customerName || req.body.patientName;
 
     if (!serviceId || !name) {
       return res.status(400).json({ error: 'Service ID and name are required' });
@@ -1116,12 +1233,14 @@ export const publicJoinQueueWithSession = async (req: Request, res: Response, ne
     // Estimate wait time (rough: position * average slot duration)
     const estimatedWait = (position + 1) * service.slotDuration;
 
-    // Emit real-time update
-    emitToQueue(queue.id, SOCKET_EVENTS.QUEUE_UPDATED, {
+    // Emit real-time update to both queue and location rooms
+    const updateData = {
       queueId: queue.id,
       action: 'entry_joined',
       entry: { id: entry.id, ticketNumber, status: entry.status },
-    });
+    };
+    emitToQueue(queue.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+    emitToLocation(service.location.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
 
     res.status(201).json({
       ticketNumber: entry.ticketNumber,
@@ -1225,10 +1344,12 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
           include: {
             service: {
               include: {
+                location: true,
                 flowsFrom: {
                   include: {
                     toService: {
                       include: {
+                        location: true,
                         queues: {
                           where: {
                             date: getStartOfDay(),
@@ -1254,13 +1375,16 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
       },
     });
 
-    // Emit real-time update
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    // Emit real-time update to both queue and location rooms
+    const locationId = entry.queue.service.location.id;
+    const updateData = {
       queueId: id,
       entryId: entry.id,
       status: 'SERVED',
       entry,
-    });
+    };
+    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
+    emitToLocation(locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
 
     // Check for auto-transfer
     const autoTransferFlow = entry.queue.service.flowsFrom.find(f => f.autoTransfer);
@@ -1288,11 +1412,15 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
           },
         });
 
-        emitToQueue(nextQueue.id, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, {
+        // Emit to next queue and its location
+        const nextLocationId = autoTransferFlow.toService.location.id;
+        const transitionData = {
           fromQueueId: id,
           toQueueId: nextQueue.id,
           entry: newEntry,
-        });
+        };
+        emitToQueue(nextQueue.id, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
+        emitToLocation(nextLocationId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
 
         return res.json({
           entry,
@@ -1337,6 +1465,18 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
     const today = getStartOfDay();
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Get the location with organization's default display mode
+    const locationData = await prisma.location.findUnique({
+      where: { id: locationId },
+      include: {
+        organization: {
+          select: { defaultDisplayMode: true }
+        }
+      }
+    });
+    
+    const orgDefaultDisplayMode = locationData?.organization?.defaultDisplayMode || 'TICKET_ONLY';
 
     // Get all services for this location (we will load service point links separately)
     const services = await prisma.service.findMany({
@@ -1465,6 +1605,7 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
         serviceId: service.id,
         serviceName: service.name,
         serviceType: service.type,
+        displayMode: service.displayMode || orgDefaultDisplayMode, // Use service override or org default
         queueId: queue?.id || null,
         queueStatus: queue?.status || 'NO_QUEUE',
         activeServicePoints,
@@ -1504,6 +1645,7 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
 
     res.json({
       locationId,
+      defaultDisplayMode: orgDefaultDisplayMode,
       timestamp: new Date().toISOString(),
       swimlanes,
     });

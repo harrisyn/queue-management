@@ -11,6 +11,7 @@ const STORAGE_KEYS = {
   LOCATION: 'qms_operator_location',
   SERVICE: 'qms_operator_service',
   SERVICE_POINT: 'qms_operator_service_point',
+  INSTANCE_ID: 'qms_operator_instance_id',
 };
 
 interface IdentityData {
@@ -42,6 +43,17 @@ interface LinkedServicePoint {
   linkId: string;
 }
 
+// Service point instance from the backend
+interface ServicePointInstance {
+  id: string;
+  servicePointId: string;
+  servicePointName: string;
+  instanceNumber: number;
+  displayName: string | null;
+  isOccupied: boolean;
+  occupiedBy?: { id: string; firstName: string; lastName: string } | null;
+}
+
 interface OperatorQueueData {
   queue: Queue;
   serving: QueueEntry[];
@@ -66,8 +78,8 @@ const QueueManagementPage: React.FC = () => {
   const [services, setServices] = useState<Service[]>([]);
   const [selectedService, setSelectedService] = useState<string>('');
   const [operatorData, setOperatorData] = useState<OperatorQueueData | null>(null);
-  const [servicePoints, setServicePoints] = useState<LinkedServicePoint[]>([]);
-  const [selectedServicePoint, setSelectedServicePoint] = useState<string>('');
+  const [servicePointInstances, setServicePointInstances] = useState<ServicePointInstance[]>([]);
+  const [selectedInstanceId, setSelectedInstanceId] = useState<string>('');
   const [isActivating, setIsActivating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -76,6 +88,10 @@ const QueueManagementPage: React.FC = () => {
   const [completedEntry, setCompletedEntry] = useState<QueueEntry | null>(null);
   const [nextServiceSuggestions, setNextServiceSuggestions] = useState<any[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
+  
+  // Legacy - keep for backward compatibility during transition
+  const [servicePoints, setServicePoints] = useState<LinkedServicePoint[]>([]);
+  const [selectedServicePoint, setSelectedServicePoint] = useState<string>('');
   
   // Customer details modal state
   const [showCustomerModal, setShowCustomerModal] = useState(false);
@@ -109,6 +125,12 @@ const QueueManagementPage: React.FC = () => {
   }, [selectedServicePoint, isInitialized]);
 
   useEffect(() => {
+    if (isInitialized) {
+      localStorage.setItem(STORAGE_KEYS.INSTANCE_ID, selectedInstanceId);
+    }
+  }, [selectedInstanceId, isInitialized]);
+
+  useEffect(() => {
     loadLocations();
   }, []);
 
@@ -121,7 +143,7 @@ const QueueManagementPage: React.FC = () => {
   useEffect(() => {
     if (selectedService) {
       loadOperatorQueue(selectedService);
-      loadServicePoints(selectedService);
+      loadServicePointInstances(selectedService);
     }
   }, [selectedService]);
 
@@ -155,7 +177,7 @@ const QueueManagementPage: React.FC = () => {
         // Try to restore from localStorage first
         const savedLocation = localStorage.getItem(STORAGE_KEYS.LOCATION);
         const savedService = localStorage.getItem(STORAGE_KEYS.SERVICE);
-        const savedServicePoint = localStorage.getItem(STORAGE_KEYS.SERVICE_POINT);
+        const savedInstanceId = localStorage.getItem(STORAGE_KEYS.INSTANCE_ID);
         
         if (savedLocation && locs.some((l: Location) => l.id === savedLocation)) {
           setSelectedLocation(savedLocation);
@@ -173,29 +195,18 @@ const QueueManagementPage: React.FC = () => {
             activeServiceId = serviceList[0].id;
           }
           
-          // Pre-load service points for the active service
+          // Pre-load service point instances for the active service
           if (activeServiceId) {
             try {
-              const points = await api.getServicePointsForService(activeServiceId);
-              // API returns flat structure: {id, name, displayName, type, capacity, isOccupied, linkId, ...}
-              const linkedPoints = points.map((p: any) => ({
-                id: p.id,
-                name: p.name,
-                displayName: p.displayName,
-                type: p.type,
-                capacity: p.capacity,
-                isOccupied: p.isOccupied,
-                activatedBy: p.activatedBy,
-                activatedAt: p.activatedAt,
-                linkId: p.linkId
-              }));
-              setServicePoints(linkedPoints);
+              const instances = await api.getServiceInstances(activeServiceId);
+              setServicePointInstances(instances);
               
-              if (savedServicePoint && linkedPoints.some((p: LinkedServicePoint) => p.id === savedServicePoint)) {
-                setSelectedServicePoint(savedServicePoint);
+              // Restore saved instance selection if valid
+              if (savedInstanceId && instances.some((inst: ServicePointInstance) => inst.id === savedInstanceId)) {
+                setSelectedInstanceId(savedInstanceId);
               }
             } catch (err) {
-              console.error('Failed to load service points', err);
+              console.error('Failed to load service point instances', err);
             }
           }
         } else if (locs.length > 0) {
@@ -226,25 +237,75 @@ const QueueManagementPage: React.FC = () => {
     }
   };
 
+  // Load database-backed service point instances for a service
+  const loadServicePointInstances = async (serviceId: string) => {
+    try {
+      const instances = await api.getServiceInstances(serviceId);
+      setServicePointInstances(instances);
+    } catch (err) {
+      console.error('Failed to load service point instances', err);
+      setServicePointInstances([]);
+    }
+  };
+  
+  // Legacy function - keep for backward compatibility
   const loadServicePoints = async (serviceId: string) => {
     try {
       const points = await api.getServicePointsForService(serviceId);
       // API returns flat structure: {id, name, displayName, type, capacity, isOccupied, linkId, ...}
-      setServicePoints(points.map((p: any) => ({
-        id: p.id,
-        name: p.name,
-        displayName: p.displayName,
-        type: p.type,
-        capacity: p.capacity,
-        isOccupied: p.isOccupied,
-        activatedBy: p.activatedBy,
-        activatedAt: p.activatedAt,
-        linkId: p.linkId
-      })));
+      
+      // Expand service points by capacity - if capacity > 1, create multiple entries
+      // Each instance uses the same base service point ID for backend calls,
+      // but has a unique composite ID for UI selection
+      const expandedPoints: LinkedServicePoint[] = [];
+      
+      points.forEach((p: any) => {
+        const capacity = p.capacity || 1;
+        
+        if (capacity === 1) {
+          // Single capacity - use as-is
+          expandedPoints.push({
+            id: p.id,
+            name: p.name,
+            displayName: p.displayName,
+            type: p.type,
+            capacity: 1,
+            isOccupied: p.isOccupied,
+            activatedBy: p.activatedBy,
+            activatedAt: p.activatedAt,
+            linkId: p.linkId
+          });
+        } else {
+          // Multiple capacity - create numbered instances
+          // All instances share the same base service point ID for backend calls
+          for (let i = 1; i <= capacity; i++) {
+            const baseName = p.displayName || p.name;
+            expandedPoints.push({
+              id: `${p.id}#${i}`, // Composite ID: baseId#instanceNumber
+              name: `${p.name} ${i}`,
+              displayName: `${baseName} ${i}`,
+              type: p.type,
+              capacity: 1,
+              isOccupied: false, // TODO: Track per-instance occupancy on backend
+              activatedBy: null,
+              activatedAt: null,
+              linkId: p.linkId
+            });
+          }
+        }
+      });
+      
+      setServicePoints(expandedPoints);
     } catch (err) {
       console.error('Failed to load service points', err);
       setServicePoints([]);
     }
+  };
+  
+  // Extract base service point ID from composite ID (handles "id#instance" format)
+  const getBaseServicePointId = (compositeId: string): string => {
+    const hashIndex = compositeId.indexOf('#');
+    return hashIndex > 0 ? compositeId.substring(0, hashIndex) : compositeId;
   };
 
   const loadOperatorQueue = async (serviceId: string) => {
@@ -278,14 +339,22 @@ const QueueManagementPage: React.FC = () => {
   const handleCallNext = async () => {
     if (!operatorData?.queue?.id) return;
     
-    // Require a service point to be selected
-    if (!selectedServicePoint) {
+    // Require an instance to be selected (new instance-based flow)
+    // Fall back to legacy service point if instances not available
+    const instanceId = selectedInstanceId;
+    const servicePointId = selectedServicePoint;
+    
+    if (!instanceId && !servicePointId) {
       setError('Please select a service desk before calling the next customer');
       return;
     }
     
     try {
-      await api.callNextWithServicePoint(operatorData.queue.id, selectedServicePoint);
+      // Use the selected instance's service point ID for the backend call
+      // The backend associates the entry with the service point AND instance
+      const instance = servicePointInstances.find(i => i.id === instanceId);
+      const baseId = instance?.servicePointId || getBaseServicePointId(servicePointId);
+      await api.callNextWithServicePoint(operatorData.queue.id, baseId, instanceId || undefined);
       await refreshQueue();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
@@ -293,29 +362,59 @@ const QueueManagementPage: React.FC = () => {
     }
   };
 
-  // Vacate desk - clear the service point selection and notify backend
+  // Vacate desk - clear the instance selection and notify backend
   const handleVacateDesk = async () => {
-    if (!selectedServicePoint || !selectedService) return;
+    if (!selectedInstanceId && !selectedServicePoint) return;
+    if (!selectedService) return;
     
     try {
-      await api.vacateServicePoint(selectedServicePoint, selectedService);
-      setSelectedServicePoint('');
-      localStorage.removeItem(STORAGE_KEYS.SERVICE_POINT);
-      // Reload service points to update occupancy status
-      await loadServicePoints(selectedService);
+      if (selectedInstanceId) {
+        // Use new instance-based API
+        await api.vacateServicePointInstance(selectedInstanceId);
+        setSelectedInstanceId('');
+        localStorage.removeItem(STORAGE_KEYS.INSTANCE_ID);
+        await loadServicePointInstances(selectedService);
+      } else {
+        // Legacy fallback
+        const baseId = getBaseServicePointId(selectedServicePoint);
+        await api.vacateServicePoint(baseId, selectedService);
+        setSelectedServicePoint('');
+        localStorage.removeItem(STORAGE_KEYS.SERVICE_POINT);
+        await loadServicePoints(selectedService);
+      }
     } catch (err) {
       console.error('Failed to vacate desk', err);
     }
   };
 
-  // Activate a service point desk
+  // Activate a service point instance
+  const handleActivateInstance = async (instanceId: string) => {
+    if (!selectedService) return;
+    
+    setIsActivating(true);
+    try {
+      await api.activateServicePointInstance(instanceId, selectedService);
+      setSelectedInstanceId(instanceId);
+      // Reload instances to update occupancy status
+      await loadServicePointInstances(selectedService);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || 'Failed to activate desk');
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
+  // Legacy: Activate a service point desk (for backward compatibility)
   const handleActivateDesk = async (servicePointId: string) => {
     if (!selectedService) return;
     
     setIsActivating(true);
     try {
-      await api.activateServicePoint(servicePointId, selectedService);
-      setSelectedServicePoint(servicePointId);
+      // Use base service point ID for backend call
+      const baseId = getBaseServicePointId(servicePointId);
+      await api.activateServicePoint(baseId, selectedService);
+      setSelectedServicePoint(servicePointId); // Keep composite ID for UI
       // Reload service points to update occupancy status
       await loadServicePoints(selectedService);
     } catch (err: unknown) {
@@ -568,24 +667,48 @@ const QueueManagementPage: React.FC = () => {
                 <label>Your Service Desk</label>
                 <div className="service-desk-controls">
                   <select 
-                    value={selectedServicePoint} 
-                    onChange={(e) => handleActivateDesk(e.target.value)}
-                    className={selectedServicePoint ? 'active-desk' : 'no-desk'}
+                    value={selectedInstanceId || selectedServicePoint} 
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      // Check if this is an instance ID
+                      const isInstance = servicePointInstances.some(i => i.id === value);
+                      if (isInstance) {
+                        handleActivateInstance(value);
+                      } else {
+                        handleActivateDesk(value);
+                      }
+                    }}
+                    className={(selectedInstanceId || selectedServicePoint) ? 'active-desk' : 'no-desk'}
                     disabled={isActivating}
                   >
                     <option value="">Select desk...</option>
-                    {servicePoints.map(sp => (
-                      <option 
-                        key={sp.id} 
-                        value={sp.id}
-                        disabled={sp.isOccupied && sp.id !== selectedServicePoint}
-                      >
-                        {sp.displayName || sp.name}
-                        {sp.isOccupied && sp.id !== selectedServicePoint ? ' (Occupied)' : ''}
-                      </option>
-                    ))}
+                    {/* Prefer database-backed instances */}
+                    {servicePointInstances.length > 0 ? (
+                      servicePointInstances.map(inst => (
+                        <option 
+                          key={inst.id} 
+                          value={inst.id}
+                          disabled={inst.isOccupied && inst.id !== selectedInstanceId}
+                        >
+                          {inst.displayName || `${inst.servicePointName} ${inst.instanceNumber}`}
+                          {inst.isOccupied && inst.id !== selectedInstanceId ? ' (Occupied)' : ''}
+                        </option>
+                      ))
+                    ) : (
+                      /* Legacy fallback: use expanded service points */
+                      servicePoints.map(sp => (
+                        <option 
+                          key={sp.id} 
+                          value={sp.id}
+                          disabled={sp.isOccupied && sp.id !== selectedServicePoint}
+                        >
+                          {sp.displayName || sp.name}
+                          {sp.isOccupied && sp.id !== selectedServicePoint ? ' (Occupied)' : ''}
+                        </option>
+                      ))
+                    )}
                   </select>
-                  {selectedServicePoint && (
+                  {(selectedInstanceId || selectedServicePoint) && (
                     <button 
                       className="vacate-btn"
                       onClick={handleVacateDesk}
@@ -600,10 +723,10 @@ const QueueManagementPage: React.FC = () => {
                     </button>
                   )}
                 </div>
-                {servicePoints.length === 0 && (
+                {servicePointInstances.length === 0 && servicePoints.length === 0 && (
                   <span className="desk-hint">No service desks linked to this service</span>
                 )}
-                {servicePoints.length > 0 && !selectedServicePoint && (
+                {(servicePointInstances.length > 0 || servicePoints.length > 0) && !selectedInstanceId && !selectedServicePoint && (
                   <span className="desk-hint">Select a desk to start serving</span>
                 )}
               </div>
@@ -642,23 +765,28 @@ const QueueManagementPage: React.FC = () => {
               <div className="stat-spacer" />
               
               {/* Active Desk Indicator */}
-              {selectedServicePoint && (
+              {(selectedInstanceId || selectedServicePoint) && (
                 <div className="active-desk-indicator">
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <rect x="2" y="3" width="20" height="14" rx="2" ry="2" />
                     <line x1="8" y1="21" x2="16" y2="21" />
                     <line x1="12" y1="17" x2="12" y2="21" />
                   </svg>
-                      <span>{servicePoints.find(sp => sp.id === selectedServicePoint)?.displayName || 
-                        servicePoints.find(sp => sp.id === selectedServicePoint)?.name || 'Desk'}</span>
+                      <span>{
+                        selectedInstanceId 
+                          ? (servicePointInstances.find(i => i.id === selectedInstanceId)?.displayName || 
+                             `${servicePointInstances.find(i => i.id === selectedInstanceId)?.servicePointName} ${servicePointInstances.find(i => i.id === selectedInstanceId)?.instanceNumber}`)
+                          : (servicePoints.find(sp => sp.id === selectedServicePoint)?.displayName || 
+                             servicePoints.find(sp => sp.id === selectedServicePoint)?.name || 'Desk')
+                      }</span>
                 </div>
               )}
               
               <button 
-                className={`call-next-btn ${!selectedServicePoint ? 'disabled-no-desk' : ''}`}
+                className={`call-next-btn ${!(selectedInstanceId || selectedServicePoint) ? 'disabled-no-desk' : ''}`}
                 onClick={handleCallNext}
-                disabled={operatorData.stats.waiting === 0 || !selectedServicePoint}
-                title={!selectedServicePoint ? 'Select a service desk first' : 
+                disabled={operatorData.stats.waiting === 0 || !(selectedInstanceId || selectedServicePoint)}
+                title={!(selectedInstanceId || selectedServicePoint) ? 'Select a service desk first' : 
                        operatorData.stats.waiting === 0 ? 'No customers waiting' : 'Call next customer'}
               >
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -669,7 +797,7 @@ const QueueManagementPage: React.FC = () => {
             </div>
 
             {/* No Desk Warning */}
-            {!selectedServicePoint && (
+            {!(selectedInstanceId || selectedServicePoint) && (
               <div className="no-desk-warning">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />

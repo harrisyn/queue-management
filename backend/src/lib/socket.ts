@@ -19,6 +19,7 @@ export const SOCKET_EVENTS = {
   SLOT_RELEASED: 'slot.released',
   SERVICEFLOW_TRANSITION: 'serviceflow.transition',
   NOTIFICATION_SENT: 'notification.sent',
+  LOCATION_UPDATED: 'location.updated',
 } as const;
 
 export const emitToQueue = (queueId: string, event: string, data: any) => {
@@ -35,4 +36,12 @@ export const emitToService = (serviceId: string, event: string, data: any) => {
 
 export const emitToLocation = (locationId: string, event: string, data: any) => {
   io?.to(`location:${locationId}`).emit(event, data);
+};
+
+// Emit to both queue and location rooms for broader real-time updates
+export const emitToQueueAndLocation = (queueId: string, locationId: string | null, event: string, data: any) => {
+  io?.to(`queue:${queueId}`).emit(event, data);
+  if (locationId) {
+    io?.to(`location:${locationId}`).emit(event, { ...data, locationId });
+  }
 };
