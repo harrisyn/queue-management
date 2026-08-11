@@ -83,7 +83,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, slug, adminLogin } = req.body;
 
     // Find user
     const user = await prisma.user.findUnique({
@@ -99,6 +99,18 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
 
     if (!isValidPassword) {
       return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Subdomain-scoped login: verify the user is allowed in this context.
+    if (adminLogin) {
+      if (user.role !== 'SUPER_ADMIN') {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    } else if (slug) {
+      const org = await prisma.organization.findUnique({ where: { slug } });
+      if (!org || user.organizationId !== org.id) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
     }
 
     // Generate token
