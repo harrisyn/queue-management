@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Building2, Inbox, Settings } from 'lucide-react';
-import { Button, Card, Badge, PageHeader, EmptyState } from '@/components/ui';
+import { Button, Card, Badge, PageHeader, EmptyState, Icon } from '@/components/ui';
 
 export default function StyleGuidePage() {
   return (
@@ -58,9 +58,9 @@ export default function StyleGuidePage() {
       <section>
         <h2 style={{ marginBottom: '1rem' }}>Icons</h2>
         <div style={{ display: 'flex', gap: '1.5rem' }}>
-          <Building2 size={24} />
-          <Settings size={24} />
-          <Inbox size={24} />
+          <Icon icon={Building2} size={24} />
+          <Icon icon={Settings} size={24} />
+          <Icon icon={Inbox} size={24} />
         </div>
       </section>
     </div>

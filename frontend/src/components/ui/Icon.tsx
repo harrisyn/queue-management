@@ -3,7 +3,7 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 
-export interface IconProps {
+export interface IconProps extends React.SVGProps<SVGSVGElement> {
   icon: LucideIcon;
   size?: number;
   color?: string;
@@ -17,6 +17,7 @@ export const Icon: React.FC<IconProps> = ({
   color,
   strokeWidth = 2,
   className,
+  ...rest
 }) => {
   return (
     <IconComponent
@@ -24,6 +25,7 @@ export const Icon: React.FC<IconProps> = ({
       color={color}
       strokeWidth={strokeWidth}
       className={className}
+      {...rest}
     />
   );
 };
