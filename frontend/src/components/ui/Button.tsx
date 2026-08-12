@@ -22,22 +22,30 @@ const sizeClass: Record<ButtonSize, string> = {
   lg: 'btn-lg',
 };
 
-export const Button: React.FC<ButtonProps> = ({
-  variant = 'primary',
-  size = 'md',
-  className = '',
-  children,
-  ...rest
-}) => {
-  const classes = ['btn', variantClass[variant], sizeClass[size], className]
-    .filter(Boolean)
-    .join(' ');
+export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
+  (
+    {
+      variant = 'primary',
+      size = 'md',
+      className = '',
+      type = 'button',
+      children,
+      ...rest
+    },
+    ref
+  ) => {
+    const classes = ['btn', variantClass[variant], sizeClass[size], className]
+      .filter(Boolean)
+      .join(' ');
 
-  return (
-    <button {...rest} className={classes}>
-      {children}
-    </button>
-  );
-};
+    return (
+      <button {...rest} ref={ref} type={type} className={classes}>
+        {children}
+      </button>
+    );
+  }
+);
+
+Button.displayName = 'Button';
 
 export default Button;

@@ -3,6 +3,7 @@
 import React from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Button } from './Button';
+import { Icon } from './Icon';
 
 export interface EmptyStateAction {
   label: string;
@@ -24,7 +25,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
 }) => {
   return (
     <div className="empty-state">
-      <IconComponent size={48} strokeWidth={1.5} className="empty-state-icon" />
+      <Icon icon={IconComponent} size={48} strokeWidth={1.5} className="empty-state-icon" />
       <h3 className="empty-state-title">{title}</h3>
       {description && <p className="empty-state-description">{description}</p>}
       {action && (
@@ -32,7 +33,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
           variant="primary"
           size="md"
           onClick={action.onClick}
-          style={{ marginTop: '1.5rem' }}
+          className="empty-state-action"
         >
           {action.label}
         </Button>
