@@ -63,6 +63,10 @@ router.get('/public/entries/:entryId/identity', (req, res, next) => {
 	const { getPublicEntryIdentity } = require('../controllers/queue.controller');
 	return getPublicEntryIdentity(req, res, next as any);
 });
+router.get('/public/orgs/by-slug/:slug', (req, res, next) => {
+	const { getPublicOrganizationBySlug } = require('../controllers/organization.controller');
+	return getPublicOrganizationBySlug(req, res, next as any);
+});
 router.get('/public/orgs/:orgId', (req, res, next) => {
 	const { getPublicOrganization } = require('../controllers/organization.controller');
 	return getPublicOrganization(req, res, next as any);

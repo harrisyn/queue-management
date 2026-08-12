@@ -8,7 +8,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<User>;
+  login: (email: string, password: string, options?: { slug?: string; adminLogin?: boolean }) => Promise<User>;
   register: (userData: { email: string; password: string; firstName: string; lastName: string }) => Promise<User>;
   logout: () => void;
   isAuthenticated: boolean;

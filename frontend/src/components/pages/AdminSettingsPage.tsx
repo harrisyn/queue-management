@@ -4,6 +4,8 @@ import React, { useEffect, useState } from 'react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { buildTenantUrl } from '@/lib/subdomain';
+import { isReservedSlug } from '@/lib/reservedSlugs';
 
 interface IdentityField {
   key: string;
@@ -63,8 +65,6 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (isAdmin && user?.organizationId) {
       loadOrganization();
-    } else if (isAdmin) {
-      loadFirstOrg();
     } else {
       setLoading(false);
     }
@@ -106,46 +106,14 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const loadFirstOrg = async () => {
-    try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const org = orgs[0];
-        setOrganization(org);
-        setFormData({
-          name: org.name || '',
-          slug: org.slug || '',
-          email: org.email || '',
-          phone: org.phone || '',
-        });
-        
-        if (org.identityFieldsConfig) {
-          const fields = Object.entries(org.identityFieldsConfig).map(([key, config]: [string, any]) => ({
-            key,
-            label: config.label || key,
-            type: config.type || 'text',
-            required: config.required || false,
-          }));
-          setIdentityFields(fields);
-        } else {
-          setIdentityFields(DEFAULT_IDENTITY_FIELDS.slice(0, 3).map(f => ({
-            ...f,
-            required: false,
-          })));
-        }
-        
-        setDisplayMode(org.defaultDisplayMode || 'TICKET_ONLY');
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization) return;
+
+    if (formData.slug && isReservedSlug(formData.slug)) {
+      setMessage({ type: 'error', text: 'This slug is reserved and cannot be used.' });
+      return;
+    }
 
     setSaving(true);
     setMessage(null);
@@ -230,6 +198,16 @@ export default function AdminSettingsPage() {
       <Layout>
         <div style={{ padding: '3rem', textAlign: 'center' }}>
           <div className="spinner" />
+        </div>
+      </Layout>
+    );
+  }
+
+  if (!user?.organizationId && !organization) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
         </div>
       </Layout>
     );
@@ -357,8 +335,10 @@ export default function AdminSettingsPage() {
                     </button>
                   </div>
                   <p style={helpText}>
-                    {formData.slug ? (
-                      <>Your public URL will be: <strong>yourdomain.com/{formData.slug}</strong></>
+                    {formData.slug && isReservedSlug(formData.slug) ? (
+                      <span style={{ color: '#dc2626' }}>This slug is reserved and can&apos;t be used.</span>
+                    ) : formData.slug ? (
+                      <>Your workspace URL will be: <strong>{buildTenantUrl(formData.slug).replace(/^https?:\/\//, '')}</strong></>
                     ) : (
                       'Create a memorable URL slug for your organization'
                     )}

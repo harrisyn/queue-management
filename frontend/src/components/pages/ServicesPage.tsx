@@ -78,11 +78,10 @@ const ServicesPage: React.FC = () => {
         setOrganizations([org]);
         setSelectedOrg(org.id);
       } else {
-        const orgs = await api.getOrganizations();
-        setOrganizations(orgs);
-        if (orgs.length > 0) {
-          setSelectedOrg(orgs[0].id);
-        }
+        // No organization on this account (e.g. a superadmin). Never guess an
+        // org - render the empty state instead of leaking another tenant's data.
+        setOrganizations([]);
+        setSelectedOrg('');
       }
     } catch (err) {
       console.error(err);
@@ -278,6 +277,16 @@ const ServicesPage: React.FC = () => {
       loadLinkedServicePoints(service.id)
     ]);
   };
+
+  if (!loading && !user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>

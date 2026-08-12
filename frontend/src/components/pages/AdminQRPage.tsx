@@ -28,18 +28,19 @@ export default function AdminQRPage() {
   }, [isAdmin, user]);
 
   const loadLocations = async () => {
+    // No organization on this account (e.g. a superadmin). Never guess an
+    // org - render the empty state instead of leaking another tenant's data.
+    const orgId = user?.organizationId;
+    if (!orgId) {
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
     try {
-      let orgId = user?.organizationId;
-      if (!orgId) {
-        const orgs = await api.getOrganizations();
-        if (orgs.length > 0) orgId = orgs[0].id;
-      }
-      if (orgId) {
-        const locs = await api.getLocations(orgId);
-        setLocations(locs.filter((l: Location) => l.publicCode));
-        if (locs.length > 0 && locs[0].publicCode) {
-          setSelectedLocation(locs.find((l: Location) => l.publicCode) || null);
-        }
+      const locs = await api.getLocations(orgId);
+      setLocations(locs.filter((l: Location) => l.publicCode));
+      if (locs.length > 0 && locs[0].publicCode) {
+        setSelectedLocation(locs.find((l: Location) => l.publicCode) || null);
       }
     } catch (err) {
       console.error(err);

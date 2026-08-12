@@ -41,8 +41,8 @@ class ApiClient {
   }
 
   // Auth
-  async login(email: string, password: string) {
-    const { data } = await this.client.post('/auth/login', { email, password });
+  async login(email: string, password: string, options?: { slug?: string; adminLogin?: boolean }) {
+    const { data } = await this.client.post('/auth/login', { email, password, ...options });
     return data;
   }
 
@@ -517,6 +517,7 @@ class ApiClient {
     adminLastName: string;
     adminPassword: string;
     emailVerified?: boolean;
+    slug?: string;
   }) {
     const { data } = await this.client.post('/public/register-org', payload);
     return data;

@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { useAuthContext } from '@/contexts/AuthContext';
 import type { Location, Service, ServiceFlow } from '@/types';
 
 interface FlowNode {
@@ -30,6 +31,7 @@ interface DragState {
 }
 
 const FlowDesignerPage: React.FC = () => {
+  const { user } = useAuthContext();
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [services, setServices] = useState<Service[]>([]);
@@ -66,7 +68,7 @@ const FlowDesignerPage: React.FC = () => {
 
   useEffect(() => {
     loadLocations();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (selectedLocation) {
@@ -75,14 +77,18 @@ const FlowDesignerPage: React.FC = () => {
   }, [selectedLocation]);
 
   const loadLocations = async () => {
+    if (!user?.organizationId) {
+      // No organization on this account (e.g. a superadmin). Never guess an
+      // org - render the empty state instead of leaking another tenant's data.
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const locs = await api.getLocations(orgs[0].id);
-        setLocations(locs);
-        if (locs.length > 0) {
-          setSelectedLocation(locs[0].id);
-        }
+      const locs = await api.getLocations(user.organizationId);
+      setLocations(locs);
+      if (locs.length > 0) {
+        setSelectedLocation(locs[0].id);
       }
     } catch (err) {
       console.error('Failed to load locations', err);
@@ -365,6 +371,16 @@ const FlowDesignerPage: React.FC = () => {
             to { transform: rotate(360deg); }
           }
         `}</style>
+      </Layout>
+    );
+  }
+
+  if (!user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
       </Layout>
     );
   }

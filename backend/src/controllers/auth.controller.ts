@@ -83,7 +83,7 @@ export const register = async (req: Request, res: Response, next: NextFunction) 
 
 export const login = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { email, password } = req.body;
+    const { email, password, slug, adminLogin } = req.body;
 
     // Find user
     const user = await prisma.user.findUnique({
@@ -98,6 +98,23 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
     const isValidPassword = await bcrypt.compare(password, user.password);
 
     if (!isValidPassword) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
+    // Subdomain-scoped login: every login must declare which context it's
+    // authenticating against (a tenant slug or the admin subdomain) — an
+    // unscoped login request is rejected rather than falling back to the
+    // pre-multitenancy unrestricted behavior.
+    if (adminLogin) {
+      if (user.role !== 'SUPER_ADMIN') {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    } else if (slug) {
+      const org = await prisma.organization.findUnique({ where: { slug } });
+      if (!org || user.organizationId !== org.id) {
+        return res.status(401).json({ error: 'Invalid credentials' });
+      }
+    } else {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 

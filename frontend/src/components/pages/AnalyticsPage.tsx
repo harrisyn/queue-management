@@ -3,6 +3,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { useAuthContext } from '@/contexts/AuthContext';
 import type { Location } from '@/types';
 
 interface ServiceMetrics {
@@ -85,6 +86,7 @@ interface JourneyAnalytics {
 }
 
 const AnalyticsPage: React.FC = () => {
+  const { user } = useAuthContext();
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -94,21 +96,25 @@ const AnalyticsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'journeys'>('overview');
 
   const loadData = useCallback(async () => {
+    if (!user?.organizationId) {
+      // No organization on this account (e.g. a superadmin). Never guess an
+      // org - render the empty state instead of leaking another tenant's data.
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const locs = await api.getLocations(orgs[0].id);
-        setLocations(locs);
-        if (locs.length > 0) {
-          setSelectedLocation(locs[0].id);
-        }
+      const locs = await api.getLocations(user.organizationId);
+      setLocations(locs);
+      if (locs.length > 0) {
+        setSelectedLocation(locs[0].id);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const loadMetrics = useCallback(async (locationId: string) => {
     try {
@@ -135,8 +141,18 @@ const AnalyticsPage: React.FC = () => {
     }
   }, [selectedLocation, loadMetrics]);
 
-  const servedPercentage = metrics?.totals?.total ? 
+  const servedPercentage = metrics?.totals?.total ?
     Math.round((metrics.totals.served / metrics.totals.total) * 100) : 0;
+
+  if (!loading && !user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
