@@ -101,7 +101,10 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Subdomain-scoped login: verify the user is allowed in this context.
+    // Subdomain-scoped login: every login must declare which context it's
+    // authenticating against (a tenant slug or the admin subdomain) — an
+    // unscoped login request is rejected rather than falling back to the
+    // pre-multitenancy unrestricted behavior.
     if (adminLogin) {
       if (user.role !== 'SUPER_ADMIN') {
         return res.status(401).json({ error: 'Invalid credentials' });
@@ -111,6 +114,8 @@ export const login = async (req: Request, res: Response, next: NextFunction) => 
       if (!org || user.organizationId !== org.id) {
         return res.status(401).json({ error: 'Invalid credentials' });
       }
+    } else {
+      return res.status(401).json({ error: 'Invalid credentials' });
     }
 
     // Generate token

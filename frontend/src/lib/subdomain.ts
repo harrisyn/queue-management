@@ -7,8 +7,8 @@ const APP_DOMAIN = process.env.NEXT_PUBLIC_APP_DOMAIN || 'localhost:8003';
  * APP_DOMAIN at all (e.g. a raw IP during local debugging).
  */
 export function extractSubdomain(host: string): string | null {
-  const hostname = host.split(':')[0];
-  const domain = APP_DOMAIN.split(':')[0];
+  const hostname = host.split(':')[0].toLowerCase();
+  const domain = APP_DOMAIN.split(':')[0].toLowerCase();
 
   if (hostname === domain || hostname === `www.${domain}`) {
     return null;

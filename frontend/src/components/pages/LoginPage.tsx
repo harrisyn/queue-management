@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { extractSubdomain } from '@/lib/subdomain';
+import { extractSubdomain, buildTenantUrl } from '@/lib/subdomain';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -13,14 +13,24 @@ const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [subdomain, setSubdomain] = useState<string | null>(null);
+  const [hostChecked, setHostChecked] = useState(false);
+  const [workspaceSlug, setWorkspaceSlug] = useState('');
   const { login } = useAuthContext();
   const router = useRouter();
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setSubdomain(extractSubdomain(window.location.host));
+      setHostChecked(true);
     }
   }, []);
+
+  const handleFindWorkspace = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (workspaceSlug.trim()) {
+      window.location.href = buildTenantUrl(workspaceSlug.trim().toLowerCase(), '/login');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,11 +114,15 @@ const LoginPage: React.FC = () => {
         <div style={formSection}>
           <div style={formCard}>
             <div style={formHeader}>
-              <h2 style={formTitle}>{subdomain === 'admin' ? 'Superadmin sign in' : 'Operator sign in'}</h2>
+              <h2 style={formTitle}>
+                {subdomain === 'admin' ? 'Superadmin sign in' : hostChecked && !subdomain ? 'Find your workspace' : 'Operator sign in'}
+              </h2>
               <p style={formSubtitle}>
                 {subdomain === 'admin'
                   ? 'Sign in with your superadmin account to manage organizations and plans.'
-                  : 'Sign in to your staff/admin account to manage queues and services.'}
+                  : hostChecked && !subdomain
+                    ? 'Sign-in is scoped to your organization\'s workspace. Enter your workspace URL to continue.'
+                    : 'Sign in to your staff/admin account to manage queues and services.'}
               </p>
             </div>
 
@@ -121,6 +135,29 @@ const LoginPage: React.FC = () => {
               </div>
             )}
 
+            {hostChecked && !subdomain ? (
+              <form onSubmit={handleFindWorkspace} style={formStyle}>
+                <div style={fieldGroup}>
+                  <label style={labelStyle}>Workspace URL</label>
+                  <div style={inputWrapper}>
+                    <input
+                      type="text"
+                      value={workspaceSlug}
+                      onChange={(e) => setWorkspaceSlug(e.target.value)}
+                      placeholder="your-org"
+                      style={inputStyle}
+                      required
+                    />
+                  </div>
+                </div>
+                <button type="submit" style={submitButton}>
+                  <span>Continue</span>
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
+                  </svg>
+                </button>
+              </form>
+            ) : (
             <form onSubmit={handleSubmit} style={formStyle}>
               <div style={fieldGroup}>
                 <label style={labelStyle}>Email address</label>
@@ -197,6 +234,7 @@ const LoginPage: React.FC = () => {
                 )}
               </button>
             </form>
+            )}
 
             <div style={divider}>
               <span style={dividerLine} />
