@@ -1,10 +1,11 @@
 import type { Metadata } from 'next';
+import { GeistSans } from 'geist/font/sans';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 
 export const metadata: Metadata = {
-  title: 'Queue Management System',
+  title: 'QueueFlow',
   description: 'Professional queue management system for healthcare and services',
 };
 
@@ -14,7 +15,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" className={GeistSans.variable}>
       <body>
         <AuthProvider>
           <SubscriptionProvider>
