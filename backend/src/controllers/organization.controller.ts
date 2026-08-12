@@ -191,12 +191,37 @@ export const createOrganization = async (req: Request, res: Response, next: Next
 
 export const getOrganizations = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const organizations = await prisma.organization.findMany({
-      include: {
-        locations: true,
-        _count: { select: { users: true, locations: true } },
-      },
-    });
+    // SUPER_ADMIN sees every org (this route is used by the general orgs
+    // list — the dedicated /superadmin/organizations endpoint has its own
+    // richer listing, this one stays available for backward compatibility).
+    // Any other caller (e.g. ORG_ADMIN) is scoped to only their own org —
+    // never return every tenant's org list to a non-superadmin.
+    let organizations;
+    if (req.user?.role === 'SUPER_ADMIN') {
+      organizations = await prisma.organization.findMany({
+        include: {
+          locations: true,
+          _count: { select: { users: true, locations: true } },
+        },
+      });
+    } else {
+      const user = await prisma.user.findUnique({
+        where: { id: req.user!.userId },
+        select: { organizationId: true },
+      });
+
+      if (!user?.organizationId) {
+        return res.json([]);
+      }
+
+      organizations = await prisma.organization.findMany({
+        where: { id: user.organizationId },
+        include: {
+          locations: true,
+          _count: { select: { users: true, locations: true } },
+        },
+      });
+    }
 
     res.json(organizations);
   } catch (error) {
