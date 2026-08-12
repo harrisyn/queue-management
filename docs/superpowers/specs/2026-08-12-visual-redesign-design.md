@@ -69,7 +69,7 @@ Full rebuild on QueueFlow branding using the new component set:
 
 Phases are independently shippable and verifiable, matching the multi-tenancy plan's convention of manual verification via `docker compose up` + the browse skill rather than a new test framework:
 
-1. **Foundation** — token updates in `globals.css`, `geist` + `lucide-react` installed, the five `ui/` components built with no consumers yet (verify via a throwaway style-guide page or Storybook-free visual smoke check).
+1. **Foundation** — token updates in `globals.css`, `geist` + `lucide-react` installed, the six `ui/` components built with no consumers yet (verify via a throwaway style-guide page or Storybook-free visual smoke check).
 2. **First impressions** — landing page rebuild, register wizard, login page (including the "find your workspace" root-login state added during the multi-tenancy work) — these are what a new visitor or returning tenant sees first, and also where the QueueFlow rename is most visible.
 3. **Tenant app** — dashboard + all `/admin/*` pages (locations, services, service points, flow designer, QR codes, invites, data sources, settings, analytics, queue management). Largest page count; every one currently repeats the purple-banner + emoji-icon pattern, so this phase is where `PageHeader`/`EmptyState`/`Icon` adoption pays off most.
 4. **Superadmin panel** — dashboard, organizations list/detail, plans. Keeps its own dark navy/indigo-adjacent theme concept from the audit (a deliberate "different context" signal) but re-themed onto the new teal accent and flat-component system instead of the current purple-under-the-hood treatment, with real icons replacing the emoji stat tiles.
