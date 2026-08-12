@@ -238,14 +238,14 @@ input::placeholder {
 }
 
 .btn-primary {
-  background: var(--gradient-primary);
+  background: var(--primary-500);
   color: white;
-  box-shadow: var(--shadow-md), 0 4px 14px rgba(99, 102, 241, 0.4);
+  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-lg), 0 6px 20px rgba(99, 102, 241, 0.5);
+  background: var(--primary-600);
+  box-shadow: var(--shadow-md);
 }
 
 .btn-secondary {
@@ -357,6 +357,11 @@ input::placeholder {
 .badge-error {
   background: var(--error-100);
   color: var(--error-600);
+}
+
+.badge-neutral {
+  background: var(--gray-100);
+  color: var(--gray-700);
 }
 
 /* ========================================
@@ -584,11 +589,11 @@ input::placeholder {
   font-size: 6rem;
   font-weight: 800;
   letter-spacing: -0.02em;
-  background: var(--gradient-primary);
+  background: var(--gradient-ticket);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  text-shadow: 0 4px 30px rgba(99, 102, 241, 0.3);
+  text-shadow: 0 4px 30px rgba(20, 184, 166, 0.3);
 }
 
 .ticket-number-serving {
@@ -680,8 +685,6 @@ input::placeholder {
 }
 
 .empty-state-icon {
-  width: 80px;
-  height: 80px;
   margin-bottom: var(--space-6);
   color: var(--gray-300);
 }
