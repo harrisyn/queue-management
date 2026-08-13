@@ -539,7 +539,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       </div>
 
       <p style={footerText}>
-        Powered by <strong>QMS</strong>
+        Powered by <strong>QueueFlow</strong>
       </p>
     </div>
   );
@@ -630,7 +630,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       </div>
 
       <p style={footerText}>
-        Powered by <strong>QMS</strong>
+        Powered by <strong>QueueFlow</strong>
       </p>
     </div>
   );
@@ -773,7 +773,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       </div>
 
       <p style={footerText}>
-        Powered by <strong>QMS</strong>
+        Powered by <strong>QueueFlow</strong>
       </p>
     </div>
   );
@@ -936,7 +936,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       </div>
 
       <p style={footerText}>
-        Powered by <strong>QMS</strong>
+        Powered by <strong>QueueFlow</strong>
       </p>
     </div>
   );
