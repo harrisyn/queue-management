@@ -196,6 +196,16 @@ class ApiClient {
     return data;
   }
 
+  async getPlans() {
+    const { data } = await this.client.get('/plans', { params: { includeInactive: false } });
+    return data;
+  }
+
+  async createSubscriptionCheckout(payload: { planId: string; provider: 'stripe' | 'paystack'; billingCycle: 'monthly' | 'yearly' }) {
+    const { data } = await this.client.post('/tenant/subscription/checkout', payload);
+    return data;
+  }
+
   async getUsers(params?: { organizationId?: string; role?: string }) {
     const { data } = await this.client.get('/users', { params });
     return data;
@@ -777,6 +787,21 @@ class ApiClient {
 
   async deleteSubscriptionPlan(id: string) {
     const { data } = await this.client.delete(`/superadmin/plans/${id}`);
+    return data;
+  }
+
+  async getPaymentProviders() {
+    const { data } = await this.client.get('/superadmin/payment-providers');
+    return data;
+  }
+
+  async savePaymentProvider(provider: 'stripe' | 'paystack', payload: { publicKey?: string; secretKey: string; webhookSecret: string; isActive: boolean }) {
+    const { data } = await this.client.put(`/superadmin/payment-providers/${provider}`, payload);
+    return data;
+  }
+
+  async testPaymentProvider(provider: 'stripe' | 'paystack') {
+    const { data } = await this.client.post(`/superadmin/payment-providers/${provider}/test`);
     return data;
   }
 }
