@@ -86,13 +86,13 @@ export const loadSubscription = async (req: Request, res: Response, next: NextFu
       return next();
     }
 
-    // Get organization's subscription
-    const subscription = await prisma.organizationSubscription.findUnique({
-      where: { organizationId: user.organizationId },
-      include: {
-        plan: true,
-      },
+    // Get organization's subscription (subscription lives on Organization.subscriptionId,
+    // not the other way around — OrganizationSubscription has no organizationId field)
+    const org = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { subscription: { include: { plan: true } } },
     });
+    const subscription = org?.subscription ?? null;
 
     if (!subscription || subscription.status !== 'ACTIVE') {
       req.subscription = {
@@ -157,13 +157,14 @@ export const checkLimit = async (
   organizationId: string,
   limitType: 'locations' | 'services' | 'users'
 ): Promise<{ current: number; limit: number; allowed: boolean }> => {
-  const subscription = await prisma.organizationSubscription.findUnique({
-    where: { organizationId },
-    include: { plan: true },
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { subscription: { include: { plan: true } } },
   });
+  const subscription = org?.subscription ?? null;
 
   const features = subscription?.plan?.features as SubscriptionFeatures || DEFAULT_FEATURES;
-  
+
   let current = 0;
   let limit = 0;
 
@@ -236,10 +237,11 @@ export const enforceLimit = (limitType: 'locations' | 'services' | 'users') => {
  * Get subscription info for a specific organization
  */
 export const getOrganizationFeatures = async (organizationId: string): Promise<SubscriptionFeatures> => {
-  const subscription = await prisma.organizationSubscription.findUnique({
-    where: { organizationId },
-    include: { plan: true },
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { subscription: { include: { plan: true } } },
   });
+  const subscription = org?.subscription ?? null;
 
   if (!subscription || subscription.status !== 'ACTIVE') {
     return DEFAULT_FEATURES;
@@ -265,6 +267,12 @@ export const getMySubscription = async (req: Request, res: Response) => {
       select: { organizationId: true },
     });
 
+    const activeProviderRows = await prisma.paymentProviderConfig.findMany({
+      where: { isActive: true },
+      select: { provider: true },
+    });
+    const activeProviders = activeProviderRows.map(r => r.provider);
+
     if (!user?.organizationId) {
       return res.json({
         subscription: null,
@@ -274,13 +282,15 @@ export const getMySubscription = async (req: Request, res: Response) => {
           services: { current: 0, limit: DEFAULT_FEATURES.maxServices, allowed: true },
           users: { current: 0, limit: DEFAULT_FEATURES.maxUsers, allowed: true },
         },
+        activeProviders,
       });
     }
 
-    const subscription = await prisma.organizationSubscription.findUnique({
-      where: { organizationId: user.organizationId },
-      include: { plan: true },
+    const org = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { subscription: { include: { plan: true } } },
     });
+    const subscription = org?.subscription ?? null;
 
     const features = subscription?.plan?.features as SubscriptionFeatures || DEFAULT_FEATURES;
     const mergedFeatures = { ...DEFAULT_FEATURES, ...features };
@@ -320,6 +330,7 @@ export const getMySubscription = async (req: Request, res: Response) => {
           allowed: userCount < (mergedFeatures.maxUsers || 5),
         },
       },
+      activeProviders,
     });
   } catch (error) {
     console.error('Error getting subscription:', error);
