@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { MapPin } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
+import { Icon } from '@/components/ui';
 
 interface Location {
   id: string;
@@ -572,7 +574,9 @@ export default function AdminLocationsPage() {
           <div style={locationsGrid}>
             {locations.length === 0 && !showForm && (
               <div style={emptyState}>
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📍</div>
+                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                  <Icon icon={MapPin} size={48} color="#14b8a6" strokeWidth={1.5} />
+                </div>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>No locations yet</h3>
                 <p style={{ color: '#6b7280', marginBottom: '1rem' }}>Create your first location to start managing queues.</p>
                 <button onClick={() => setShowForm(true)} style={submitButton}>
@@ -658,12 +662,11 @@ const pageContainer: React.CSSProperties = {
 };
 
 const headerSection: React.CSSProperties = {
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   borderRadius: '16px',
   padding: '2rem',
   marginBottom: '1.5rem',
   color: 'white',
-  boxShadow: '0 10px 40px rgba(99, 102, 241, 0.3)',
 };
 
 const headerContent: React.CSSProperties = {
@@ -766,7 +769,7 @@ const detailsHeader: React.CSSProperties = {
   alignItems: 'center',
   padding: '1.25rem 1.5rem',
   borderBottom: '1px solid #e5e7eb',
-  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  background: '#f8fafc',
 };
 
 const detailsTitle: React.CSSProperties = {
@@ -925,7 +928,7 @@ const editButtonLarge: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '8px',
@@ -962,7 +965,7 @@ const formHeader: React.CSSProperties = {
   alignItems: 'center',
   padding: '1.25rem 1.5rem',
   borderBottom: '1px solid #e5e7eb',
-  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  background: '#f8fafc',
 };
 
 const formTitle: React.CSSProperties = {
@@ -1040,7 +1043,7 @@ const submitButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
   borderRadius: '8px',
   border: 'none',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
@@ -1075,8 +1078,8 @@ const locationCard: React.CSSProperties = {
 };
 
 const locationCardActive: React.CSSProperties = {
-  borderColor: '#6366f1',
-  boxShadow: '0 8px 30px rgba(99, 102, 241, 0.2)',
+  borderColor: '#14b8a6',
+  boxShadow: '0 8px 30px rgba(20, 184, 166, 0.2)',
 };
 
 const cardHeader: React.CSSProperties = {
@@ -1089,12 +1092,12 @@ const cardHeader: React.CSSProperties = {
 const cardIcon: React.CSSProperties = {
   width: '48px',
   height: '48px',
-  background: 'linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%)',
+  background: 'rgba(20, 184, 166, 0.1)',
   borderRadius: '12px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#6366f1',
+  color: '#14b8a6',
 };
 
 const publicCodeBadge: React.CSSProperties = {
@@ -1139,7 +1142,7 @@ const cardUrlPreview: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   fontSize: '0.75rem',
-  color: '#6366f1',
+  color: '#0d9488',
   marginBottom: '1rem',
 };
 

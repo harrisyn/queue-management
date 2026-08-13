@@ -677,7 +677,7 @@ const FlowDesignerPage: React.FC = () => {
           }
 
           .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: var(--primary);
             border-radius: 16px;
             padding: 1.5rem 2rem;
             margin-bottom: 1.5rem;
@@ -916,7 +916,7 @@ const FlowDesignerPage: React.FC = () => {
             text-transform: uppercase;
             padding: 0.125rem 0.375rem;
             border-radius: 4px;
-            background: #e0e7ff;
+            background: rgba(20, 184, 166, 0.1);
             color: var(--primary);
           }
 

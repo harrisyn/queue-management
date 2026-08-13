@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+import { QrCode, Lightbulb } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { Icon } from '@/components/ui';
 
 interface Location {
   id: string;
@@ -117,7 +119,7 @@ export default function AdminQRPage() {
           h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #111827; }
           p { color: #6b7280; margin-bottom: 2rem; }
           img { max-width: 300px; border: 1px solid #e5e7eb; border-radius: 12px; }
-          .url { margin-top: 1rem; font-family: monospace; color: #6366f1; }
+          .url { margin-top: 1rem; font-family: monospace; color: #14b8a6; }
         </style>
       </head>
       <body>
@@ -159,7 +161,9 @@ export default function AdminQRPage() {
           </div>
         ) : locations.length === 0 ? (
           <div style={emptyState}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📱</div>
+            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+              <Icon icon={QrCode} size={48} color="#14b8a6" strokeWidth={1.5} />
+            </div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>
               No locations with public codes
             </h3>
@@ -203,9 +207,9 @@ export default function AdminQRPage() {
                       onClick={() => setQrSize(size)}
                       style={{
                         ...sizeButton,
-                        background: qrSize === size ? '#6366f1' : 'white',
+                        background: qrSize === size ? '#14b8a6' : 'white',
                         color: qrSize === size ? 'white' : '#374151',
-                        borderColor: qrSize === size ? '#6366f1' : '#e5e7eb',
+                        borderColor: qrSize === size ? '#14b8a6' : '#e5e7eb',
                       }}
                     >
                       {size}px
@@ -262,7 +266,7 @@ export default function AdminQRPage() {
 
         {/* Tips */}
         <div style={tipsCard}>
-          <div style={{ fontSize: '1.25rem' }}>💡</div>
+          <Icon icon={Lightbulb} size={22} color="#92400e" />
           <div>
             <h3 style={{ fontWeight: 600, color: '#92400e', marginBottom: '0.25rem' }}>Tips for using QR codes</h3>
             <ul style={{ color: '#a16207', fontSize: '0.875rem', margin: 0, paddingLeft: '1.25rem' }}>
@@ -292,7 +296,7 @@ const emptyState: React.CSSProperties = {
 const linkButton: React.CSSProperties = {
   display: 'inline-block',
   padding: '0.625rem 1.25rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '0.5rem',
   textDecoration: 'none',
@@ -366,7 +370,7 @@ const urlBox: React.CSSProperties = {
 const codeStyle: React.CSSProperties = {
   fontSize: '0.8125rem',
   fontFamily: 'monospace',
-  color: '#6366f1',
+  color: '#14b8a6',
   wordBreak: 'break-all',
 };
 

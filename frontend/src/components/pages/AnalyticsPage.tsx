@@ -735,12 +735,11 @@ const AnalyticsPage: React.FC = () => {
           }
 
           .page-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            background: var(--primary);
             border-radius: 16px;
             padding: 2rem;
             margin-bottom: 2rem;
             color: white;
-            box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
           }
 
           .header-content {
@@ -1006,7 +1005,7 @@ const AnalyticsPage: React.FC = () => {
           .service-icon {
             width: 32px;
             height: 32px;
-            background: linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%);
+            background: rgba(20, 184, 166, 0.1);
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -1082,7 +1081,7 @@ const AnalyticsPage: React.FC = () => {
           .empty-icon {
             width: 100px;
             height: 100px;
-            background: linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%);
+            background: rgba(20, 184, 166, 0.1);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -1462,7 +1461,7 @@ const AnalyticsPage: React.FC = () => {
             justify-content: center;
           }
 
-          .journey-card.total .journey-card-icon { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
+          .journey-card.total .journey-card-icon { background: rgba(20, 184, 166, 0.12); color: #0d9488; }
           .journey-card.completed .journey-card-icon { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #059669; }
           .journey-card.in-progress .journey-card-icon { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; }
           .journey-card.multi-service .journey-card-icon { background: linear-gradient(135deg, #fce7f3, #fbcfe8); color: #db2777; }
@@ -1547,7 +1546,7 @@ const AnalyticsPage: React.FC = () => {
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--accent));
+            background: var(--primary);
             color: white;
             display: flex;
             align-items: center;
