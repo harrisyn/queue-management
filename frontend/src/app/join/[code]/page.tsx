@@ -483,15 +483,9 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       <div style={infoHeader}>
         <div style={logoBox}>
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="url(#gradient)" />
+            <rect width="48" height="48" rx="12" fill="#14b8a6" />
             <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-            <circle cx="24" cy="22" r="4" fill="#6366f1"/>
-            <defs>
-              <linearGradient id="gradient" x1="0" y1="0" x2="48" y2="48">
-                <stop stopColor="#6366f1"/>
-                <stop offset="1" stopColor="#8b5cf6"/>
-              </linearGradient>
-            </defs>
+            <circle cx="24" cy="22" r="4" fill="#0d9488"/>
           </svg>
         </div>
         {renderModeSelector()}
@@ -550,15 +544,9 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       <div style={infoHeader}>
         <div style={logoBox}>
           <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="url(#gradient)" />
+            <rect width="48" height="48" rx="12" fill="#14b8a6" />
             <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-            <circle cx="24" cy="22" r="4" fill="#6366f1"/>
-            <defs>
-              <linearGradient id="gradient" x1="0" y1="0" x2="48" y2="48">
-                <stop stopColor="#6366f1"/>
-                <stop offset="1" stopColor="#8b5cf6"/>
-              </linearGradient>
-            </defs>
+            <circle cx="24" cy="22" r="4" fill="#0d9488"/>
           </svg>
         </div>
         {mode !== 'kiosk' && renderModeSelector()}
@@ -603,7 +591,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
                 {service.description && <span style={serviceDesc}>{service.description}</span>}
                 <span style={serviceTime}>{service.startTime} - {service.endTime}</span>
               </div>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="#6366f1">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="#14b8a6">
                 <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
               </svg>
             </button>
@@ -817,15 +805,9 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
         <div style={ticketHeader}>
           <div style={logoSmall}>
             <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-              <rect width="48" height="48" rx="12" fill="url(#successGradient)" />
+              <rect width="48" height="48" rx="12" fill="#14b8a6" />
               <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-              <circle cx="24" cy="22" r="4" fill="#6366f1"/>
-              <defs>
-                <linearGradient id="successGradient" x1="0" y1="0" x2="48" y2="48">
-                  <stop stopColor="#6366f1"/>
-                  <stop offset="1" stopColor="#8b5cf6"/>
-                </linearGradient>
-              </defs>
+              <circle cx="24" cy="22" r="4" fill="#0d9488"/>
             </svg>
           </div>
           <div>
@@ -978,7 +960,7 @@ const pageStyle: React.CSSProperties = {
 const bgPattern: React.CSSProperties = {
   position: 'absolute',
   inset: 0,
-  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2314b8a6' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
 };
 
 const contentStyle: React.CSSProperties = {
@@ -1038,7 +1020,7 @@ const homeButton: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   padding: '0.75rem 1.5rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '0.75rem',
   textDecoration: 'none',
@@ -1234,11 +1216,10 @@ const joinButton: React.CSSProperties = {
   fontSize: '1rem',
   fontWeight: 600,
   color: 'white',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   border: 'none',
   borderRadius: '0.75rem',
   cursor: 'pointer',
-  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
 };
 
 const successContainer: React.CSSProperties = {
@@ -1297,7 +1278,7 @@ const ticketLabel: React.CSSProperties = {
 const ticketNumberStyle: React.CSSProperties = {
   fontSize: '4rem',
   fontWeight: 800,
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: 'var(--gradient-ticket)',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
   letterSpacing: '-0.02em',
@@ -1498,7 +1479,7 @@ const countdownProgress: React.CSSProperties = {
   bottom: 0,
   left: 0,
   height: '3px',
-  background: '#6366f1',
+  background: '#14b8a6',
 };
 
 const cancelCountdownBtn: React.CSSProperties = {
@@ -1592,7 +1573,7 @@ const sessionTicketCard: React.CSSProperties = {
 const sessionTicketNumber: React.CSSProperties = {
   fontSize: '1.5rem',
   fontWeight: 700,
-  color: '#6366f1',
+  color: '#0d9488',
   minWidth: '80px',
 };
 
@@ -1621,7 +1602,7 @@ const addAnotherButton: React.CSSProperties = {
   gap: '0.5rem',
   width: '100%',
   padding: '1rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '0.75rem',
