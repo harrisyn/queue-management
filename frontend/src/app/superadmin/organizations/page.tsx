@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import Link from 'next/link';
+import { Search } from 'lucide-react';
 import api from '@/api/client';
+import { Icon } from '@/components/ui';
 
 interface Organization {
   id: string;
@@ -137,7 +139,7 @@ export default function OrganizationsPage() {
       case 'ACTIVE':
         return { ...base, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' };
       case 'TRIAL':
-        return { ...base, background: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc' };
+        return { ...base, background: 'rgba(20, 184, 166, 0.2)', color: '#5eead4' };
       case 'PAST_DUE':
         return { ...base, background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' };
       case 'CANCELLED':
@@ -160,7 +162,7 @@ export default function OrganizationsPage() {
       {/* Filters */}
       <div style={filtersContainer}>
         <div style={searchBox}>
-          <span style={searchIcon}>🔍</span>
+          <span style={searchIcon}><Icon icon={Search} size={16} /></span>
           <input
             type="text"
             placeholder="Search by name, email, or slug..."
@@ -416,7 +418,7 @@ const searchInput: React.CSSProperties = {
   width: '100%',
   padding: '0.75rem 1rem 0.75rem 2.75rem',
   background: '#1e293b',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   borderRadius: '8px',
   color: '#fff',
   fontSize: '0.9375rem',
@@ -425,7 +427,7 @@ const searchInput: React.CSSProperties = {
 const filterSelect: React.CSSProperties = {
   padding: '0.75rem 1rem',
   background: '#1e293b',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   borderRadius: '8px',
   color: '#fff',
   fontSize: '0.9375rem',
@@ -455,7 +457,7 @@ const dismissBtn: React.CSSProperties = {
 const tableContainer: React.CSSProperties = {
   background: '#1e293b',
   borderRadius: '12px',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   overflow: 'hidden',
 };
 
@@ -469,7 +471,7 @@ const spinner: React.CSSProperties = {
   width: '40px',
   height: '40px',
   border: '4px solid #1e293b',
-  borderTop: '4px solid #6366f1',
+  borderTop: '4px solid #14b8a6',
   borderRadius: '50%',
   margin: '0 auto 1rem',
   animation: 'spin 1s linear infinite',
@@ -494,11 +496,11 @@ const th: React.CSSProperties = {
   fontWeight: 600,
   textTransform: 'uppercase' as const,
   letterSpacing: '0.05em',
-  borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
 };
 
 const tr: React.CSSProperties = {
-  borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
 };
 
 const td: React.CSSProperties = {
@@ -523,8 +525,8 @@ const orgSlug: React.CSSProperties = {
 };
 
 const planBadge: React.CSSProperties = {
-  background: 'rgba(99, 102, 241, 0.2)',
-  color: '#a5b4fc',
+  background: 'rgba(20, 184, 166, 0.2)',
+  color: '#5eead4',
   padding: '0.25rem 0.75rem',
   borderRadius: '4px',
   fontSize: '0.875rem',
@@ -550,8 +552,8 @@ const actionsCell: React.CSSProperties = {
 
 const actionLink: React.CSSProperties = {
   padding: '0.5rem 0.75rem',
-  background: 'rgba(99, 102, 241, 0.2)',
-  color: '#a5b4fc',
+  background: 'rgba(20, 184, 166, 0.2)',
+  color: '#5eead4',
   borderRadius: '6px',
   textDecoration: 'none',
   fontSize: '0.75rem',
@@ -580,9 +582,9 @@ const paginationContainer: React.CSSProperties = {
 const pageBtn: React.CSSProperties = {
   padding: '0.5rem 1rem',
   background: '#1e293b',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   borderRadius: '6px',
-  color: '#a5b4fc',
+  color: '#5eead4',
   cursor: 'pointer',
   fontSize: '0.875rem',
 };
@@ -610,12 +612,12 @@ const modal: React.CSSProperties = {
   borderRadius: '12px',
   width: '100%',
   maxWidth: '500px',
-  border: '1px solid rgba(99, 102, 241, 0.3)',
+  border: '1px solid rgba(20, 184, 166, 0.3)',
 };
 
 const modalHeader: React.CSSProperties = {
   padding: '1.25rem 1.5rem',
-  borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -659,7 +661,7 @@ const formSelect: React.CSSProperties = {
   width: '100%',
   padding: '0.75rem',
   background: '#0f172a',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   borderRadius: '8px',
   color: '#fff',
   fontSize: '0.9375rem',
@@ -667,7 +669,7 @@ const formSelect: React.CSSProperties = {
 
 const modalFooter: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  borderTop: '1px solid rgba(99, 102, 241, 0.1)',
+  borderTop: '1px solid rgba(20, 184, 166, 0.1)',
   display: 'flex',
   justifyContent: 'flex-end',
   gap: '0.75rem',
@@ -676,7 +678,7 @@ const modalFooter: React.CSSProperties = {
 const cancelBtn: React.CSSProperties = {
   padding: '0.75rem 1.25rem',
   background: 'transparent',
-  border: '1px solid rgba(99, 102, 241, 0.3)',
+  border: '1px solid rgba(20, 184, 166, 0.3)',
   borderRadius: '8px',
   color: '#94a3b8',
   cursor: 'pointer',
@@ -685,7 +687,7 @@ const cancelBtn: React.CSSProperties = {
 
 const saveBtn: React.CSSProperties = {
   padding: '0.75rem 1.25rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   border: 'none',
   borderRadius: '8px',
   color: '#fff',
