@@ -715,7 +715,7 @@ class ApiClient {
     status?: string;
     billingCycle?: string;
     trialEndsAt?: string;
-    externalPaymentId?: string;
+    externalProviderSubscriptionId?: string;
   }) {
     const { data } = await this.client.patch(`/superadmin/organizations/${id}/subscription`, payload);
     return data;
