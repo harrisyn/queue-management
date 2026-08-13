@@ -81,7 +81,7 @@ const LoginPage: React.FC = () => {
                 </defs>
               </svg>
             </div>
-            <span style={logoText}>QMS</span>
+            <span style={logoText}>QueueFlow</span>
           </div>
           
           <h1 style={heroTitle}>

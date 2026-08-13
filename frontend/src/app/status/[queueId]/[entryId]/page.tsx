@@ -733,7 +733,7 @@ export default function QueueStatusPage({
         </p>
 
         <p style={footerText}>
-          Powered by <strong>QMS</strong>
+          Powered by <strong>QueueFlow</strong>
         </p>
       </div>
     </div>

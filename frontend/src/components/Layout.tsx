@@ -60,7 +60,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
                 </linearGradient>
               </defs>
             </svg>
-            <span style={logoText}>QMS</span>
+            <span style={logoText}>QueueFlow</span>
           </div>
         </Link>
 
@@ -124,7 +124,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               </linearGradient>
             </defs>
           </svg>
-          <span style={mobileLogoText}>QMS</span>
+          <span style={mobileLogoText}>QueueFlow</span>
         </Link>
         {user && (
           <button 
