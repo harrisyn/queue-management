@@ -3,8 +3,10 @@
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { QrCode, Zap, Bell } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { extractSubdomain, buildTenantUrl } from '@/lib/subdomain';
+import { Button, Icon } from '@/components/ui';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -70,15 +72,9 @@ const LoginPage: React.FC = () => {
           <div style={logoContainer}>
             <div style={logoIcon}>
               <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                <rect width="48" height="48" rx="12" fill="url(#gradient)" />
+                <rect width="48" height="48" rx="12" fill="#14b8a6" />
                 <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-                <circle cx="24" cy="22" r="4" fill="#6366f1"/>
-                <defs>
-                  <linearGradient id="gradient" x1="0" y1="0" x2="48" y2="48">
-                    <stop stopColor="#6366f1"/>
-                    <stop offset="1" stopColor="#8b5cf6"/>
-                  </linearGradient>
-                </defs>
+                <circle cx="24" cy="22" r="4" fill="#0d9488"/>
               </svg>
             </div>
             <span style={logoText}>QueueFlow</span>
@@ -96,15 +92,15 @@ const LoginPage: React.FC = () => {
           
           <div style={featureList}>
             <div style={featureItem}>
-              <div style={featureIconStyle}>📱</div>
+              <Icon icon={QrCode} size={20} color="#2dd4bf" />
               <span>Scan QR to join queue</span>
             </div>
             <div style={featureItem}>
-              <div style={featureIconStyle}>⚡</div>
+              <Icon icon={Zap} size={20} color="#2dd4bf" />
               <span>Real-time updates</span>
             </div>
             <div style={featureItem}>
-              <div style={featureIconStyle}>🔔</div>
+              <Icon icon={Bell} size={20} color="#2dd4bf" />
               <span>Turn notifications</span>
             </div>
           </div>
@@ -150,12 +146,12 @@ const LoginPage: React.FC = () => {
                     />
                   </div>
                 </div>
-                <button type="submit" style={submitButton}>
+                <Button type="submit" variant="primary" size="lg" style={{ width: '100%' }}>
                   <span>Continue</span>
                   <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                     <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
                   </svg>
-                </button>
+                </Button>
               </form>
             ) : (
             <form onSubmit={handleSubmit} style={formStyle}>
@@ -214,10 +210,12 @@ const LoginPage: React.FC = () => {
                 </div>
               </div>
 
-              <button
+              <Button
                 type="submit"
+                variant="primary"
+                size="lg"
                 disabled={loading}
-                style={submitButton}
+                style={{ width: '100%' }}
               >
                 {loading ? (
                   <>
@@ -232,7 +230,7 @@ const LoginPage: React.FC = () => {
                     </svg>
                   </>
                 )}
-              </button>
+              </Button>
             </form>
             )}
 
@@ -276,7 +274,7 @@ const pageStyle: React.CSSProperties = {
 const bgPattern: React.CSSProperties = {
   position: 'absolute',
   inset: 0,
-  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2314b8a6' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
 };
 
 const bgGradient: React.CSSProperties = {
@@ -285,7 +283,7 @@ const bgGradient: React.CSSProperties = {
   right: '-20%',
   width: '80%',
   height: '150%',
-  background: 'radial-gradient(ellipse, rgba(99, 102, 241, 0.15) 0%, transparent 70%)',
+  background: 'radial-gradient(ellipse, rgba(20, 184, 166, 0.15) 0%, transparent 70%)',
   pointerEvents: 'none',
 };
 
@@ -328,7 +326,7 @@ const heroTitle: React.CSSProperties = {
   fontWeight: 800,
   lineHeight: 1.1,
   marginBottom: '1.5rem',
-  background: 'linear-gradient(135deg, #ffffff 0%, #a5b4fc 100%)',
+  background: 'linear-gradient(135deg, #ffffff 0%, #99f6e4 100%)',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
 };
@@ -352,10 +350,6 @@ const featureItem: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.75rem',
   color: '#d1d5db',
-};
-
-const featureIconStyle: React.CSSProperties = {
-  fontSize: '1.25rem',
 };
 
 const formSection: React.CSSProperties = {
@@ -428,7 +422,7 @@ const labelStyle: React.CSSProperties = {
 
 const forgotLink: React.CSSProperties = {
   fontSize: '0.875rem',
-  color: '#6366f1',
+  color: '#14b8a6',
   fontWeight: 500,
 };
 
@@ -467,25 +461,6 @@ const togglePasswordBtn: React.CSSProperties = {
   display: 'flex',
 };
 
-const submitButton: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '0.5rem',
-  width: '100%',
-  padding: '1rem',
-  fontSize: '1rem',
-  fontWeight: 600,
-  color: 'white',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-  border: 'none',
-  borderRadius: '0.75rem',
-  cursor: 'pointer',
-  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.4)',
-  transition: 'all 0.2s',
-  marginTop: '0.5rem',
-};
-
 const divider: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
@@ -511,7 +486,7 @@ const signupPrompt: React.CSSProperties = {
 };
 
 const signupLink: React.CSSProperties = {
-  color: '#6366f1',
+  color: '#14b8a6',
   fontWeight: 600,
 };
 
