@@ -1,18 +1,33 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import {
+  Building2,
+  Zap,
+  QrCode,
+  Monitor,
+  MapPin,
+  BarChart3,
+  Shield,
+  ArrowRight,
+  Bell,
+  Ticket,
+  Users,
+  TrendingUp,
+  Stethoscope,
+  Syringe,
+} from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import DashboardPage from '@/components/pages/DashboardPage';
+import { Button, Icon } from '@/components/ui';
 
 // ============================================================================
-// SAAS LANDING PAGE - Modern, Professional, Stunning
+// SAAS LANDING PAGE
 // ============================================================================
 
 function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
-  const [activeTestimonial, setActiveTestimonial] = useState(0);
-  const heroRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -22,82 +37,44 @@ function LandingPage() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Auto-rotate testimonials
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setActiveTestimonial(prev => (prev + 1) % testimonials.length);
-    }, 5000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const testimonials = [
-    {
-      quote: "QueueFlow reduced our patient wait times by 45% in the first month. The real-time updates keep everyone informed.",
-      author: "Dr. Sarah Chen",
-      role: "Chief Medical Officer",
-      company: "Metro Health Center",
-      avatar: "SC",
-    },
-    {
-      quote: "Finally, a queue system that just works. Our customers love the SMS notifications and QR check-in.",
-      author: "James Wilson",
-      role: "Operations Director",
-      company: "TechServe Inc",
-      avatar: "JW",
-    },
-    {
-      quote: "The analytics dashboard gives us insights we never had before. We've optimized our staffing completely.",
-      author: "Maria Rodriguez",
-      role: "Branch Manager",
-      company: "First National Bank",
-      avatar: "MR",
-    },
-  ];
-
   const features = [
     {
-      icon: "⚡",
-      title: "Real-time Updates",
-      description: "Customers receive instant notifications about their queue position and estimated wait time.",
-      gradient: "linear-gradient(135deg, #6366f1, #8b5cf6)",
+      icon: Zap,
+      title: 'Real-time Updates',
+      description: 'Live position and wait-time updates powered by WebSockets — no page refresh needed.',
     },
     {
-      icon: "📱",
-      title: "QR Code Check-in",
-      description: "Scan and join queues in seconds. No app download required - works in any browser.",
-      gradient: "linear-gradient(135deg, #ec4899, #f43f5e)",
+      icon: QrCode,
+      title: 'QR Code Check-in',
+      description: 'Scan and join a queue in seconds, right from a browser. No app to install.',
     },
     {
-      icon: "📊",
-      title: "Analytics Dashboard",
-      description: "Deep insights into wait times, peak hours, and staff performance to optimize operations.",
-      gradient: "linear-gradient(135deg, #10b981, #14b8a6)",
+      icon: Monitor,
+      title: 'Live Display Boards',
+      description: 'Purpose-built TV displays show queue status and who’s being served, in real time.',
     },
     {
-      icon: "🔔",
-      title: "Smart Notifications",
-      description: "SMS, email, and push notifications keep customers informed even when they step away.",
-      gradient: "linear-gradient(135deg, #f59e0b, #f97316)",
+      icon: MapPin,
+      title: 'Multi-location',
+      description: 'Manage every branch and location from a single dashboard.',
     },
     {
-      icon: "🏢",
-      title: "Multi-location",
-      description: "Manage multiple branches from a single dashboard with location-specific settings.",
-      gradient: "linear-gradient(135deg, #3b82f6, #6366f1)",
+      icon: BarChart3,
+      title: 'Analytics Dashboard',
+      description: 'Track wait times, peak hours, and throughput to plan staffing.',
     },
     {
-      icon: "🔒",
-      title: "Enterprise Security",
-      description: "Bank-grade encryption, HIPAA compliant, with role-based access control.",
-      gradient: "linear-gradient(135deg, #8b5cf6, #a855f7)",
+      icon: Shield,
+      title: 'Workspace Isolation',
+      description: 'Every organization gets its own subdomain and role-scoped access — your data stays yours.',
     },
   ];
 
-  const stats = [
-    { value: "50K+", label: "Customers Served Daily" },
-    { value: "45%", label: "Average Wait Time Reduction" },
-    { value: "99.9%", label: "Uptime Guarantee" },
-    { value: "4.9★", label: "Customer Rating" },
+  const steps = [
+    { num: '01', title: 'Create a location', desc: 'Set up your first location in minutes.' },
+    { num: '02', title: 'Configure services', desc: 'Define the services and service points customers can queue for.' },
+    { num: '03', title: 'Share a join link or QR code', desc: 'Customers join from any browser — no app required.' },
+    { num: '04', title: 'Manage the queue live', desc: 'Call the next customer, track wait times, keep everyone informed.' },
   ];
 
   return (
@@ -107,7 +84,6 @@ function LandingPage() {
       <div style={styles.bgGrid} />
       <div style={styles.glowOrb1} />
       <div style={styles.glowOrb2} />
-      <div style={styles.glowOrb3} />
 
       {/* Navigation */}
       <nav style={{
@@ -116,40 +92,38 @@ function LandingPage() {
       }}>
         <div style={styles.navContent}>
           <Link href="/" style={styles.logo}>
-            <span style={styles.logoIcon}>🏥</span>
+            <Icon icon={Building2} size={26} color="#2dd4bf" />
             <span style={styles.logoText}>QueueFlow</span>
           </Link>
 
           <div style={styles.navLinks}>
             <a href="#features" style={styles.navLink}>Features</a>
             <a href="#how-it-works" style={styles.navLink}>How it Works</a>
-            <a href="#testimonials" style={styles.navLink}>Testimonials</a>
-            <a href="#pricing" style={styles.navLink}>Pricing</a>
           </div>
 
           <div style={styles.navActions}>
             <Link href="/login" style={styles.loginBtn}>
               Sign In
             </Link>
-            <Link href="/register" style={styles.ctaBtn}>
-              Get Started Free
+            <Link href="/register" style={{ textDecoration: 'none' }}>
+              <Button variant="primary" size="md">Get Started Free</Button>
             </Link>
           </div>
         </div>
       </nav>
 
       {/* Hero Section */}
-      <section ref={heroRef} style={styles.hero}>
+      <section style={styles.hero}>
         <div style={styles.heroContent}>
           <div style={styles.heroBadge}>
             <span style={styles.badgeDot} />
-            <span>Now with AI-powered wait time predictions</span>
+            <span>A subdomain workspace for every organization</span>
           </div>
 
           <h1 style={styles.heroTitle}>
             Transform Your
             <br />
-            <span style={styles.gradientText}>Queue Experience</span>
+            <span style={styles.accentText}>Queue Experience</span>
           </h1>
 
           <p style={styles.heroSubtitle}>
@@ -159,27 +133,12 @@ function LandingPage() {
           </p>
 
           <div style={styles.heroCtas}>
-            <Link href="/register" style={styles.primaryCta}>
-              <span>Start Free Trial</span>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-              </svg>
+            <Link href="/register" style={{ textDecoration: 'none' }}>
+              <Button variant="primary" size="lg">
+                <span>Start Free</span>
+                <Icon icon={ArrowRight} size={18} />
+              </Button>
             </Link>
-            <a href="#demo" style={styles.secondaryCta}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-              </svg>
-              <span>Watch Demo</span>
-            </a>
-          </div>
-
-          <div style={styles.heroTrust}>
-            <span style={styles.trustLabel}>Trusted by 500+ organizations</span>
-            <div style={styles.trustLogos}>
-              {['🏥', '🏦', '🏛️', '🏪', '🎓'].map((emoji, i) => (
-                <div key={i} style={styles.trustLogo}>{emoji}</div>
-              ))}
-            </div>
           </div>
         </div>
 
@@ -198,15 +157,15 @@ function LandingPage() {
               </div>
               <div style={styles.mockupContent}>
                 <div style={styles.mockupSidebar}>
-                  <div style={styles.sidebarItem}>📊 Overview</div>
-                  <div style={{ ...styles.sidebarItem, ...styles.sidebarItemActive }}>👥 Queues</div>
-                  <div style={styles.sidebarItem}>📍 Locations</div>
-                  <div style={styles.sidebarItem}>📈 Analytics</div>
+                  <div style={styles.sidebarItem}><Icon icon={BarChart3} size={14} /> Overview</div>
+                  <div style={{ ...styles.sidebarItem, ...styles.sidebarItemActive }}><Icon icon={Users} size={14} /> Queues</div>
+                  <div style={styles.sidebarItem}><Icon icon={MapPin} size={14} /> Locations</div>
+                  <div style={styles.sidebarItem}><Icon icon={TrendingUp} size={14} /> Analytics</div>
                 </div>
                 <div style={styles.mockupMain}>
                   <div style={styles.queueCard}>
                     <div style={styles.queueHeader}>
-                      <span>🏥 General Consultation</span>
+                      <span style={styles.queueHeaderLabel}><Icon icon={Stethoscope} size={14} /> General Consultation</span>
                       <span style={styles.queueBadge}>12 waiting</span>
                     </div>
                     <div style={styles.queueProgress}>
@@ -219,7 +178,7 @@ function LandingPage() {
                   </div>
                   <div style={styles.queueCard}>
                     <div style={styles.queueHeader}>
-                      <span>💉 Vaccination</span>
+                      <span style={styles.queueHeaderLabel}><Icon icon={Syringe} size={14} /> Vaccination</span>
                       <span style={styles.queueBadge}>5 waiting</span>
                     </div>
                     <div style={styles.queueProgress}>
@@ -236,32 +195,20 @@ function LandingPage() {
 
             {/* Floating ticket */}
             <div style={styles.floatingTicket}>
-              <div style={styles.ticketHeader}>🎫 Your Ticket</div>
+              <div style={styles.ticketHeader}><Icon icon={Ticket} size={13} color="rgba(255,255,255,0.8)" /> Your Ticket</div>
               <div style={styles.ticketNumber}>A-024</div>
-              <div style={styles.ticketInfo}>Position: #3 • ~8 min</div>
+              <div style={styles.ticketInfo}>Position: #3 &bull; ~8 min</div>
             </div>
 
             {/* Floating notification */}
             <div style={styles.floatingNotification}>
-              <span style={styles.notifIcon}>🔔</span>
+              <Icon icon={Bell} size={22} color="#2dd4bf" />
               <div>
                 <strong>You&apos;re next!</strong>
                 <p style={styles.notifText}>Please proceed to Counter 2</p>
               </div>
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* Stats Section */}
-      <section style={styles.statsSection}>
-        <div style={styles.statsGrid}>
-          {stats.map((stat, i) => (
-            <div key={i} style={styles.statCard}>
-              <div style={styles.statValue}>{stat.value}</div>
-              <div style={styles.statLabel}>{stat.label}</div>
-            </div>
-          ))}
         </div>
       </section>
 
@@ -272,19 +219,18 @@ function LandingPage() {
           <h2 style={styles.sectionTitle}>
             Everything you need to
             <br />
-            <span style={styles.gradientText}>manage queues effectively</span>
+            <span style={styles.accentText}>manage queues effectively</span>
           </h2>
           <p style={styles.sectionSubtitle}>
-            From simple check-ins to complex multi-location operations,
-            QueueFlow has you covered.
+            From simple check-ins to multi-location operations, QueueFlow has you covered.
           </p>
         </div>
 
         <div style={styles.featuresGrid}>
           {features.map((feature, i) => (
             <div key={i} style={styles.featureCard}>
-              <div style={{ ...styles.featureIcon, background: feature.gradient }}>
-                {feature.icon}
+              <div style={styles.featureIcon}>
+                <Icon icon={feature.icon} size={24} color="#2dd4bf" />
               </div>
               <h3 style={styles.featureTitle}>{feature.title}</h3>
               <p style={styles.featureDesc}>{feature.description}</p>
@@ -300,95 +246,18 @@ function LandingPage() {
           <h2 style={styles.sectionTitle}>
             Get started in
             <br />
-            <span style={styles.gradientText}>three simple steps</span>
+            <span style={styles.accentText}>four simple steps</span>
           </h2>
         </div>
 
         <div style={styles.stepsGrid}>
-          <div style={styles.stepCard}>
-            <div style={styles.stepNumber}>01</div>
-            <h3 style={styles.stepTitle}>Create Your Organization</h3>
-            <p style={styles.stepDesc}>
-              Sign up in under 2 minutes. Add your locations, services, and team members.
-            </p>
-          </div>
-          <div style={styles.stepConnector}>
-            <svg width="60" height="24" viewBox="0 0 60 24" fill="none">
-              <path d="M0 12H55M55 12L45 2M55 12L45 22" stroke="url(#stepGrad)" strokeWidth="2"/>
-              <defs>
-                <linearGradient id="stepGrad" x1="0" y1="12" x2="60" y2="12">
-                  <stop stopColor="#6366f1"/>
-                  <stop offset="1" stopColor="#a855f7"/>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <div style={styles.stepCard}>
-            <div style={styles.stepNumber}>02</div>
-            <h3 style={styles.stepTitle}>Set Up Your Queues</h3>
-            <p style={styles.stepDesc}>
-              Configure queue types, time slots, and notification preferences for each service.
-            </p>
-          </div>
-          <div style={styles.stepConnector}>
-            <svg width="60" height="24" viewBox="0 0 60 24" fill="none">
-              <path d="M0 12H55M55 12L45 2M55 12L45 22" stroke="url(#stepGrad2)" strokeWidth="2"/>
-              <defs>
-                <linearGradient id="stepGrad2" x1="0" y1="12" x2="60" y2="12">
-                  <stop stopColor="#a855f7"/>
-                  <stop offset="1" stopColor="#ec4899"/>
-                </linearGradient>
-              </defs>
-            </svg>
-          </div>
-          <div style={styles.stepCard}>
-            <div style={styles.stepNumber}>03</div>
-            <h3 style={styles.stepTitle}>Start Serving</h3>
-            <p style={styles.stepDesc}>
-              Customers scan your QR code, join the queue, and get real-time updates.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Testimonials Section */}
-      <section id="testimonials" style={styles.testimonialsSection}>
-        <div style={styles.sectionHeader}>
-          <span style={styles.sectionBadge}>Testimonials</span>
-          <h2 style={styles.sectionTitle}>
-            Loved by teams
-            <br />
-            <span style={styles.gradientText}>around the world</span>
-          </h2>
-        </div>
-
-        <div style={styles.testimonialCard}>
-          <div style={styles.testimonialQuote}>
-            &ldquo;{testimonials[activeTestimonial].quote}&rdquo;
-          </div>
-          <div style={styles.testimonialAuthor}>
-            <div style={styles.testimonialAvatar}>
-              {testimonials[activeTestimonial].avatar}
+          {steps.map((step) => (
+            <div key={step.num} style={styles.stepCard}>
+              <div style={styles.stepNumber}>{step.num}</div>
+              <h3 style={styles.stepTitle}>{step.title}</h3>
+              <p style={styles.stepDesc}>{step.desc}</p>
             </div>
-            <div>
-              <strong style={styles.authorName}>{testimonials[activeTestimonial].author}</strong>
-              <span style={styles.authorRole}>
-                {testimonials[activeTestimonial].role}, {testimonials[activeTestimonial].company}
-              </span>
-            </div>
-          </div>
-          <div style={styles.testimonialDots}>
-            {testimonials.map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setActiveTestimonial(i)}
-                style={{
-                  ...styles.testimonialDot,
-                  ...(i === activeTestimonial ? styles.testimonialDotActive : {}),
-                }}
-              />
-            ))}
-          </div>
+          ))}
         </div>
       </section>
 
@@ -396,18 +265,17 @@ function LandingPage() {
       <section style={styles.ctaSection}>
         <div style={styles.ctaCard}>
           <h2 style={styles.ctaTitle}>
-            Ready to transform your queue experience?
+            Ready to get started?
           </h2>
           <p style={styles.ctaSubtitle}>
-            Join 500+ organizations already using QueueFlow.
-            Start your free trial today — no credit card required.
+            Create your workspace in minutes &mdash; no credit card required.
           </p>
           <div style={styles.ctaButtons}>
-            <Link href="/register" style={styles.ctaPrimary}>
-              Get Started Free
+            <Link href="/register" style={{ textDecoration: 'none' }}>
+              <Button variant="primary" size="lg">Get Started Free</Button>
             </Link>
-            <Link href="/login" style={styles.ctaSecondary}>
-              Sign In
+            <Link href="/login" style={{ textDecoration: 'none' }}>
+              <Button variant="secondary" size="lg">Sign In</Button>
             </Link>
           </div>
         </div>
@@ -418,7 +286,7 @@ function LandingPage() {
         <div style={styles.footerContent}>
           <div style={styles.footerBrand}>
             <Link href="/" style={styles.footerLogo}>
-              <span style={styles.logoIcon}>🏥</span>
+              <Icon icon={Building2} size={22} color="#2dd4bf" />
               <span style={styles.logoText}>QueueFlow</span>
             </Link>
             <p style={styles.footerDesc}>
@@ -427,33 +295,15 @@ function LandingPage() {
           </div>
 
           <div style={styles.footerLinks}>
-            <div style={styles.footerCol}>
-              <h4 style={styles.footerColTitle}>Product</h4>
-              <a href="#features" style={styles.footerLink}>Features</a>
-              <a href="#pricing" style={styles.footerLink}>Pricing</a>
-              <a href="#" style={styles.footerLink}>Integrations</a>
-            </div>
-            <div style={styles.footerCol}>
-              <h4 style={styles.footerColTitle}>Company</h4>
-              <a href="#" style={styles.footerLink}>About</a>
-              <a href="#" style={styles.footerLink}>Blog</a>
-              <a href="#" style={styles.footerLink}>Careers</a>
-            </div>
-            <div style={styles.footerCol}>
-              <h4 style={styles.footerColTitle}>Support</h4>
-              <a href="#" style={styles.footerLink}>Documentation</a>
-              <a href="#" style={styles.footerLink}>Contact</a>
-              <a href="#" style={styles.footerLink}>Status</a>
-            </div>
+            <a href="#features" style={styles.footerLink}>Features</a>
+            <a href="#how-it-works" style={styles.footerLink}>How it Works</a>
+            <Link href="/join" style={styles.footerLink}>Public join pages</Link>
+            <Link href="/login" style={styles.footerLink}>Sign in</Link>
           </div>
         </div>
 
         <div style={styles.footerBottom}>
-          <p>© 2024 QueueFlow. All rights reserved.</p>
-          <div style={styles.footerLegal}>
-            <a href="#" style={styles.footerLink}>Privacy</a>
-            <a href="#" style={styles.footerLink}>Terms</a>
-          </div>
+          <p>&copy; 2026 QueueFlow. All rights reserved.</p>
         </div>
       </footer>
 
@@ -475,15 +325,6 @@ const animations = `
     0%, 100% { opacity: 0.6; transform: scale(1); }
     50% { opacity: 1; transform: scale(1.05); }
   }
-  @keyframes slideIn {
-    from { opacity: 0; transform: translateY(20px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  @keyframes gradientShift {
-    0% { background-position: 0% 50%; }
-    50% { background-position: 100% 50%; }
-    100% { background-position: 0% 50%; }
-  }
 `;
 
 // ============================================================================
@@ -501,7 +342,7 @@ const styles: Record<string, React.CSSProperties> = {
   bgGradient: {
     position: 'fixed',
     inset: 0,
-    background: 'radial-gradient(ellipse at 50% 0%, rgba(99, 102, 241, 0.15) 0%, transparent 60%), radial-gradient(ellipse at 100% 50%, rgba(139, 92, 246, 0.1) 0%, transparent 50%), radial-gradient(ellipse at 0% 100%, rgba(236, 72, 153, 0.08) 0%, transparent 50%)',
+    background: 'radial-gradient(ellipse at 50% 0%, rgba(20, 184, 166, 0.15) 0%, transparent 60%), radial-gradient(ellipse at 100% 50%, rgba(13, 148, 136, 0.1) 0%, transparent 50%)',
     zIndex: 0,
   },
   bgGrid: {
@@ -518,7 +359,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '600px',
     height: '600px',
     borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, rgba(20, 184, 166, 0.3) 0%, transparent 70%)',
     filter: 'blur(80px)',
     animation: 'pulse 8s ease-in-out infinite',
     zIndex: 0,
@@ -530,21 +371,9 @@ const styles: Record<string, React.CSSProperties> = {
     width: '500px',
     height: '500px',
     borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.25) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, rgba(13, 148, 136, 0.25) 0%, transparent 70%)',
     filter: 'blur(80px)',
     animation: 'pulse 10s ease-in-out infinite reverse',
-    zIndex: 0,
-  },
-  glowOrb3: {
-    position: 'fixed',
-    top: '50%',
-    right: '-5%',
-    width: '400px',
-    height: '400px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(236, 72, 153, 0.15) 0%, transparent 70%)',
-    filter: 'blur(60px)',
-    animation: 'float 12s ease-in-out infinite',
     zIndex: 0,
   },
 
@@ -577,9 +406,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.5rem',
     textDecoration: 'none',
   },
-  logoIcon: {
-    fontSize: '1.75rem',
-  },
   logoText: {
     fontSize: '1.35rem',
     fontWeight: 700,
@@ -607,17 +433,6 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 500,
     padding: '0.5rem 1rem',
   },
-  ctaBtn: {
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    color: 'white',
-    textDecoration: 'none',
-    padding: '0.625rem 1.25rem',
-    borderRadius: '10px',
-    fontSize: '0.95rem',
-    fontWeight: 600,
-    boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
-    transition: 'all 0.2s',
-  },
 
   // Hero
   hero: {
@@ -640,11 +455,11 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.5rem',
     padding: '0.5rem 1rem',
-    background: 'rgba(99, 102, 241, 0.1)',
-    border: '1px solid rgba(99, 102, 241, 0.2)',
+    background: 'rgba(20, 184, 166, 0.1)',
+    border: '1px solid rgba(20, 184, 166, 0.2)',
     borderRadius: '50px',
     fontSize: '0.85rem',
-    color: '#a5b4fc',
+    color: '#5eead4',
     marginBottom: '1.5rem',
   },
   badgeDot: {
@@ -661,13 +476,8 @@ const styles: Record<string, React.CSSProperties> = {
     marginBottom: '1.5rem',
     color: 'white',
   },
-  gradientText: {
-    background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)',
-    backgroundSize: '200% 200%',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text',
-    animation: 'gradientShift 5s ease infinite',
+  accentText: {
+    color: '#2dd4bf',
   },
   heroSubtitle: {
     fontSize: '1.2rem',
@@ -679,57 +489,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     gap: '1rem',
     marginBottom: '3rem',
-  },
-  primaryCta: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '1rem 2rem',
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    color: 'white',
-    textDecoration: 'none',
-    borderRadius: '12px',
-    fontSize: '1.05rem',
-    fontWeight: 600,
-    boxShadow: '0 8px 30px rgba(99, 102, 241, 0.4)',
-    transition: 'all 0.2s',
-  },
-  secondaryCta: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '1rem 2rem',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    color: 'white',
-    textDecoration: 'none',
-    borderRadius: '12px',
-    fontSize: '1.05rem',
-    fontWeight: 500,
-    transition: 'all 0.2s',
-  },
-  heroTrust: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '1rem',
-  },
-  trustLabel: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: '0.9rem',
-  },
-  trustLogos: {
-    display: 'flex',
-    gap: '0.5rem',
-  },
-  trustLogo: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '10px',
-    background: 'rgba(255,255,255,0.05)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '1.25rem',
   },
   heroVisual: {
     position: 'relative',
@@ -790,8 +549,8 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '0.5rem',
   },
   sidebarItemActive: {
-    background: 'rgba(99, 102, 241, 0.2)',
-    color: '#a5b4fc',
+    background: 'rgba(20, 184, 166, 0.2)',
+    color: '#5eead4',
   },
   mockupMain: {
     flex: 1,
@@ -814,9 +573,14 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.85rem',
     color: 'white',
   },
+  queueHeaderLabel: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.375rem',
+  },
   queueBadge: {
-    background: 'rgba(99, 102, 241, 0.2)',
-    color: '#a5b4fc',
+    background: 'rgba(20, 184, 166, 0.2)',
+    color: '#5eead4',
     padding: '0.2rem 0.5rem',
     borderRadius: '4px',
     fontSize: '0.7rem',
@@ -830,7 +594,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   queueProgressBar: {
     height: '100%',
-    background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+    background: '#14b8a6',
     borderRadius: '2px',
   },
   queueStats: {
@@ -850,6 +614,9 @@ const styles: Record<string, React.CSSProperties> = {
     animation: 'float 4s ease-in-out infinite',
   },
   ticketHeader: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.375rem',
     fontSize: '0.75rem',
     color: 'rgba(255,255,255,0.8)',
     marginBottom: '0.25rem',
@@ -871,53 +638,17 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(15, 15, 25, 0.95)',
     borderRadius: '12px',
     padding: '0.875rem 1rem',
-    border: '1px solid rgba(99, 102, 241, 0.3)',
+    border: '1px solid rgba(20, 184, 166, 0.3)',
     boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
     display: 'flex',
     alignItems: 'center',
     gap: '0.75rem',
     animation: 'float 5s ease-in-out infinite reverse',
   },
-  notifIcon: {
-    fontSize: '1.5rem',
-  },
   notifText: {
     fontSize: '0.75rem',
     color: 'rgba(255,255,255,0.6)',
     margin: '0.125rem 0 0',
-  },
-
-  // Stats
-  statsSection: {
-    position: 'relative',
-    zIndex: 1,
-    padding: '4rem 2rem',
-    borderTop: '1px solid rgba(255,255,255,0.05)',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
-    background: 'rgba(255,255,255,0.01)',
-  },
-  statsGrid: {
-    maxWidth: '1200px',
-    margin: '0 auto',
-    display: 'grid',
-    gridTemplateColumns: 'repeat(4, 1fr)',
-    gap: '2rem',
-  },
-  statCard: {
-    textAlign: 'center',
-  },
-  statValue: {
-    fontSize: '2.5rem',
-    fontWeight: 800,
-    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text',
-    marginBottom: '0.5rem',
-  },
-  statLabel: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: '0.95rem',
   },
 
   // Features
@@ -934,11 +665,11 @@ const styles: Record<string, React.CSSProperties> = {
   sectionBadge: {
     display: 'inline-block',
     padding: '0.375rem 1rem',
-    background: 'rgba(99, 102, 241, 0.1)',
-    border: '1px solid rgba(99, 102, 241, 0.2)',
+    background: 'rgba(20, 184, 166, 0.1)',
+    border: '1px solid rgba(20, 184, 166, 0.2)',
     borderRadius: '50px',
     fontSize: '0.85rem',
-    color: '#a5b4fc',
+    color: '#5eead4',
     marginBottom: '1.25rem',
   },
   sectionTitle: {
@@ -974,8 +705,8 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '1.5rem',
     marginBottom: '1.25rem',
+    background: 'rgba(20, 184, 166, 0.1)',
   },
   featureTitle: {
     fontSize: '1.2rem',
@@ -999,116 +730,40 @@ const styles: Record<string, React.CSSProperties> = {
   },
   stepsGrid: {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     justifyContent: 'center',
-    gap: '1rem',
+    gap: '1.5rem',
     maxWidth: '1200px',
     margin: '0 auto',
     flexWrap: 'wrap',
   },
   stepCard: {
+    position: 'relative',
     background: 'rgba(255,255,255,0.03)',
     borderRadius: '16px',
     border: '1px solid rgba(255,255,255,0.05)',
     padding: '2rem',
-    width: '280px',
+    width: '250px',
     textAlign: 'center',
   },
   stepNumber: {
-    fontSize: '3rem',
+    fontSize: '2rem',
     fontWeight: 800,
-    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text',
+    color: '#2dd4bf',
     marginBottom: '1rem',
   },
   stepTitle: {
-    fontSize: '1.15rem',
+    fontSize: '1.05rem',
     fontWeight: 600,
     color: 'white',
     marginBottom: '0.75rem',
   },
   stepDesc: {
-    fontSize: '0.9rem',
+    fontSize: '0.88rem',
     color: 'rgba(255,255,255,0.5)',
     lineHeight: 1.6,
     margin: 0,
   },
-  stepConnector: {
-    color: 'rgba(255,255,255,0.2)',
-  },
-
-  // Testimonials
-  testimonialsSection: {
-    position: 'relative',
-    zIndex: 1,
-    padding: '6rem 2rem',
-  },
-  testimonialCard: {
-    maxWidth: '700px',
-    margin: '0 auto',
-    background: 'rgba(255,255,255,0.03)',
-    borderRadius: '24px',
-    border: '1px solid rgba(255,255,255,0.05)',
-    padding: '3rem',
-    textAlign: 'center',
-  },
-  testimonialQuote: {
-    fontSize: '1.35rem',
-    lineHeight: 1.6,
-    color: 'rgba(255,255,255,0.9)',
-    marginBottom: '2rem',
-    fontStyle: 'italic',
-  },
-  testimonialAuthor: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '1rem',
-    marginBottom: '1.5rem',
-  },
-  testimonialAvatar: {
-    width: '50px',
-    height: '50px',
-    borderRadius: '50%',
-    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'white',
-    fontWeight: 600,
-  },
-  authorName: {
-    display: 'block',
-    color: 'white',
-  },
-  authorRole: {
-    display: 'block',
-    fontSize: '0.9rem',
-    color: 'rgba(255,255,255,0.5)',
-  },
-  testimonialDots: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '0.5rem',
-  },
-  testimonialDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    background: 'rgba(255,255,255,0.2)',
-    border: 'none',
-    cursor: 'pointer',
-    padding: 0,
-    transition: 'all 0.2s',
-  },
-  testimonialDotActive: {
-    background: '#6366f1',
-    width: '24px',
-    borderRadius: '4px',
-  },
-
   // CTA
   ctaSection: {
     position: 'relative',
@@ -1118,9 +773,9 @@ const styles: Record<string, React.CSSProperties> = {
   ctaCard: {
     maxWidth: '800px',
     margin: '0 auto',
-    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.2) 0%, rgba(139, 92, 246, 0.1) 100%)',
+    background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%)',
     borderRadius: '24px',
-    border: '1px solid rgba(99, 102, 241, 0.2)',
+    border: '1px solid rgba(20, 184, 166, 0.2)',
     padding: '4rem',
     textAlign: 'center',
   },
@@ -1141,26 +796,6 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '1rem',
     justifyContent: 'center',
   },
-  ctaPrimary: {
-    padding: '1rem 2.5rem',
-    background: 'linear-gradient(135deg, #6366f1, #8b5cf6)',
-    color: 'white',
-    textDecoration: 'none',
-    borderRadius: '12px',
-    fontSize: '1.05rem',
-    fontWeight: 600,
-    boxShadow: '0 8px 30px rgba(99, 102, 241, 0.4)',
-  },
-  ctaSecondary: {
-    padding: '1rem 2.5rem',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    color: 'white',
-    textDecoration: 'none',
-    borderRadius: '12px',
-    fontSize: '1.05rem',
-    fontWeight: 500,
-  },
 
   // Footer
   footer: {
@@ -1174,6 +809,9 @@ const styles: Record<string, React.CSSProperties> = {
     margin: '0 auto',
     display: 'flex',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: '2rem',
     marginBottom: '3rem',
   },
   footerBrand: {
@@ -1194,17 +832,8 @@ const styles: Record<string, React.CSSProperties> = {
   },
   footerLinks: {
     display: 'flex',
-    gap: '4rem',
-  },
-  footerCol: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.75rem',
-  },
-  footerColTitle: {
-    color: 'white',
-    fontWeight: 600,
-    marginBottom: '0.5rem',
+    gap: '2rem',
+    flexWrap: 'wrap',
   },
   footerLink: {
     color: 'rgba(255,255,255,0.5)',
@@ -1222,10 +851,6 @@ const styles: Record<string, React.CSSProperties> = {
     borderTop: '1px solid rgba(255,255,255,0.05)',
     fontSize: '0.85rem',
     color: 'rgba(255,255,255,0.4)',
-  },
-  footerLegal: {
-    display: 'flex',
-    gap: '1.5rem',
   },
 };
 
