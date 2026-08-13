@@ -917,12 +917,11 @@ const pageContainer: React.CSSProperties = {
 };
 
 const headerSection: React.CSSProperties = {
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   borderRadius: '16px',
   padding: '2rem',
   marginBottom: '1.5rem',
   color: 'white',
-  boxShadow: '0 10px 40px rgba(99, 102, 241, 0.3)',
 };
 
 const headerContent: React.CSSProperties = {
@@ -1044,7 +1043,7 @@ const detailsHeader: React.CSSProperties = {
   alignItems: 'center',
   padding: '1.25rem 1.5rem',
   borderBottom: '1px solid #e5e7eb',
-  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  background: '#f8fafc',
 };
 
 const detailsTitle: React.CSSProperties = {
@@ -1122,12 +1121,12 @@ const statCard: React.CSSProperties = {
 const statIcon: React.CSSProperties = {
   width: '40px',
   height: '40px',
-  background: 'linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%)',
+  background: 'rgba(20, 184, 166, 0.1)',
   borderRadius: '10px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#6366f1',
+  color: '#14b8a6',
 };
 
 const statValue: React.CSSProperties = {
@@ -1154,7 +1153,7 @@ const editButtonLarge: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '8px',
@@ -1190,7 +1189,7 @@ const formHeader: React.CSSProperties = {
   justifyContent: 'space-between',
   alignItems: 'center',
   padding: '1.25rem 1.5rem',
-  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  background: '#f8fafc',
   borderBottom: '1px solid #e5e7eb',
 };
 
@@ -1261,14 +1260,13 @@ const submitButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '10px',
   fontSize: '0.95rem',
   fontWeight: 600,
   cursor: 'pointer',
-  boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
 };
 
 const cancelButton: React.CSSProperties = {
@@ -1301,8 +1299,8 @@ const serviceCard: React.CSSProperties = {
 };
 
 const serviceCardActive: React.CSSProperties = {
-  borderColor: '#6366f1',
-  boxShadow: '0 8px 30px rgba(99, 102, 241, 0.2)',
+  borderColor: '#14b8a6',
+  boxShadow: '0 8px 30px rgba(20, 184, 166, 0.2)',
 };
 
 const cardHeader: React.CSSProperties = {
@@ -1315,12 +1313,12 @@ const cardHeader: React.CSSProperties = {
 const cardIcon: React.CSSProperties = {
   width: '48px',
   height: '48px',
-  background: 'linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%)',
+  background: 'rgba(20, 184, 166, 0.1)',
   borderRadius: '12px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#6366f1',
+  color: '#14b8a6',
 };
 
 const typeBadgeGeneral: React.CSSProperties = {
@@ -1382,7 +1380,7 @@ const cardClickHint: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   fontSize: '0.75rem',
-  color: '#6366f1',
+  color: '#0d9488',
   marginBottom: '1rem',
 };
 
@@ -1428,13 +1426,13 @@ const emptyState: React.CSSProperties = {
 const emptyIcon: React.CSSProperties = {
   width: '100px',
   height: '100px',
-  background: 'linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%)',
+  background: 'rgba(20, 184, 166, 0.1)',
   borderRadius: '50%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   margin: '0 auto 1.5rem',
-  color: '#6366f1',
+  color: '#14b8a6',
 };
 
 const emptyTitle: React.CSSProperties = {
@@ -1453,14 +1451,13 @@ const emptyButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '10px',
   fontSize: '0.95rem',
   fontWeight: 600,
   cursor: 'pointer',
-  boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
 };
 
 const emptyLink: React.CSSProperties = {
@@ -1468,13 +1465,12 @@ const emptyLink: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '10px',
   fontSize: '0.95rem',
   fontWeight: 600,
   textDecoration: 'none',
-  boxShadow: '0 4px 15px rgba(99, 102, 241, 0.3)',
 };
 
 // Service Points Styles
@@ -1639,7 +1635,7 @@ const linkButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   padding: '0.5rem 1rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '8px',

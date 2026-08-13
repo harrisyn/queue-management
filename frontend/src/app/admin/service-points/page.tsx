@@ -1,20 +1,23 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { Building2, Syringe, Stethoscope, Wallet, Pill, FlaskConical, Camera, MapPin } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { Icon } from '@/components/ui';
 import type { Location, ServicePoint, ServicePointType } from '@/types';
 
-const SERVICE_POINT_TYPES: { value: ServicePointType; label: string; icon: string }[] = [
-  { value: 'RECEPTION', label: 'Reception', icon: '🏢' },
-  { value: 'TRIAGE', label: 'Triage', icon: '💉' },
-  { value: 'CONSULTATION', label: 'Consultation', icon: '👨‍⚕️' },
-  { value: 'CASHIER', label: 'Cashier', icon: '💰' },
-  { value: 'PHARMACY', label: 'Pharmacy', icon: '💊' },
-  { value: 'LAB', label: 'Laboratory', icon: '🔬' },
-  { value: 'IMAGING', label: 'Imaging', icon: '📷' },
-  { value: 'OTHER', label: 'Other', icon: '📍' },
+const SERVICE_POINT_TYPES: { value: ServicePointType; label: string; icon: LucideIcon }[] = [
+  { value: 'RECEPTION', label: 'Reception', icon: Building2 },
+  { value: 'TRIAGE', label: 'Triage', icon: Syringe },
+  { value: 'CONSULTATION', label: 'Consultation', icon: Stethoscope },
+  { value: 'CASHIER', label: 'Cashier', icon: Wallet },
+  { value: 'PHARMACY', label: 'Pharmacy', icon: Pill },
+  { value: 'LAB', label: 'Laboratory', icon: FlaskConical },
+  { value: 'IMAGING', label: 'Imaging', icon: Camera },
+  { value: 'OTHER', label: 'Other', icon: MapPin },
 ];
 
 const ServicePointsPage: React.FC = () => {
@@ -266,7 +269,7 @@ const ServicePointsPage: React.FC = () => {
                   className={`point-card ${!point.isActive ? 'inactive' : ''}`}
                 >
                   <div className="point-header">
-                    <span className="point-icon">{typeInfo.icon}</span>
+                    <span className="point-icon"><Icon icon={typeInfo.icon} size={28} color="#14b8a6" /></span>
                     <div className="point-title">
                       <h3>{point.name}</h3>
                       {point.displayName && point.displayName !== point.name && (
@@ -371,7 +374,7 @@ const ServicePointsPage: React.FC = () => {
                         className={`type-option ${formData.type === type.value ? 'selected' : ''}`}
                         onClick={() => setFormData({ ...formData, type: type.value })}
                       >
-                        <span className="type-icon">{type.icon}</span>
+                        <span className="type-icon"><Icon icon={type.icon} size={18} /></span>
                         <span>{type.label}</span>
                       </button>
                     ))}
@@ -425,7 +428,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            background: var(--primary);
             border-radius: 16px;
             padding: 1.5rem 2rem;
             margin-bottom: 1.5rem;
@@ -644,7 +647,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .edit-btn:hover {
-            background: #e0e7ff;
+            background: rgba(20, 184, 166, 0.1);
             color: var(--primary);
           }
 
@@ -777,7 +780,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .type-option.selected {
-            background: #e0e7ff;
+            background: rgba(20, 184, 166, 0.1);
             border-color: var(--primary);
             color: var(--primary);
           }
