@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Building2, CreditCard, Home, ChevronLeft, ChevronRight, Zap } from 'lucide-react';
+import { LayoutDashboard, Building2, CreditCard, Home, ChevronLeft, ChevronRight, Zap, Wallet } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Icon } from '@/components/ui';
 
@@ -40,6 +40,7 @@ export default function SuperadminLayout({
     { href: '/superadmin', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/superadmin/organizations', label: 'Organizations', icon: Building2 },
     { href: '/superadmin/plans', label: 'Subscription Plans', icon: CreditCard },
+    { href: '/superadmin/payment-providers', label: 'Payment Providers', icon: Wallet },
   ];
 
   return (
