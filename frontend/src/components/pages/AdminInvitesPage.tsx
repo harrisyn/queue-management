@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { ClipboardList, Mail, Check, Link2, Copy } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { Icon } from '@/components/ui';
 
 type Invite = {
   id: string;
@@ -152,7 +154,7 @@ const AdminInvitesPage: React.FC = () => {
         {/* How it works */}
         <div style={howItWorksCard}>
           <h3 style={{ fontWeight: 600, color: '#111827', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <span style={{ fontSize: '1.25rem' }}>📋</span>
+            <Icon icon={ClipboardList} size={20} color="#14b8a6" />
             How Invites Work
           </h3>
           <ol style={{ margin: 0, paddingLeft: '1.5rem', color: '#4b5563', fontSize: '0.9375rem', lineHeight: 1.8 }}>
@@ -249,7 +251,9 @@ const AdminInvitesPage: React.FC = () => {
           </div>
         ) : invites.length === 0 ? (
           <div style={emptyState}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>✉️</div>
+            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+              <Icon icon={Mail} size={48} color="#14b8a6" strokeWidth={1.5} />
+            </div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>
               No invites yet
             </h3>
@@ -275,7 +279,7 @@ const AdminInvitesPage: React.FC = () => {
                       {getRoleLabel(invite.role)}
                     </span>
                     {invite.used ? (
-                      <span style={usedBadge}>✓ Used</span>
+                      <span style={usedBadge}><Icon icon={Check} size={12} /> Used</span>
                     ) : (
                       <span style={availableBadge}>Available</span>
                     )}
@@ -293,14 +297,14 @@ const AdminInvitesPage: React.FC = () => {
                       style={actionButton}
                       title="Copy code"
                     >
-                      {copiedCode === invite.code ? '✓' : '📋'}
+                      <Icon icon={copiedCode === invite.code ? Check : Copy} size={16} />
                     </button>
                     <button
                       onClick={() => copyInviteLink(invite.code)}
                       style={actionButton}
                       title="Copy registration link"
                     >
-                      🔗
+                      <Icon icon={Link2} size={16} />
                     </button>
                   </div>
                 )}
@@ -319,7 +323,7 @@ const addButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '0.75rem',
   border: 'none',
@@ -444,7 +448,7 @@ const submitButton: React.CSSProperties = {
   padding: '0.625rem 1.25rem',
   borderRadius: '0.5rem',
   border: 'none',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
@@ -487,6 +491,9 @@ const roleBadge: React.CSSProperties = {
 };
 
 const usedBadge: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.25rem',
   padding: '0.25rem 0.5rem',
   borderRadius: '0.375rem',
   fontSize: '0.75rem',

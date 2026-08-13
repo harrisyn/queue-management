@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Info } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { Icon } from '@/components/ui';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
 
@@ -472,8 +474,8 @@ export default function AdminSettingsPage() {
                       key={mode.value}
                       style={{
                         ...displayModeOption,
-                        borderColor: displayMode === mode.value ? '#6366f1' : '#e5e7eb',
-                        background: displayMode === mode.value ? '#eef2ff' : 'white',
+                        borderColor: displayMode === mode.value ? '#14b8a6' : '#e5e7eb',
+                        background: displayMode === mode.value ? 'rgba(20, 184, 166, 0.08)' : 'white',
                       }}
                     >
                       <input
@@ -505,7 +507,9 @@ export default function AdminSettingsPage() {
 
         {/* Organization ID Info */}
         <div style={infoCard}>
-          <div style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>ℹ️</div>
+          <div style={{ marginBottom: '0.5rem' }}>
+            <Icon icon={Info} size={20} color="#6b7280" />
+          </div>
           <div>
             <p style={{ color: '#374151', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
               <strong>Organization ID:</strong>
@@ -543,7 +547,7 @@ const tabStyle: React.CSSProperties = {
 
 const activeTabStyle: React.CSSProperties = {
   ...tabStyle,
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
 };
 
@@ -579,7 +583,7 @@ const addFieldButton: React.CSSProperties = {
 const addButton: React.CSSProperties = {
   padding: '0.75rem 1rem',
   border: 'none',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '0.5rem',
   cursor: 'pointer',
@@ -690,12 +694,11 @@ const saveButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
   borderRadius: '0.5rem',
   border: 'none',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
   fontSize: '0.9375rem',
-  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
 };
 
 const infoCard: React.CSSProperties = {
