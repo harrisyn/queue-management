@@ -20,7 +20,7 @@ model Organization {
   // Display settings for queues
   defaultDisplayMode    String                   @default("TICKET_ONLY") // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
   // Subscription
-  subscriptionId        String?
+  subscriptionId        String?                  @unique
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   locations             Location[]
@@ -492,8 +492,10 @@ model OrganizationSubscription {
   cancelledAt           DateTime?
   cancelReason          String?
   
-  // External payment reference (e.g., Stripe subscription ID)
-  externalPaymentId     String?
+  // Which provider this subscription's recurring billing runs through
+  provider              String?            // "stripe" | "paystack"
+  // The provider's own recurring-subscription ID (renamed from externalPaymentId)
+  externalProviderSubscriptionId String?
   
   // Usage tracking (updated periodically)
   usageStats            Json?              // {"locationsUsed": 2, "usersUsed": 5, "entriesThisMonth": 1234}
@@ -507,4 +509,26 @@ model OrganizationSubscription {
   @@index([planId])
   @@index([status])
   @@index([currentPeriodEnd])
+}
+
+model PaymentProviderConfig {
+  id            String   @id @default(uuid())
+  provider      String   // "stripe" | "paystack"
+  isActive      Boolean  @default(false)
+  publicKey     String?
+  secretKey     String   // encrypted at rest
+  webhookSecret String   // encrypted at rest
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([provider])
+}
+
+model ProcessedWebhookEvent {
+  id          String   @id @default(uuid())
+  provider    String   // "stripe" | "paystack"
+  eventId     String   // provider's own event ID
+  processedAt DateTime @default(now())
+
+  @@unique([provider, eventId])
 }

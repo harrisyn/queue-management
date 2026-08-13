@@ -126,7 +126,7 @@ export const getOrganization = async (req: Request, res: Response, next: NextFun
 export const updateOrganizationSubscription = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { planId, status, billingCycle, trialEndsAt, externalPaymentId } = req.body;
+    const { planId, status, billingCycle, trialEndsAt, externalProviderSubscriptionId } = req.body;
 
     const organization = await prisma.organization.findUnique({
       where: { id },
@@ -155,7 +155,7 @@ export const updateOrganizationSubscription = async (req: Request, res: Response
           status: status || undefined,
           billingCycle: billingCycle || undefined,
           trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : undefined,
-          externalPaymentId: externalPaymentId || undefined,
+          externalProviderSubscriptionId: externalProviderSubscriptionId || undefined,
           currentPeriodStart: planId ? currentPeriodStart : undefined,
           currentPeriodEnd: planId ? currentPeriodEnd : undefined,
         },
@@ -177,7 +177,7 @@ export const updateOrganizationSubscription = async (req: Request, res: Response
           currentPeriodStart,
           currentPeriodEnd,
           trialEndsAt: trialEndsAt ? new Date(trialEndsAt) : null,
-          externalPaymentId: externalPaymentId || null,
+          externalProviderSubscriptionId: externalProviderSubscriptionId || null,
         },
         include: { plan: true },
       });

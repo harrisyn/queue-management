@@ -89,7 +89,14 @@ router.post('/public/verify-otp', (req, res, next) => {
 // Subscription info endpoint (requires auth)
 import { authenticate } from '../middleware/auth.middleware';
 import { getMySubscription } from '../middleware/subscription.middleware';
+import { createCheckoutSession } from '../controllers/subscriptionCheckout.controller';
+import { listPlans } from '../controllers/superadmin.controller';
 router.get('/subscription', authenticate, getMySubscription);
+router.post('/tenant/subscription/checkout', authenticate, createCheckoutSession);
+// Read-only plan listing for any authenticated user (not superadmin-only —
+// tenants need this to render the pricing page). Reuses the superadmin
+// controller's listPlans, which only reads SubscriptionPlan rows.
+router.get('/plans', authenticate, listPlans);
 
 router.use('/orgs', organizationRoutes);
 router.use('/locations', locationRoutes);
