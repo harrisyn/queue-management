@@ -13,6 +13,7 @@ import {
   getDashboardStats,
   getOrganizationUsage,
 } from '../controllers/superadmin.controller';
+import { listPaymentProviders, upsertPaymentProvider, testPaymentProvider } from '../controllers/paymentProvider.controller';
 
 const router = Router();
 
@@ -36,5 +37,10 @@ router.get('/plans', listPlans);
 router.post('/plans', createPlan);
 router.patch('/plans/:id', updatePlan);
 router.delete('/plans/:id', deletePlan);
+
+// Payment provider configuration
+router.get('/payment-providers', listPaymentProviders);
+router.put('/payment-providers/:provider', upsertPaymentProvider);
+router.post('/payment-providers/:provider/test', testPaymentProvider);
 
 export default router;
