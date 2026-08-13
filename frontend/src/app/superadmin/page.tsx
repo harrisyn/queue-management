@@ -2,7 +2,9 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { Building2, CheckCircle2, Gift, DollarSign, MapPin, Users, Plus, Search } from 'lucide-react';
 import api from '@/api/client';
+import { Icon } from '@/components/ui';
 
 interface DashboardStats {
   stats: {
@@ -84,42 +86,42 @@ export default function SuperadminDashboard() {
       {/* Stats Grid */}
       <div style={statsGrid}>
         <div style={statCard}>
-          <div style={statIcon}>🏢</div>
+          <div style={statIcon}><Icon icon={Building2} size={28} color="#2dd4bf" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.totalOrganizations}</span>
             <span style={statLabel}>Organizations</span>
           </div>
         </div>
         <div style={statCard}>
-          <div style={statIcon}>✅</div>
+          <div style={statIcon}><Icon icon={CheckCircle2} size={28} color="#2dd4bf" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.activeSubscriptions}</span>
             <span style={statLabel}>Active Subscriptions</span>
           </div>
         </div>
         <div style={statCard}>
-          <div style={statIcon}>🆓</div>
+          <div style={statIcon}><Icon icon={Gift} size={28} color="#2dd4bf" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.trialSubscriptions}</span>
             <span style={statLabel}>On Trial</span>
           </div>
         </div>
-        <div style={{ ...statCard, background: 'linear-gradient(135deg, #059669 0%, #047857 100%)' }}>
-          <div style={statIcon}>💰</div>
+        <div style={{ ...statCard, background: '#059669' }}>
+          <div style={statIcon}><Icon icon={DollarSign} size={28} color="#fff" /></div>
           <div style={statContent}>
             <span style={statValue}>${stats.mrr}</span>
             <span style={statLabel}>Monthly Revenue</span>
           </div>
         </div>
         <div style={statCard}>
-          <div style={statIcon}>📍</div>
+          <div style={statIcon}><Icon icon={MapPin} size={28} color="#2dd4bf" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.totalLocations}</span>
             <span style={statLabel}>Total Locations</span>
           </div>
         </div>
         <div style={statCard}>
-          <div style={statIcon}>👥</div>
+          <div style={statIcon}><Icon icon={Users} size={28} color="#2dd4bf" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.totalUsers}</span>
             <span style={statLabel}>Total Users</span>
@@ -194,11 +196,11 @@ export default function SuperadminDashboard() {
         <h3 style={actionsTitle}>Quick Actions</h3>
         <div style={actionsGrid}>
           <Link href="/superadmin/plans" style={actionBtn}>
-            <span style={actionIcon}>➕</span>
+            <Icon icon={Plus} size={16} />
             <span>Create Plan</span>
           </Link>
           <Link href="/superadmin/organizations" style={actionBtn}>
-            <span style={actionIcon}>🔍</span>
+            <Icon icon={Search} size={16} />
             <span>Search Orgs</span>
           </Link>
         </div>
@@ -220,7 +222,7 @@ const getStatusBadge = (status?: string): React.CSSProperties => {
     case 'ACTIVE':
       return { ...base, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' };
     case 'TRIAL':
-      return { ...base, background: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc' };
+      return { ...base, background: 'rgba(20, 184, 166, 0.2)', color: '#5eead4' };
     case 'PAST_DUE':
       return { ...base, background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' };
     case 'CANCELLED':
@@ -245,7 +247,7 @@ const spinner: React.CSSProperties = {
   width: '40px',
   height: '40px',
   border: '4px solid #1e293b',
-  borderTop: '4px solid #6366f1',
+  borderTop: '4px solid #14b8a6',
   borderRadius: '50%',
   animation: 'spin 1s linear infinite',
 };
@@ -261,7 +263,7 @@ const errorContainer: React.CSSProperties = {
 
 const retryBtn: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: '#fff',
   border: 'none',
   borderRadius: '8px',
@@ -298,13 +300,13 @@ const statsGrid: React.CSSProperties = {
 };
 
 const statCard: React.CSSProperties = {
-  background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+  background: '#1e293b',
   borderRadius: '12px',
   padding: '1.5rem',
   display: 'flex',
   alignItems: 'center',
   gap: '1rem',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
 };
 
 const statIcon: React.CSSProperties = {
@@ -337,13 +339,13 @@ const contentGrid: React.CSSProperties = {
 const card: React.CSSProperties = {
   background: '#1e293b',
   borderRadius: '12px',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   overflow: 'hidden',
 };
 
 const cardHeader: React.CSSProperties = {
   padding: '1.25rem 1.5rem',
-  borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -356,7 +358,7 @@ const cardTitle: React.CSSProperties = {
 };
 
 const cardLink: React.CSSProperties = {
-  color: '#a5b4fc',
+  color: '#5eead4',
   textDecoration: 'none',
   fontSize: '0.875rem',
 };
@@ -401,7 +403,7 @@ const planCount: React.CSSProperties = {
 const countValue: React.CSSProperties = {
   fontSize: '1.5rem',
   fontWeight: 700,
-  color: '#a5b4fc',
+  color: '#5eead4',
 };
 
 const countLabel: React.CSSProperties = {
@@ -461,7 +463,7 @@ const emptyState: React.CSSProperties = {
 };
 
 const createLink: React.CSSProperties = {
-  color: '#a5b4fc',
+  color: '#5eead4',
   textDecoration: 'none',
   display: 'block',
   marginTop: '0.5rem',
@@ -471,7 +473,7 @@ const actionsCard: React.CSSProperties = {
   background: '#1e293b',
   borderRadius: '12px',
   padding: '1.5rem',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
 };
 
 const actionsTitle: React.CSSProperties = {
@@ -492,10 +494,10 @@ const actionBtn: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: 'rgba(99, 102, 241, 0.2)',
-  border: '1px solid rgba(99, 102, 241, 0.3)',
+  background: 'rgba(20, 184, 166, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.3)',
   borderRadius: '8px',
-  color: '#a5b4fc',
+  color: '#5eead4',
   textDecoration: 'none',
   fontSize: '0.875rem',
   fontWeight: 500,

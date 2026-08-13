@@ -1,7 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Plus } from 'lucide-react';
 import api from '@/api/client';
+import { Icon } from '@/components/ui';
 
 interface SubscriptionPlan {
   id: string;
@@ -204,7 +206,7 @@ export default function PlansPage() {
           <p style={subtitle}>Define pricing tiers and feature limits</p>
         </div>
         <button onClick={openCreateModal} style={createBtn}>
-          <span>➕</span> Create Plan
+          <Icon icon={Plus} size={16} /> Create Plan
         </button>
       </header>
 
@@ -512,7 +514,7 @@ const createBtn: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   border: 'none',
   borderRadius: '8px',
   color: '#fff',
@@ -551,7 +553,7 @@ const spinner: React.CSSProperties = {
   width: '40px',
   height: '40px',
   border: '4px solid #1e293b',
-  borderTop: '4px solid #6366f1',
+  borderTop: '4px solid #14b8a6',
   borderRadius: '50%',
   margin: '0 auto 1rem',
   animation: 'spin 1s linear infinite',
@@ -566,13 +568,13 @@ const plansGrid: React.CSSProperties = {
 const planCard: React.CSSProperties = {
   background: '#1e293b',
   borderRadius: '12px',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   overflow: 'hidden',
 };
 
 const planHeader: React.CSSProperties = {
   padding: '1.25rem 1.5rem',
-  borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
 };
 
 const planTitleRow: React.CSSProperties = {
@@ -663,7 +665,7 @@ const limitItem: React.CSSProperties = {
 
 const limitValue: React.CSSProperties = {
   display: 'block',
-  color: '#a5b4fc',
+  color: '#5eead4',
   fontSize: '1.25rem',
   fontWeight: 600,
 };
@@ -675,7 +677,7 @@ const limitLabel: React.CSSProperties = {
 
 const featuresSection: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  borderTop: '1px solid rgba(99, 102, 241, 0.1)',
+  borderTop: '1px solid rgba(20, 184, 166, 0.1)',
 };
 
 const featuresList: React.CSSProperties = {
@@ -702,7 +704,7 @@ const featureDisabled: React.CSSProperties = {
 
 const planFooter: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  borderTop: '1px solid rgba(99, 102, 241, 0.1)',
+  borderTop: '1px solid rgba(20, 184, 166, 0.1)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -720,8 +722,8 @@ const planActions: React.CSSProperties = {
 
 const editBtn: React.CSSProperties = {
   padding: '0.5rem 0.75rem',
-  background: 'rgba(99, 102, 241, 0.2)',
-  color: '#a5b4fc',
+  background: 'rgba(20, 184, 166, 0.2)',
+  color: '#5eead4',
   border: 'none',
   borderRadius: '6px',
   fontSize: '0.75rem',
@@ -747,7 +749,7 @@ const emptyState: React.CSSProperties = {
   color: '#64748b',
   background: '#1e293b',
   borderRadius: '12px',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
 };
 
 const modalOverlay: React.CSSProperties = {
@@ -771,12 +773,12 @@ const modal: React.CSSProperties = {
   maxWidth: '600px',
   maxHeight: '90vh',
   overflow: 'auto',
-  border: '1px solid rgba(99, 102, 241, 0.3)',
+  border: '1px solid rgba(20, 184, 166, 0.3)',
 };
 
 const modalHeader: React.CSSProperties = {
   padding: '1.25rem 1.5rem',
-  borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -824,7 +826,7 @@ const formInput: React.CSSProperties = {
   width: '100%',
   padding: '0.75rem',
   background: '#0f172a',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   borderRadius: '8px',
   color: '#fff',
   fontSize: '0.9375rem',
@@ -847,7 +849,7 @@ const featureCheckbox: React.CSSProperties = {
 
 const modalFooter: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  borderTop: '1px solid rgba(99, 102, 241, 0.1)',
+  borderTop: '1px solid rgba(20, 184, 166, 0.1)',
   display: 'flex',
   justifyContent: 'flex-end',
   gap: '0.75rem',
@@ -859,7 +861,7 @@ const modalFooter: React.CSSProperties = {
 const cancelBtn: React.CSSProperties = {
   padding: '0.75rem 1.25rem',
   background: 'transparent',
-  border: '1px solid rgba(99, 102, 241, 0.3)',
+  border: '1px solid rgba(20, 184, 166, 0.3)',
   borderRadius: '8px',
   color: '#94a3b8',
   cursor: 'pointer',
@@ -868,7 +870,7 @@ const cancelBtn: React.CSSProperties = {
 
 const saveBtn: React.CSSProperties = {
   padding: '0.75rem 1.25rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   border: 'none',
   borderRadius: '8px',
   color: '#fff',

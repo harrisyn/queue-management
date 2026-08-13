@@ -142,7 +142,7 @@ export default function OrganizationDetailPage({
       case 'ACTIVE':
         return { ...base, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' };
       case 'TRIAL':
-        return { ...base, background: 'rgba(99, 102, 241, 0.2)', color: '#a5b4fc' };
+        return { ...base, background: 'rgba(20, 184, 166, 0.2)', color: '#5eead4' };
       case 'PAST_DUE':
         return { ...base, background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' };
       case 'CANCELLED':
@@ -462,7 +462,7 @@ const spinner: React.CSSProperties = {
   width: '40px',
   height: '40px',
   border: '4px solid #1e293b',
-  borderTop: '4px solid #6366f1',
+  borderTop: '4px solid #14b8a6',
   borderRadius: '50%',
   animation: 'spin 1s linear infinite',
 };
@@ -478,7 +478,7 @@ const errorContainer: React.CSSProperties = {
 
 const backBtn: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: '#fff',
   borderRadius: '8px',
   textDecoration: 'none',
@@ -554,13 +554,13 @@ const contentGrid: React.CSSProperties = {
 const card: React.CSSProperties = {
   background: '#1e293b',
   borderRadius: '12px',
-  border: '1px solid rgba(99, 102, 241, 0.2)',
+  border: '1px solid rgba(20, 184, 166, 0.2)',
   overflow: 'hidden',
 };
 
 const cardHeader: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  borderBottom: '1px solid rgba(99, 102, 241, 0.1)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -642,14 +642,14 @@ const usageValue: React.CSSProperties = {
 
 const progressBar: React.CSSProperties = {
   height: '6px',
-  background: 'rgba(99, 102, 241, 0.2)',
+  background: 'rgba(20, 184, 166, 0.2)',
   borderRadius: '3px',
   overflow: 'hidden',
 };
 
 const progressFill: React.CSSProperties = {
   height: '100%',
-  background: '#6366f1',
+  background: '#14b8a6',
   borderRadius: '3px',
   transition: 'width 0.3s ease',
 };
@@ -693,8 +693,8 @@ const listItemStats: React.CSSProperties = {
 };
 
 const publicCodeBadge: React.CSSProperties = {
-  background: 'rgba(99, 102, 241, 0.2)',
-  color: '#a5b4fc',
+  background: 'rgba(20, 184, 166, 0.2)',
+  color: '#5eead4',
   padding: '0.125rem 0.5rem',
   borderRadius: '4px',
   fontFamily: 'monospace',
