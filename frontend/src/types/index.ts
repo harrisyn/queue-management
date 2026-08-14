@@ -71,6 +71,10 @@ export interface Service {
   startTime: string;
   endTime: string;
   isActive: boolean;
+  requiresName?: boolean;
+  requiresPhone?: boolean;
+  allowAnonymous?: boolean;
+  displayMode?: string;
   location?: Location;
   practitioners?: Practitioner[];
 }

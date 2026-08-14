@@ -14,6 +14,9 @@ interface AddServiceWizardProps {
 
 const STEP_LABELS = ['Basic Info', 'Location(s)', 'Schedule', 'Service Points & Desks', 'Review'];
 
+const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const formatDays = (activeDays: string) => activeDays.split(',').map(d => DAY_NAMES[parseInt(d, 10)] || d).join(', ');
+
 export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organizationId, locations, onClose, onSubmit }) => {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(initialWizardData);
@@ -202,6 +205,41 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organization
                 selected={data.servicePoints}
                 onChange={sps => update('servicePoints', sps)}
               />
+            </div>
+          )}
+
+          {step === 4 && (
+            <div className="wizard-step-content">
+              <div className="review-section">
+                <h3>{data.name}</h3>
+                {data.description && <p className="review-desc">{data.description}</p>}
+                <div className="review-grid">
+                  <div><span>Type</span><strong>{data.type}</strong></div>
+                  <div><span>Hours</span><strong>{data.startTime} - {data.endTime}</strong></div>
+                  <div><span>Days</span><strong>{formatDays(data.activeDays)}</strong></div>
+                  <div><span>Slot Duration</span><strong>{data.slotDuration} min</strong></div>
+                </div>
+              </div>
+              <div className="review-section">
+                <h4>Location(s)</h4>
+                <p>
+                  {data.locationScope === 'all'
+                    ? `All ${locations.length} location${locations.length === 1 ? '' : 's'} in your organization`
+                    : locations.find(l => l.id === data.selectedLocationId)?.name || 'None selected'}
+                </p>
+              </div>
+              <div className="review-section">
+                <h4>Service Points & Desks</h4>
+                {data.servicePoints.length === 0 ? (
+                  <p className="review-empty">None assigned yet — you can add these after creating the service.</p>
+                ) : (
+                  <ul className="review-list">
+                    {data.servicePoints.map(sp => (
+                      <li key={sp.servicePointId}>{sp.displayName || sp.name} — {sp.capacity} desk{sp.capacity === 1 ? '' : 's'}</li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -412,6 +450,46 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organization
           border-radius: 10px;
           font-weight: 600;
           cursor: pointer;
+        }
+        .review-section {
+          margin-bottom: 1.5rem;
+        }
+        .review-section h3 {
+          margin: 0 0 0.25rem;
+        }
+        .review-section h4 {
+          margin: 0 0 0.5rem;
+          font-size: 0.9rem;
+          color: #374151;
+        }
+        .review-desc {
+          color: #6b7280;
+          margin: 0 0 0.75rem;
+        }
+        .review-grid {
+          display: grid;
+          grid-template-columns: repeat(2, 1fr);
+          gap: 0.75rem;
+        }
+        .review-grid div {
+          display: flex;
+          flex-direction: column;
+          gap: 0.125rem;
+          font-size: 0.85rem;
+        }
+        .review-grid span {
+          color: #6b7280;
+          font-size: 0.75rem;
+        }
+        .review-list {
+          margin: 0;
+          padding-left: 1.25rem;
+          font-size: 0.875rem;
+          color: #374151;
+        }
+        .review-empty {
+          font-size: 0.875rem;
+          color: #6b7280;
         }
       `}</style>
     </div>

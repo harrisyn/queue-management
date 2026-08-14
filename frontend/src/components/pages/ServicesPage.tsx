@@ -6,6 +6,8 @@ import Layout from '@/components/Layout';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import type { Service, Location, Organization, ServiceType } from '@/types';
+import { AddServiceWizard } from '@/components/services/AddServiceWizard';
+import type { WizardData } from '@/components/services/wizardTypes';
 
 interface ServicePoint {
   id: string;
@@ -51,6 +53,7 @@ const ServicesPage: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
@@ -131,13 +134,41 @@ const ServicesPage: React.FC = () => {
     if (!selectedLocation) return;
 
     try {
-      await api.createService(selectedLocation, formData);
+      await api.createService({ ...formData, locationIds: [selectedLocation] });
       await loadServices(selectedLocation);
       await refreshSubscription(); // Refresh subscription to update limits
       resetForm();
     } catch (err) {
       console.error(err);
     }
+  };
+
+  const handleWizardSubmit = async (data: WizardData) => {
+    const locationIds = data.locationScope === 'all'
+      ? locations.map(l => l.id)
+      : [data.selectedLocationId];
+
+    await api.createService({
+      name: data.name,
+      description: data.description,
+      type: data.type,
+      requiresName: data.requiresName,
+      requiresPhone: data.requiresPhone,
+      allowAnonymous: data.allowAnonymous,
+      displayMode: data.displayMode || undefined,
+      slotDuration: data.slotDuration,
+      concurrentLimit: data.concurrentLimit,
+      activeDays: data.activeDays,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      isActive: data.isActive,
+      locationIds,
+      servicePoints: data.servicePoints.map(sp => ({ servicePointId: sp.servicePointId, capacity: sp.capacity })),
+    });
+
+    await loadServices(selectedLocation);
+    await refreshSubscription();
+    setShowWizard(false);
   };
 
   const handleUpdateService = async (e: React.FormEvent) => {
@@ -237,10 +268,10 @@ const ServicesPage: React.FC = () => {
     }
   }, []);
 
-  const handleLinkServicePoint = async (servicePointId: string) => {
+  const handleLinkServicePoint = async (servicePointId: string, capacity: number) => {
     if (!selectedService) return;
     try {
-      await api.linkServicePointToService(servicePointId, selectedService.id);
+      await api.linkServicePointToService(servicePointId, selectedService.id, capacity);
       await loadLinkedServicePoints(selectedService.id);
     } catch (err: any) {
       alert(err.response?.data?.error || 'Failed to link service point');
@@ -312,8 +343,8 @@ const ServicesPage: React.FC = () => {
                 </p>
               </div>
             </div>
-            <button 
-              onClick={() => { resetForm(); setShowForm(true); }} 
+            <button
+              onClick={() => setShowWizard(true)}
               style={{
                 ...addButton,
                 ...(!selectedLocation || !canCreate('services') ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
@@ -650,7 +681,7 @@ const ServicesPage: React.FC = () => {
                             </div>
                           </div>
                           <button 
-                            onClick={() => handleLinkServicePoint(sp.id)} 
+                            onClick={() => handleLinkServicePoint(sp.id, sp.capacity)}
                             style={linkButton}
                             title="Add to service"
                           >
@@ -902,6 +933,15 @@ const ServicesPage: React.FC = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {showWizard && user?.organizationId && (
+          <AddServiceWizard
+            organizationId={user.organizationId}
+            locations={locations}
+            onClose={() => setShowWizard(false)}
+            onSubmit={handleWizardSubmit}
+          />
         )}
       </div>
     </Layout>
