@@ -256,8 +256,9 @@ Replace the `syncInstancesForServicePoint` function (top of the file) with:
 ```typescript
 // Ensure a service-point-to-service assignment has exactly `capacity` active
 // ServicePointInstance rows. Creates missing instances and deactivates
-// (never deletes) excess ones.
-async function syncInstancesForServicePointService(servicePointServiceId: string) {
+// (never deletes) excess ones. Exported so service.controller.ts's bulk
+// service creation (Task 6) can reuse it without duplicating the logic.
+export async function syncInstancesForServicePointService(servicePointServiceId: string) {
   const link = await prisma.servicePointService.findUnique({
     where: { id: servicePointServiceId },
     include: { instances: true, servicePoint: true },
@@ -1373,49 +1374,18 @@ git commit -m "fix: rescope service-point counts now that ServicePoint is org-le
 - Modify: `backend/src/routes/service.routes.ts`
 
 **Interfaces:**
-- Consumes: `syncInstancesForServicePointService`-equivalent behavior via `linkServicePointToService`'s pattern (duplicated inline here since it lives in a different controller file — see Step 1).
+- Consumes: `syncInstancesForServicePointService` exported from `../controllers/servicepoint.controller` (Task 2).
 - Produces: `POST /services` accepting `{ name, description, type, requiresName, requiresPhone, allowAnonymous, displayMode, slotDuration, concurrentLimit, activeDays, startTime, endTime, isActive, locationIds: string[], servicePoints: [{ servicePointId, capacity }] }`, returning `{ services: Service[] }`. `PATCH /services/:id` accepting an additional `servicePoints` array.
 
-- [ ] **Step 1: Add a shared instance-sync helper to service.controller.ts**
+- [ ] **Step 1: Import the shared instance-sync helper**
 
-At the top of `backend/src/controllers/service.controller.ts`, add (this mirrors `syncInstancesForServicePointService` from `servicepoint.controller.ts` — duplicated rather than imported to keep the two controllers independently readable, matching this codebase's existing pattern of small per-controller helpers):
+At the top of `backend/src/controllers/service.controller.ts`, add the import (reusing Task 2's helper rather than duplicating it — the two controllers must never drift on this logic):
 
 ```typescript
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { checkLimit } from '../middleware/subscription.middleware';
-
-async function syncInstancesForServicePointService(servicePointServiceId: string) {
-  const link = await prisma.servicePointService.findUnique({
-    where: { id: servicePointServiceId },
-    include: { instances: true, servicePoint: true },
-  });
-
-  if (!link) return;
-
-  const currentCount = link.instances.length;
-  const targetCount = link.capacity;
-
-  if (currentCount < targetCount) {
-    for (let i = currentCount + 1; i <= targetCount; i++) {
-      await prisma.servicePointInstance.create({
-        data: {
-          servicePointServiceId,
-          instanceNumber: i,
-          displayName: `${link.servicePoint.displayName || link.servicePoint.name} ${i}`,
-          isActive: link.isActive,
-        },
-      });
-    }
-  }
-
-  if (currentCount > targetCount) {
-    await prisma.servicePointInstance.updateMany({
-      where: { servicePointServiceId, instanceNumber: { gt: targetCount } },
-      data: { isActive: false },
-    });
-  }
-}
+import { syncInstancesForServicePointService } from './servicepoint.controller';
 ```
 
 This replaces the current `import { Request, Response, NextFunction } from 'express';\nimport prisma from '../lib/prisma';` two-line header.
