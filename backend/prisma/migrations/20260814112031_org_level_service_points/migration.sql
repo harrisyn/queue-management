@@ -26,12 +26,13 @@ ALTER TABLE "ServicePointService" ALTER COLUMN "capacity" SET NOT NULL;
 -- 3. ServicePointInstance: add servicePointServiceId, backfill, drop servicePointId + currentServiceId
 ALTER TABLE "ServicePointInstance" ADD COLUMN "servicePointServiceId" TEXT;
 
--- Prefer the link matching currentServiceId if set, else the first (only, in practice) link for that service point.
+-- Prefer the link matching currentServiceId if set and it matches one of this
+-- service point's links; otherwise fall back to the earliest-created link for
+-- that service point (mirrors lib/instanceBackfill.ts's resolveBackfillLink).
 UPDATE "ServicePointInstance" spi
 SET "servicePointServiceId" = (
   SELECT sps.id FROM "ServicePointService" sps
   WHERE sps."servicePointId" = spi."servicePointId"
-    AND (spi."currentServiceId" IS NULL OR sps."serviceId" = spi."currentServiceId")
   ORDER BY (sps."serviceId" = spi."currentServiceId") DESC, sps."createdAt" ASC
   LIMIT 1
 );
