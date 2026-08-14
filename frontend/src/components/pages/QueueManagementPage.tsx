@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { Users } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { PageHeader } from '@/components/ui';
 import { useSocket } from '@/hooks/useSocket';
 import { useAuthContext } from '@/contexts/AuthContext';
 import type { Queue, Service, QueueEntry, Location } from '@/types';
@@ -398,9 +400,14 @@ const QueueManagementPage: React.FC = () => {
   // Activate a service point instance
   const handleActivateInstance = async (instanceId: string) => {
     if (!selectedService) return;
-    
+
     setIsActivating(true);
     try {
+      // Release any desk we're already holding before taking a new one,
+      // otherwise the old instance is left occupied forever.
+      if (selectedInstanceId && selectedInstanceId !== instanceId) {
+        await api.vacateServicePointInstance(selectedInstanceId);
+      }
       await api.activateServicePointInstance(instanceId, selectedService);
       setSelectedInstanceId(instanceId);
       // Reload instances to update occupancy status
@@ -416,9 +423,15 @@ const QueueManagementPage: React.FC = () => {
   // Legacy: Activate a service point desk (for backward compatibility)
   const handleActivateDesk = async (servicePointId: string) => {
     if (!selectedService) return;
-    
+
     setIsActivating(true);
     try {
+      // Release any desk we're already holding before taking a new one,
+      // otherwise the old desk is left occupied forever.
+      if (selectedServicePoint && selectedServicePoint !== servicePointId) {
+        const previousBaseId = getBaseServicePointId(selectedServicePoint);
+        await api.vacateServicePoint(previousBaseId, selectedService);
+      }
       // Use base service point ID for backend call
       const baseId = getBaseServicePointId(servicePointId);
       await api.activateServicePoint(baseId, selectedService);
@@ -643,29 +656,16 @@ const QueueManagementPage: React.FC = () => {
   return (
     <Layout>
       <div className="queue-management">
-        {/* Header */}
-        <div className="header">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                  <circle cx="9" cy="7" r="4" />
-                  <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
-                  <path d="M16 3.13a4 4 0 0 1 0 7.75" />
-                </svg>
-              </div>
-              <div>
-                <h1>Queue Management</h1>
-                <p>Manage queues and serve customers</p>
-              </div>
-            </div>
-
+        <PageHeader
+          icon={Users}
+          title="Queue Management"
+          subtitle="Manage queues and serve customers"
+          actions={
             <div className="selectors">
               <div className="selector">
                 <label>Location</label>
-                <select 
-                  value={selectedLocation} 
+                <select
+                  value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
                 >
                   {locations.map(loc => (
@@ -675,8 +675,8 @@ const QueueManagementPage: React.FC = () => {
               </div>
               <div className="selector">
                 <label>Service</label>
-                <select 
-                  value={selectedService} 
+                <select
+                  value={selectedService}
                   onChange={(e) => setSelectedService(e.target.value)}
                 >
                   {services.length === 0 && <option value="">No services</option>}
@@ -688,8 +688,8 @@ const QueueManagementPage: React.FC = () => {
               <div className="selector service-desk-selector">
                 <label>Your Service Desk</label>
                 <div className="service-desk-controls">
-                  <select 
-                    value={selectedInstanceId || selectedServicePoint} 
+                  <select
+                    value={selectedInstanceId || selectedServicePoint}
                     onChange={(e) => {
                       const value = e.target.value;
                       // Check if this is an instance ID
@@ -707,8 +707,8 @@ const QueueManagementPage: React.FC = () => {
                     {/* Prefer database-backed instances */}
                     {servicePointInstances.length > 0 ? (
                       servicePointInstances.map(inst => (
-                        <option 
-                          key={inst.id} 
+                        <option
+                          key={inst.id}
                           value={inst.id}
                           disabled={inst.isOccupied && inst.id !== selectedInstanceId}
                         >
@@ -719,8 +719,8 @@ const QueueManagementPage: React.FC = () => {
                     ) : (
                       /* Legacy fallback: use expanded service points */
                       servicePoints.map(sp => (
-                        <option 
-                          key={sp.id} 
+                        <option
+                          key={sp.id}
                           value={sp.id}
                           disabled={sp.isOccupied && sp.id !== selectedServicePoint}
                         >
@@ -731,7 +731,7 @@ const QueueManagementPage: React.FC = () => {
                     )}
                   </select>
                   {(selectedInstanceId || selectedServicePoint) && (
-                    <button 
+                    <button
                       className="vacate-btn"
                       onClick={handleVacateDesk}
                       title="Vacate this desk"
@@ -753,8 +753,8 @@ const QueueManagementPage: React.FC = () => {
                 )}
               </div>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {error && (
           <div className="error-alert">
@@ -1157,55 +1157,6 @@ const QueueManagementPage: React.FC = () => {
         )}
 
         <style jsx>{`
-          .queue-management {
-            max-width: 1200px;
-            margin: 0 auto;
-          }
-
-          .header {
-            background: var(--primary);
-            border-radius: 16px;
-            padding: 1.5rem 2rem;
-            margin-bottom: 1.5rem;
-            color: white;
-          }
-
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-          }
-
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          .header-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-            font-weight: 600;
-          }
-
-          .header p {
-            margin: 0.25rem 0 0;
-            opacity: 0.9;
-            font-size: 0.9rem;
-          }
-
           .selectors {
             display: flex;
             gap: 1rem;
@@ -1955,11 +1906,6 @@ const QueueManagementPage: React.FC = () => {
           }
 
           @media (max-width: 768px) {
-            .header-content {
-              flex-direction: column;
-              align-items: stretch;
-            }
-
             .selectors {
               flex-direction: column;
             }

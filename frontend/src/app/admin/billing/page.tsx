@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { CheckCircle2, CreditCard } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
 import { Button, Card, Badge, PageHeader, Icon } from '@/components/ui';
@@ -89,8 +89,9 @@ export default function BillingPage() {
 
   return (
     <Layout>
-      <div style={{ maxWidth: '1000px', margin: '0 auto' }}>
+      <div>
         <PageHeader
+          icon={CreditCard}
           title="Billing"
           subtitle={
             data?.subscription

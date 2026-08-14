@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { Layers } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { PageHeader } from '@/components/ui';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import type { Service, Location, Organization, ServiceType } from '@/types';
@@ -290,34 +292,18 @@ const ServicesPage: React.FC = () => {
 
   return (
     <Layout>
-      <div style={pageContainer}>
-        {/* Header */}
-        <div style={headerSection}>
-          <div style={headerContent}>
-            <div style={headerLeft}>
-              <div style={headerIcon}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polygon points="12 2 2 7 12 12 22 7 12 2" />
-                  <polyline points="2 17 12 22 22 17" />
-                  <polyline points="2 12 12 17 22 12" />
-                </svg>
-              </div>
-              <div>
-                <h1 style={pageTitle}>Services</h1>
-                <p style={pageSubtitle}>
-                  Configure and manage your queue services
-                  <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
-                    ({limits.services.current}/{limits.services.limit} used)
-                  </span>
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => { resetForm(); setShowForm(true); }} 
+      <div>
+        <PageHeader
+          icon={Layers}
+          title="Services"
+          subtitle={`Configure and manage your queue services (${limits.services.current}/${limits.services.limit} used)`}
+          actions={
+            <button
+              onClick={() => { resetForm(); setShowForm(true); }}
               style={{
                 ...addButton,
                 ...(!selectedLocation || !canCreate('services') ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
-              }} 
+              }}
               disabled={!selectedLocation || !canCreate('services')}
               title={!canCreate('services') ? 'Service limit reached. Upgrade to add more.' : !selectedLocation ? 'Select a location first' : 'Add a new service'}
             >
@@ -327,8 +313,8 @@ const ServicesPage: React.FC = () => {
               </svg>
               Add Service
             </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Upgrade prompt if limit reached */}
         {!canCreate('services') && (
@@ -911,66 +897,18 @@ const ServicesPage: React.FC = () => {
 export default ServicesPage;
 
 // Styles
-const pageContainer: React.CSSProperties = {
-  maxWidth: '1200px',
-  margin: '0 auto',
-};
-
-const headerSection: React.CSSProperties = {
-  background: '#14b8a6',
-  borderRadius: '16px',
-  padding: '2rem',
-  marginBottom: '1.5rem',
-  color: 'white',
-};
-
-const headerContent: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-};
-
-const headerLeft: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '1rem',
-};
-
-const headerIcon: React.CSSProperties = {
-  width: '56px',
-  height: '56px',
-  background: 'rgba(255, 255, 255, 0.2)',
-  borderRadius: '12px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  backdropFilter: 'blur(10px)',
-};
-
-const pageTitle: React.CSSProperties = {
-  margin: 0,
-  fontSize: '1.75rem',
-  fontWeight: 700,
-};
-
-const pageSubtitle: React.CSSProperties = {
-  margin: '0.25rem 0 0',
-  opacity: 0.9,
-};
-
 const addButton: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: 'rgba(255, 255, 255, 0.2)',
-  color: 'white',
-  border: '1px solid rgba(255, 255, 255, 0.3)',
+  background: 'white',
+  color: 'var(--primary)',
+  border: 'none',
   borderRadius: '10px',
   fontSize: '0.95rem',
   fontWeight: 600,
   cursor: 'pointer',
-  backdropFilter: 'blur(10px)',
 };
 
 const filtersBar: React.CSSProperties = {

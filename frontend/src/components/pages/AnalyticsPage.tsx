@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { PieChart, MapPin } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { PageHeader } from '@/components/ui';
 import { useAuthContext } from '@/contexts/AuthContext';
 import type { Location } from '@/types';
 
@@ -157,28 +159,14 @@ const AnalyticsPage: React.FC = () => {
   return (
     <Layout>
       <div className="analytics-page">
-        {/* Page Header */}
-        <div className="page-header">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-                  <path d="M22 12A10 10 0 0 0 12 2v10z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="page-title">Analytics</h1>
-                <p className="page-subtitle">Track performance metrics and insights</p>
-              </div>
-            </div>
-            
+        <PageHeader
+          icon={PieChart}
+          title="Analytics"
+          subtitle="Track performance metrics and insights"
+          actions={
             <div className="location-selector">
               <label className="selector-label">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
+                <MapPin size={16} />
                 Location
               </label>
               <select
@@ -191,8 +179,8 @@ const AnalyticsPage: React.FC = () => {
                 ))}
               </select>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Tabs Navigation */}
         <div className="tabs-container">
@@ -724,58 +712,12 @@ const AnalyticsPage: React.FC = () => {
 
         <style jsx>{`
           .analytics-page {
-            max-width: 1200px;
-            margin: 0 auto;
             animation: fadeIn 0.3s ease-out;
           }
 
           @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
-          }
-
-          .page-header {
-            background: var(--primary);
-            border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            color: white;
-          }
-
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1.5rem;
-          }
-
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          .header-icon {
-            width: 56px;
-            height: 56px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(10px);
-          }
-
-          .page-title {
-            margin: 0;
-            font-size: 1.75rem;
-            font-weight: 700;
-          }
-
-          .page-subtitle {
-            margin: 0.25rem 0 0;
-            opacity: 0.9;
           }
 
           .location-selector {
@@ -1107,20 +1049,6 @@ const AnalyticsPage: React.FC = () => {
           }
 
           @media (max-width: 768px) {
-            .page-header {
-              padding: 1.5rem;
-            }
-
-            .header-content {
-              flex-direction: column;
-              align-items: stretch;
-            }
-
-            .header-left {
-              flex-direction: column;
-              text-align: center;
-            }
-
             .location-selector {
               width: 100%;
             }

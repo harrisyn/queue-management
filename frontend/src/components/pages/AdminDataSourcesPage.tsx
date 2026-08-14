@@ -6,7 +6,7 @@ import { Plug, Database, FileText, Link2, Package, Search, Pause, Play, Pencil, 
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader } from '@/components/ui';
 
 interface FieldMapping {
   id: string;
@@ -332,19 +332,20 @@ export default function AdminDataSourcesPage() {
   return (
     <Layout>
       <div className="page-container">
-        <div className="page-header">
-          <div>
-            <h1>Data Sources</h1>
-            <p className="subtitle">Connect external systems (EMR, EHR, databases) to enrich customer data</p>
-          </div>
-          <button className="btn-primary" onClick={() => setShowForm(true)}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Add Data Source
-          </button>
-        </div>
+        <PageHeader
+          icon={Database}
+          title="Data Sources"
+          subtitle="Connect external systems (EMR, EHR, databases) to enrich customer data"
+          actions={
+            <button className="btn-primary" onClick={() => setShowForm(true)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Data Source
+            </button>
+          }
+        />
 
         {loading ? (
           <div className="loading">Loading data sources...</div>
@@ -743,37 +744,13 @@ export default function AdminDataSourcesPage() {
         )}
 
         <style jsx>{`
-          .page-container {
-            padding: 2rem;
-            max-width: 1600px;
-            margin: 0 auto;
-          }
-
-          .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 2rem;
-          }
-
-          .page-header h1 {
-            margin: 0;
-            font-size: 2rem;
-            color: #1f2937;
-          }
-
-          .subtitle {
-            margin: 0.5rem 0 0;
-            color: #6b7280;
-          }
-
           .btn-primary {
             display: flex;
             align-items: center;
             gap: 0.5rem;
             padding: 0.75rem 1.5rem;
-            background: #14b8a6;
-            color: white;
+            background: white;
+            color: var(--primary);
             border: none;
             border-radius: 10px;
             font-weight: 600;
@@ -783,7 +760,7 @@ export default function AdminDataSourcesPage() {
 
           .btn-primary:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
 
           .content-grid {

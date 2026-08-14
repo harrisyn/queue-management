@@ -6,7 +6,7 @@ import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader } from '@/components/ui';
 
 interface Location {
   id: string;
@@ -215,29 +215,14 @@ export default function AdminLocationsPage() {
 
   return (
     <Layout>
-      <div style={pageContainer}>
-        {/* Header */}
-        <div style={headerSection}>
-          <div style={headerContent}>
-            <div style={headerLeft}>
-              <div style={headerIcon}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
-              </div>
-              <div>
-                <h1 style={pageTitle}>Locations</h1>
-                <p style={pageSubtitle}>
-                  Manage your physical locations and their public access codes
-                  <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
-                    ({limits.locations.current}/{limits.locations.limit} used)
-                  </span>
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => { resetForm(); setShowForm(true); }} 
+      <div>
+        <PageHeader
+          icon={MapPin}
+          title="Locations"
+          subtitle={`Manage your physical locations and their public access codes (${limits.locations.current}/${limits.locations.limit} used)`}
+          actions={
+            <button
+              onClick={() => { resetForm(); setShowForm(true); }}
               style={{
                 ...addButton,
                 ...(canCreate('locations') ? {} : { opacity: 0.5, cursor: 'not-allowed' }),
@@ -250,8 +235,8 @@ export default function AdminLocationsPage() {
               </svg>
               Add Location
             </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Upgrade prompt if limit reached */}
         {!canCreate('locations') && (
@@ -655,69 +640,18 @@ export default function AdminLocationsPage() {
 }
 
 // Styles
-const pageContainer: React.CSSProperties = {
-  padding: '0',
-  maxWidth: '1200px',
-  margin: '0 auto',
-};
-
-const headerSection: React.CSSProperties = {
-  background: '#14b8a6',
-  borderRadius: '16px',
-  padding: '2rem',
-  marginBottom: '1.5rem',
-  color: 'white',
-};
-
-const headerContent: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: '1rem',
-};
-
-const headerLeft: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '1rem',
-};
-
-const headerIcon: React.CSSProperties = {
-  width: '56px',
-  height: '56px',
-  background: 'rgba(255, 255, 255, 0.2)',
-  borderRadius: '12px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  backdropFilter: 'blur(10px)',
-};
-
-const pageTitle: React.CSSProperties = {
-  margin: 0,
-  fontSize: '1.75rem',
-  fontWeight: 700,
-};
-
-const pageSubtitle: React.CSSProperties = {
-  margin: '0.25rem 0 0',
-  opacity: 0.9,
-};
-
 const addButton: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: 'rgba(255, 255, 255, 0.2)',
-  color: 'white',
-  border: '1px solid rgba(255, 255, 255, 0.3)',
+  background: 'white',
+  color: 'var(--primary)',
+  border: 'none',
   borderRadius: '10px',
   fontSize: '0.95rem',
   fontWeight: 600,
   cursor: 'pointer',
-  backdropFilter: 'blur(10px)',
 };
 
 const filterBar: React.CSSProperties = {

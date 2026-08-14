@@ -1,6 +1,46 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 
+// Ensure a service point has exactly `capacity` active ServicePointInstance rows.
+// Creates missing instances and deactivates (never deletes) excess ones.
+async function syncInstancesForServicePoint(servicePointId: string) {
+  const servicePoint = await prisma.servicePoint.findUnique({
+    where: { id: servicePointId },
+    include: { instances: true },
+  });
+
+  if (!servicePoint) return;
+
+  const currentCount = servicePoint.instances.length;
+  const targetCount = servicePoint.capacity;
+
+  if (currentCount < targetCount) {
+    for (let i = currentCount + 1; i <= targetCount; i++) {
+      await prisma.servicePointInstance.create({
+        data: {
+          servicePointId,
+          instanceNumber: i,
+          displayName: `${servicePoint.displayName || servicePoint.name} ${i}`,
+          isActive: servicePoint.isActive,
+        },
+      });
+    }
+  }
+
+  if (currentCount > targetCount) {
+    await prisma.servicePointInstance.updateMany({
+      where: { servicePointId, instanceNumber: { gt: targetCount } },
+      data: { isActive: false },
+    });
+  }
+
+  // Keep existing instances' active state aligned with the parent service point.
+  await prisma.servicePointInstance.updateMany({
+    where: { servicePointId, instanceNumber: { lte: targetCount } },
+    data: { isActive: servicePoint.isActive },
+  });
+}
+
 // Get all service points for a location
 export const getServicePoints = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -79,6 +119,8 @@ export const createServicePoint = async (req: Request, res: Response, next: Next
       },
     });
 
+    await syncInstancesForServicePoint(servicePoint.id);
+
     res.status(201).json(servicePoint);
   } catch (error) {
     next(error);
@@ -101,6 +143,10 @@ export const updateServicePoint = async (req: Request, res: Response, next: Next
         ...(isActive !== undefined && { isActive }),
       },
     });
+
+    if (capacity !== undefined || isActive !== undefined) {
+      await syncInstancesForServicePoint(id);
+    }
 
     res.json(servicePoint);
   } catch (error) {
@@ -496,42 +542,12 @@ export const syncServicePointInstances = async (req: Request, res: Response, nex
   try {
     const { servicePointId } = req.params;
 
-    const servicePoint = await prisma.servicePoint.findUnique({
-      where: { id: servicePointId },
-      include: { instances: true }
-    });
-
-    if (!servicePoint) {
+    const exists = await prisma.servicePoint.findUnique({ where: { id: servicePointId } });
+    if (!exists) {
       return res.status(404).json({ error: 'Service point not found' });
     }
 
-    const currentCount = servicePoint.instances.length;
-    const targetCount = servicePoint.capacity;
-
-    // Create missing instances
-    if (currentCount < targetCount) {
-      for (let i = currentCount + 1; i <= targetCount; i++) {
-        await prisma.servicePointInstance.create({
-          data: {
-            servicePointId,
-            instanceNumber: i,
-            displayName: `${servicePoint.displayName || servicePoint.name} ${i}`,
-            isActive: servicePoint.isActive, // Inherit parent's active state
-          }
-        });
-      }
-    }
-
-    // Deactivate excess instances (don't delete to preserve history)
-    if (currentCount > targetCount) {
-      await prisma.servicePointInstance.updateMany({
-        where: {
-          servicePointId,
-          instanceNumber: { gt: targetCount }
-        },
-        data: { isActive: false }
-      });
-    }
+    await syncInstancesForServicePoint(servicePointId);
 
     // Get updated instances
     const instances = await prisma.servicePointInstance.findMany({
@@ -558,7 +574,7 @@ export const activateServicePointInstance = async (req: Request, res: Response, 
   try {
     const { instanceId } = req.params;
     const { serviceId } = req.body;
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });
@@ -616,7 +632,7 @@ export const activateServicePointInstance = async (req: Request, res: Response, 
 export const vacateServicePointInstance = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { instanceId } = req.params;
-    const userId = (req as any).user?.id;
+    const userId = (req as any).user?.userId;
 
     if (!userId) {
       return res.status(401).json({ error: 'Authentication required' });

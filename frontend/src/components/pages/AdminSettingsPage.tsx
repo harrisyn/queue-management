@@ -1,11 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Info } from 'lucide-react';
+import { Info, Settings } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader } from '@/components/ui';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
 
@@ -222,16 +222,12 @@ export default function AdminSettingsPage() {
 
   return (
     <Layout>
-      <div style={{ padding: '1.5rem', maxWidth: '900px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#111827' }}>
-            Organization Settings
-          </h1>
-          <p style={{ color: '#6b7280' }}>
-            Manage your organization details, customer fields, and display preferences.
-          </p>
-        </div>
+      <div>
+        <PageHeader
+          icon={Settings}
+          title="Organization Settings"
+          subtitle="Manage your organization details, customer fields, and display preferences."
+        />
 
         {/* Message */}
         {message && (

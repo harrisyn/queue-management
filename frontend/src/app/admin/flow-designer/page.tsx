@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Workflow } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { PageHeader } from '@/components/ui';
 import { useAuthContext } from '@/contexts/AuthContext';
 import type { Location, Service, ServiceFlow } from '@/types';
 
@@ -388,26 +390,16 @@ const FlowDesignerPage: React.FC = () => {
   return (
     <Layout>
       <div className="flow-designer">
-        {/* Header */}
-        <div className="header">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-              </div>
-              <div>
-                <h1>Patient Flow Designer</h1>
-                <p>Design how patients move between services</p>
-              </div>
-            </div>
-
+        <PageHeader
+          icon={Workflow}
+          title="Patient Flow Designer"
+          subtitle="Design how patients move between services"
+          actions={
             <div className="header-actions">
               <div className="selector">
                 <label>Location</label>
-                <select 
-                  value={selectedLocation} 
+                <select
+                  value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
                 >
                   {locations.map(loc => (
@@ -423,8 +415,8 @@ const FlowDesignerPage: React.FC = () => {
                 Add Connection
               </button>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {error && (
           <div className="error-alert">
@@ -671,54 +663,6 @@ const FlowDesignerPage: React.FC = () => {
         )}
 
         <style jsx>{`
-          .flow-designer {
-            max-width: 1400px;
-            margin: 0 auto;
-          }
-
-          .header {
-            background: var(--primary);
-            border-radius: 16px;
-            padding: 1.5rem 2rem;
-            margin-bottom: 1.5rem;
-            color: white;
-          }
-
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-          }
-
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          .header-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-          }
-
-          .header p {
-            margin: 0.25rem 0 0;
-            opacity: 0.9;
-            font-size: 0.9rem;
-          }
-
           .header-actions {
             display: flex;
             align-items: center;
@@ -1127,11 +1071,6 @@ const FlowDesignerPage: React.FC = () => {
           }
 
           @media (max-width: 768px) {
-            .header-content {
-              flex-direction: column;
-              align-items: stretch;
-            }
-
             .header-actions {
               flex-direction: column;
             }

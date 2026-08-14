@@ -5,7 +5,7 @@ import { ClipboardList, Mail, Check, Link2, Copy } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader } from '@/components/ui';
 
 type Invite = {
   id: string;
@@ -132,24 +132,20 @@ const AdminInvitesPage: React.FC = () => {
 
   return (
     <Layout>
-      <div style={{ padding: '1.5rem', maxWidth: '1000px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
-          <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#111827' }}>
-              Staff Invites
-            </h1>
-            <p style={{ color: '#6b7280' }}>
-              Create invite codes for operators and staff to join your organization.
-            </p>
-          </div>
-          <button onClick={() => setShowForm(true)} style={addButton}>
-            <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-            </svg>
-            Create Invite
-          </button>
-        </div>
+      <div>
+        <PageHeader
+          icon={Mail}
+          title="Staff Invites"
+          subtitle="Create invite codes for operators and staff to join your organization."
+          actions={
+            <button onClick={() => setShowForm(true)} style={addButton}>
+              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
+              </svg>
+              Create Invite
+            </button>
+          }
+        />
 
         {/* How it works */}
         <div style={howItWorksCard}>
@@ -323,14 +319,14 @@ const addButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: '#14b8a6',
-  color: 'white',
+  background: 'white',
+  color: '#14b8a6',
   borderRadius: '0.75rem',
   border: 'none',
   fontWeight: 600,
   fontSize: '0.9375rem',
   cursor: 'pointer',
-  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
+  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.15)',
 };
 
 const howItWorksCard: React.CSSProperties = {

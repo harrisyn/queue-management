@@ -150,6 +150,7 @@ const DashboardPage: React.FC = () => {
     <Layout>
       <div style={containerStyle}>
         <PageHeader
+          icon={ClipboardList}
           title={`Welcome back, ${user?.firstName}!`}
           subtitle={
             organization
@@ -239,10 +240,7 @@ const DashboardPage: React.FC = () => {
 };
 
 // Styles
-const containerStyle: React.CSSProperties = {
-  maxWidth: '1200px',
-  margin: '0 auto',
-};
+const containerStyle: React.CSSProperties = {};
 
 const loadingContainer: React.CSSProperties = {
   display: 'flex',

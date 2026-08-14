@@ -5,7 +5,7 @@ import { QrCode, Lightbulb } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader } from '@/components/ui';
 
 interface Location {
   id: string;
@@ -144,16 +144,12 @@ export default function AdminQRPage() {
 
   return (
     <Layout>
-      <div style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#111827' }}>
-            QR Code Generator
-          </h1>
-          <p style={{ color: '#6b7280' }}>
-            Generate and print QR codes for your locations. Customers can scan to join queues instantly.
-          </p>
-        </div>
+      <div>
+        <PageHeader
+          icon={QrCode}
+          title="QR Code Generator"
+          subtitle="Generate and print QR codes for your locations. Customers can scan to join queues instantly."
+        />
 
         {loading ? (
           <div style={{ padding: '3rem', textAlign: 'center' }}>

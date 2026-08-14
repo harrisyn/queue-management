@@ -6,7 +6,7 @@ import { Building2, Syringe, Stethoscope, Wallet, Pill, FlaskConical, Camera, Ma
 import api from '@/api/client';
 import Layout from '@/components/Layout';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader } from '@/components/ui';
 import type { Location, ServicePoint, ServicePointType } from '@/types';
 
 const SERVICE_POINT_TYPES: { value: ServicePointType; label: string; icon: LucideIcon }[] = [
@@ -200,27 +200,16 @@ const ServicePointsPage: React.FC = () => {
   return (
     <Layout>
       <div className="service-points-page">
-        {/* Header */}
-        <div className="header">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              </div>
-              <div>
-                <h1>Service Points</h1>
-                <p>Manage reception desks, consultation rooms, and more</p>
-              </div>
-            </div>
-
+        <PageHeader
+          icon={Building2}
+          title="Service Points"
+          subtitle="Manage reception desks, consultation rooms, and more"
+          actions={
             <div className="header-actions">
               <div className="selector">
                 <label>Location</label>
-                <select 
-                  value={selectedLocation} 
+                <select
+                  value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
                 >
                   {locations.map(loc => (
@@ -236,8 +225,8 @@ const ServicePointsPage: React.FC = () => {
                 Add Service Point
               </button>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {error && (
           <div className="error-alert">
@@ -422,54 +411,6 @@ const ServicePointsPage: React.FC = () => {
         )}
 
         <style jsx>{`
-          .service-points-page {
-            max-width: 1200px;
-            margin: 0 auto;
-          }
-
-          .header {
-            background: var(--primary);
-            border-radius: 16px;
-            padding: 1.5rem 2rem;
-            margin-bottom: 1.5rem;
-            color: white;
-          }
-
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-          }
-
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          .header-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-          }
-
-          .header p {
-            margin: 0.25rem 0 0;
-            opacity: 0.9;
-            font-size: 0.9rem;
-          }
-
           .header-actions {
             display: flex;
             align-items: center;
@@ -848,11 +789,6 @@ const ServicePointsPage: React.FC = () => {
           }
 
           @media (max-width: 768px) {
-            .header-content {
-              flex-direction: column;
-              align-items: stretch;
-            }
-
             .header-actions {
               flex-direction: column;
             }
