@@ -8,6 +8,10 @@ import { PageHeader } from '@/components/ui';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import type { Service, Location, Organization, ServiceType } from '@/types';
+import { AddServiceWizard } from '@/components/services/AddServiceWizard';
+import type { WizardData } from '@/components/services/wizardTypes';
+import { ServicePointsDeskPicker } from '@/components/services/ServicePointsDeskPicker';
+import type { WizardServicePoint } from '@/components/services/wizardTypes';
 
 interface ServicePoint {
   id: string;
@@ -53,15 +57,12 @@ const ServicesPage: React.FC = () => {
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [showWizard, setShowWizard] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [selectedService, setSelectedService] = useState<Service | null>(null);
   const [editingService, setEditingService] = useState<Service | null>(null);
-  
-  // Service Points state
-  const [locationServicePoints, setLocationServicePoints] = useState<ServicePoint[]>([]);
-  const [linkedServicePoints, setLinkedServicePoints] = useState<LinkedServicePoint[]>([]);
-  const [showServicePointsPanel, setShowServicePointsPanel] = useState(false);
-  
+  const [editServicePoints, setEditServicePoints] = useState<WizardServicePoint[]>([]);
+
   const [formData, setFormData] = useState<ServiceFormData>({
     name: '',
     description: '',
@@ -128,18 +129,32 @@ const ServicesPage: React.FC = () => {
     if (selectedLocation) loadServices(selectedLocation);
   }, [selectedLocation, loadServices]);
 
-  const handleCreateService = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedLocation) return;
+  const handleWizardSubmit = async (data: WizardData) => {
+    const locationIds = data.locationScope === 'all'
+      ? locations.map(l => l.id)
+      : [data.selectedLocationId];
 
-    try {
-      await api.createService(selectedLocation, formData);
-      await loadServices(selectedLocation);
-      await refreshSubscription(); // Refresh subscription to update limits
-      resetForm();
-    } catch (err) {
-      console.error(err);
-    }
+    await api.createService({
+      name: data.name,
+      description: data.description,
+      type: data.type,
+      requiresName: data.requiresName,
+      requiresPhone: data.requiresPhone,
+      allowAnonymous: data.allowAnonymous,
+      displayMode: data.displayMode || undefined,
+      slotDuration: data.slotDuration,
+      concurrentLimit: data.concurrentLimit,
+      activeDays: data.activeDays,
+      startTime: data.startTime,
+      endTime: data.endTime,
+      isActive: data.isActive,
+      locationIds,
+      servicePoints: data.servicePoints.map(sp => ({ servicePointId: sp.servicePointId, capacity: sp.capacity })),
+    });
+
+    await loadServices(selectedLocation);
+    await refreshSubscription();
+    setShowWizard(false);
   };
 
   const handleUpdateService = async (e: React.FormEvent) => {
@@ -147,7 +162,10 @@ const ServicesPage: React.FC = () => {
     if (!editingService) return;
 
     try {
-      await api.updateService(editingService.id, formData);
+      await api.updateService(editingService.id, {
+        ...formData,
+        servicePoints: editServicePoints.map(sp => ({ servicePointId: sp.servicePointId, capacity: sp.capacity })),
+      });
       await loadServices(selectedLocation);
       resetForm();
     } catch (err: any) {
@@ -176,7 +194,7 @@ const ServicesPage: React.FC = () => {
     setShowForm(false);
   };
 
-  const startEdit = (service: Service) => {
+  const startEdit = async (service: Service) => {
     setEditingService(service);
     setFormData({
       name: service.name,
@@ -188,6 +206,13 @@ const ServicesPage: React.FC = () => {
       endTime: service.endTime || '17:00',
       activeDays: service.activeDays || '1,2,3,4,5',
     });
+    const linked = await api.getServicePointsForService(service.id);
+    setEditServicePoints(linked.map((sp: LinkedServicePoint) => ({
+      servicePointId: sp.id,
+      name: sp.name,
+      displayName: sp.displayName,
+      capacity: sp.capacity,
+    })));
     setShowForm(true);
     setShowDetails(false);
   };
@@ -197,6 +222,7 @@ const ServicesPage: React.FC = () => {
     setShowDetails(false);
     setSelectedService(null);
     setEditingService(null);
+    setEditServicePoints([]);
     setFormData({
       name: '',
       description: '',
@@ -218,68 +244,6 @@ const ServicesPage: React.FC = () => {
     return locations.find((l: Location) => l.id === selectedLocation);
   };
 
-  // Service Points Management
-  const loadLocationServicePoints = useCallback(async (locationId: string) => {
-    try {
-      const points = await api.getServicePoints(locationId);
-      setLocationServicePoints(points);
-    } catch (err) {
-      console.error('Failed to load service points:', err);
-      setLocationServicePoints([]);
-    }
-  }, []);
-
-  const loadLinkedServicePoints = useCallback(async (serviceId: string) => {
-    try {
-      const linked = await api.getServicePointsForService(serviceId);
-      setLinkedServicePoints(linked);
-    } catch (err) {
-      console.error('Failed to load linked service points:', err);
-      setLinkedServicePoints([]);
-    }
-  }, []);
-
-  const handleLinkServicePoint = async (servicePointId: string) => {
-    if (!selectedService) return;
-    try {
-      await api.linkServicePointToService(servicePointId, selectedService.id);
-      await loadLinkedServicePoints(selectedService.id);
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to link service point');
-    }
-  };
-
-  const handleUnlinkServicePoint = async (servicePointId: string) => {
-    if (!selectedService) return;
-    try {
-      await api.unlinkServicePointFromService(servicePointId, selectedService.id);
-      await loadLinkedServicePoints(selectedService.id);
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to unlink service point');
-    }
-  };
-
-  const handleUpdateLinkCapacity = async (linkId: string, capacity: number | null) => {
-    if (!selectedService) return;
-    try {
-      await api.updateServicePointLink(linkId, { capacity });
-      await loadLinkedServicePoints(selectedService.id);
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to update capacity');
-    }
-  };
-
-  const openServicePointsPanel = async (service: Service) => {
-    setSelectedService(service);
-    setShowServicePointsPanel(true);
-    setShowDetails(false);
-    setShowForm(false);
-    await Promise.all([
-      loadLocationServicePoints(selectedLocation),
-      loadLinkedServicePoints(service.id)
-    ]);
-  };
-
   if (!loading && !user?.organizationId) {
     return (
       <Layout>
@@ -299,7 +263,7 @@ const ServicesPage: React.FC = () => {
           subtitle={`Configure and manage your queue services (${limits.services.current}/${limits.services.limit} used)`}
           actions={
             <button
-              onClick={() => { resetForm(); setShowForm(true); }}
+              onClick={() => setShowWizard(true)}
               style={{
                 ...addButton,
                 ...(!selectedLocation || !canCreate('services') ? { opacity: 0.5, cursor: 'not-allowed' } : {}),
@@ -442,15 +406,6 @@ const ServicesPage: React.FC = () => {
             </div>
 
             <div style={detailsActions}>
-              <button onClick={() => openServicePointsPanel(selectedService)} style={servicePointsButtonLarge}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <rect x="3" y="3" width="7" height="7" />
-                  <rect x="14" y="3" width="7" height="7" />
-                  <rect x="14" y="14" width="7" height="7" />
-                  <rect x="3" y="14" width="7" height="7" />
-                </svg>
-                Manage Service Points
-              </button>
               <button onClick={() => startEdit(selectedService)} style={editButtonLarge}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
@@ -469,203 +424,7 @@ const ServicesPage: React.FC = () => {
           </div>
         )}
 
-        {/* Service Points Management Panel */}
-        {showServicePointsPanel && selectedService && (
-          <div style={detailsPanel}>
-            <div style={detailsHeader}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                <h2 style={detailsTitle}>Service Points for {selectedService.name}</h2>
-              </div>
-              <button onClick={() => { setShowServicePointsPanel(false); setSelectedService(null); }} style={closeButton}>×</button>
-            </div>
-            
-            <div style={detailsBody}>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '1.5rem' }}>
-                Assign service points (windows/counters) where this service can be provided. 
-                Patients will be directed to these service points when called.
-              </p>
-
-              {/* Linked Service Points */}
-              <div style={servicePointsSection}>
-                <h3 style={sectionTitle}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="9 11 12 14 22 4" />
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                  </svg>
-                  Linked Service Points ({linkedServicePoints.length})
-                </h3>
-                
-                {linkedServicePoints.length === 0 ? (
-                  <div style={emptyServicePoints}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <rect x="3" y="3" width="7" height="7" />
-                      <rect x="14" y="3" width="7" height="7" />
-                      <rect x="14" y="14" width="7" height="7" />
-                      <rect x="3" y="14" width="7" height="7" />
-                    </svg>
-                    <p>No service points linked yet</p>
-                    <span>Add service points from the available list below</span>
-                  </div>
-                ) : (
-                  <div style={servicePointsList}>
-                    {linkedServicePoints.map((sp) => (
-                      <div key={sp.linkId} style={servicePointCard}>
-                        <div style={servicePointInfo}>
-                          <div style={servicePointIcon}>
-                            {sp.type === 'RECEPTION' ? (
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                <circle cx="8.5" cy="7" r="4" />
-                                <line x1="20" y1="8" x2="20" y2="14" />
-                                <line x1="23" y1="11" x2="17" y2="11" />
-                              </svg>
-                            ) : sp.type === 'CONSULTATION' ? (
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                              </svg>
-                            ) : (
-                              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                <line x1="3" y1="9" x2="21" y2="9" />
-                                <line x1="9" y1="21" x2="9" y2="9" />
-                              </svg>
-                            )}
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={servicePointName}>{sp.displayName || sp.name}</div>
-                            <div style={servicePointMeta}>
-                              Type: {sp.type}
-                            </div>
-                          </div>
-                          <div style={capacityEditWrapper}>
-                            <label style={capacityLabel}>Capacity:</label>
-                            <input
-                              type="number"
-                              min="1"
-                              value={sp.serviceCapacity ?? sp.defaultCapacity ?? sp.capacity}
-                              onChange={(e) => {
-                                const val = e.target.value === '' ? null : parseInt(e.target.value, 10);
-                                handleUpdateLinkCapacity(sp.linkId, val);
-                              }}
-                              style={capacityInput}
-                              title={sp.serviceCapacity != null ? `Custom for this service (default: ${sp.defaultCapacity})` : `Using default capacity`}
-                            />
-                            {sp.serviceCapacity != null && (
-                              <button
-                                onClick={() => handleUpdateLinkCapacity(sp.linkId, null)}
-                                style={resetCapacityButton}
-                                title={`Reset to default (${sp.defaultCapacity})`}
-                              >
-                                ↺
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <button 
-                          onClick={() => handleUnlinkServicePoint(sp.id)} 
-                          style={unlinkButton}
-                          title="Remove from service"
-                        >
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <line x1="18" y1="6" x2="6" y2="18" />
-                            <line x1="6" y1="6" x2="18" y2="18" />
-                          </svg>
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {/* Available Service Points */}
-              <div style={{ ...servicePointsSection, marginTop: '2rem' }}>
-                <h3 style={sectionTitle}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <circle cx="12" cy="12" r="10" />
-                    <line x1="12" y1="8" x2="12" y2="16" />
-                    <line x1="8" y1="12" x2="16" y2="12" />
-                  </svg>
-                  Available Service Points
-                </h3>
-                
-                {locationServicePoints.filter(sp => 
-                  !linkedServicePoints.some(linked => linked.id === sp.id)
-                ).length === 0 ? (
-                  <div style={emptyServicePoints}>
-                    <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                      <circle cx="12" cy="12" r="10" />
-                      <polyline points="12 6 12 12 16 14" />
-                    </svg>
-                    <p>No available service points</p>
-                    <span>All service points are already linked, or create new ones in Admin → Service Points</span>
-                  </div>
-                ) : (
-                  <div style={servicePointsList}>
-                    {locationServicePoints
-                      .filter(sp => !linkedServicePoints.some(linked => linked.id === sp.id))
-                      .map((sp) => (
-                        <div key={sp.id} style={servicePointCardAvailable}>
-                          <div style={servicePointInfo}>
-                            <div style={servicePointIconAvailable}>
-                              {sp.type === 'RECEPTION' ? (
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
-                                  <circle cx="8.5" cy="7" r="4" />
-                                  <line x1="20" y1="8" x2="20" y2="14" />
-                                  <line x1="23" y1="11" x2="17" y2="11" />
-                                </svg>
-                              ) : sp.type === 'CONSULTATION' ? (
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-                                </svg>
-                              ) : (
-                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
-                                  <line x1="3" y1="9" x2="21" y2="9" />
-                                  <line x1="9" y1="21" x2="9" y2="9" />
-                                </svg>
-                              )}
-                            </div>
-                            <div>
-                              <div style={servicePointName}>{sp.displayName || sp.name}</div>
-                              <div style={servicePointMeta}>
-                                Type: {sp.type} • 
-                                Capacity: {sp.capacity} • 
-                                {sp.isActive ? 'Active' : 'Inactive'}
-                              </div>
-                            </div>
-                          </div>
-                          <button 
-                            onClick={() => handleLinkServicePoint(sp.id)} 
-                            style={linkButton}
-                            title="Add to service"
-                          >
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <line x1="12" y1="5" x2="12" y2="19" />
-                              <line x1="5" y1="12" x2="19" y2="12" />
-                            </svg>
-                            Add
-                          </button>
-                        </div>
-                      ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div style={detailsActions}>
-              <button onClick={() => { setShowServicePointsPanel(false); openDetails(selectedService); }} style={editButtonLarge}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <line x1="19" y1="12" x2="5" y2="12" />
-                  <polyline points="12 19 5 12 12 5" />
-                </svg>
-                Back to Service Details
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Create/Edit Service Form */}
+        {/* Edit Service Form */}
         {showForm && (
           <div style={formCard}>
             <div style={formHeader}>
@@ -674,11 +433,11 @@ const ServicesPage: React.FC = () => {
                   <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
                   <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
                 </svg>
-                {editingService ? 'Edit Service' : 'Create New Service'}
+                Edit Service
               </h3>
               <button onClick={resetForm} style={closeButton}>×</button>
             </div>
-            <form onSubmit={editingService ? handleUpdateService : handleCreateService} style={formBody}>
+            <form onSubmit={handleUpdateService} style={formBody}>
               <div style={formGrid}>
                 <div style={formField}>
                   <label style={labelStyle}>Service Name *</label>
@@ -758,12 +517,23 @@ const ServicesPage: React.FC = () => {
                 />
               </div>
 
+              <div style={formFieldFull}>
+                <label style={labelStyle}>Service Points & Desks</label>
+                {editingService && (
+                  <ServicePointsDeskPicker
+                    organizationId={user?.organizationId || ''}
+                    selected={editServicePoints}
+                    onChange={setEditServicePoints}
+                  />
+                )}
+              </div>
+
               <div style={formActions}>
                 <button type="submit" style={submitButton}>
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                     <polyline points="20 6 9 17 4 12" />
                   </svg>
-                  {editingService ? 'Save Changes' : 'Create Service'}
+                  Save Changes
                 </button>
                 <button type="button" onClick={resetForm} style={cancelButton}>
                   Cancel
@@ -807,7 +577,7 @@ const ServicesPage: React.FC = () => {
             </div>
             <h3 style={emptyTitle}>No Services Yet</h3>
             <p style={emptyText}>Create your first service to start managing queues</p>
-            <button onClick={() => setShowForm(true)} style={emptyButton}>
+            <button onClick={() => setShowWizard(true)} style={emptyButton}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19" />
                 <line x1="5" y1="12" x2="19" y2="12" />
@@ -888,6 +658,15 @@ const ServicesPage: React.FC = () => {
               </div>
             ))}
           </div>
+        )}
+
+        {showWizard && user?.organizationId && (
+          <AddServiceWizard
+            organizationId={user.organizationId}
+            locations={locations}
+            onClose={() => setShowWizard(false)}
+            onSubmit={handleWizardSubmit}
+          />
         )}
       </div>
     </Layout>

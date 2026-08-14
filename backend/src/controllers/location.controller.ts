@@ -167,7 +167,7 @@ export const getPublicLocationInfo = async (req: Request, res: Response, next: N
         timezone: true,
         publicCode: true,
         organization: { select: { id: true, name: true } },
-        _count: { select: { services: true, servicePoints: true } },
+        _count: { select: { services: true } },
       },
     });
 
@@ -175,7 +175,20 @@ export const getPublicLocationInfo = async (req: Request, res: Response, next: N
       return res.status(404).json({ error: 'Location not found' });
     }
 
-    res.json(location);
+    // Count distinct service points, not link rows - a service point linked
+    // to multiple services at this location must only count once (mirrors
+    // the dedupe in servicepoint.controller.ts's getActiveServicePoints).
+    const distinctServicePointLinks = await prisma.servicePointService.findMany({
+      where: { isActive: true, service: { locationId } },
+      select: { servicePointId: true },
+      distinct: ['servicePointId'],
+    });
+    const servicePointsCount = distinctServicePointLinks.length;
+
+    res.json({
+      ...location,
+      _count: { ...location._count, servicePoints: servicePointsCount },
+    });
   } catch (error) {
     next(error);
   }

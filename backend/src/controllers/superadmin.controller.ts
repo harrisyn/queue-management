@@ -87,7 +87,6 @@ export const getOrganization = async (req: Request, res: Response, next: NextFun
             _count: {
               select: {
                 services: true,
-                servicePoints: true,
               },
             },
           },

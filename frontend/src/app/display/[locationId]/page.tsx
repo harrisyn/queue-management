@@ -4,12 +4,25 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import api from '@/api/client';
 import { useSocket } from '@/hooks/useSocket';
-import type { ServicePoint, Location } from '@/types';
+import type { Location } from '@/types';
 
 interface DisplayEntry {
   ticketNumber: string;
   serviceName: string;
   servicePointName: string;
+}
+
+interface DisplayServicePoint {
+  id: string;
+  name: string;
+  displayName?: string;
+  type: string;
+  displayMode: string;
+  currentlyServing: {
+    ticketNumber: string;
+    customerName: string;
+    serviceName: string;
+  } | null;
 }
 
 interface QueueSwimlane {
@@ -50,7 +63,7 @@ const TVDisplayPage: React.FC = () => {
   const locationId = params.locationId as string;
   
   const [location, setLocation] = useState<Location | null>(null);
-  const [servicePoints, setServicePoints] = useState<ServicePoint[]>([]);
+  const [servicePoints, setServicePoints] = useState<DisplayServicePoint[]>([]);
   const [swimlanes, setSwimlanes] = useState<QueueSwimlane[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
@@ -255,7 +268,7 @@ const TVDisplayPage: React.FC = () => {
   }, [fetchData]);
 
   // Get service points with currently serving entries
-  const activePoints = servicePoints.filter((sp: ServicePoint) => sp.currentlyServing);
+  const activePoints = servicePoints.filter((sp: DisplayServicePoint) => sp.currentlyServing);
   const waitingAnnouncements = activePoints.slice(0, 5);
 
   // Get selected swimlane for single-queue view

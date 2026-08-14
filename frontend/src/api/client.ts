@@ -104,9 +104,12 @@ class ApiClient {
     return data;
   }
 
-  async createService(locationId: string, service: Partial<Service>) {
-    const { data } = await this.client.post(`/services/locations/${locationId}/services`, service);
-    return data;
+  async createService(payload: Partial<Service> & {
+    locationIds: string[];
+    servicePoints?: { servicePointId: string; capacity: number }[];
+  }) {
+    const { data } = await this.client.post('/services', payload);
+    return data as { services: Service[] };
   }
 
   // Queues
@@ -341,8 +344,8 @@ class ApiClient {
   }
 
   // Service Points
-  async getServicePoints(locationId: string) {
-    const { data } = await this.client.get(`/service-points/location/${locationId}`);
+  async getServicePoints(organizationId: string) {
+    const { data } = await this.client.get(`/service-points/organization/${organizationId}`);
     return data;
   }
 
@@ -357,7 +360,7 @@ class ApiClient {
   }
 
   async createServicePoint(payload: {
-    locationId: string;
+    organizationId: string;
     name: string;
     displayName?: string;
     type?: string;
@@ -383,8 +386,8 @@ class ApiClient {
   }
 
   // Service point linking to services (admin)
-  async linkServicePointToService(servicePointId: string, serviceId: string) {
-    const { data } = await this.client.post('/service-points/link', { servicePointId, serviceId });
+  async linkServicePointToService(servicePointId: string, serviceId: string, capacity: number) {
+    const { data } = await this.client.post('/service-points/link', { servicePointId, serviceId, capacity });
     return data;
   }
 
@@ -412,11 +415,6 @@ class ApiClient {
   // Service Point Instances
   async getServicePointInstances(servicePointId: string) {
     const { data } = await this.client.get(`/service-points/${servicePointId}/instances`);
-    return data;
-  }
-
-  async syncServicePointInstances(servicePointId: string) {
-    const { data } = await this.client.post(`/service-points/${servicePointId}/instances/sync`);
     return data;
   }
 
@@ -505,10 +503,9 @@ class ApiClient {
     return data;
   }
 
-  async callNextWithServicePoint(queueId: string, servicePointId?: string, servicePointInstanceId?: string) {
-    const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, { 
-      servicePointId, 
-      servicePointInstanceId 
+  async callNextWithServicePoint(queueId: string, servicePointInstanceId?: string) {
+    const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, {
+      servicePointInstanceId
     });
     return data;
   }
@@ -649,7 +646,9 @@ class ApiClient {
   }
 
   // Service management
-  async updateService(id: string, payload: Partial<Service>) {
+  async updateService(id: string, payload: Partial<Service> & {
+    servicePoints?: { servicePointId: string; capacity: number }[];
+  }) {
     const { data } = await this.client.put(`/services/${id}`, payload);
     return data;
   }
