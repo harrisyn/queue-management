@@ -1,35 +1,110 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
+import { checkLimit } from '../middleware/subscription.middleware';
+import { syncInstancesForServicePointService } from './servicepoint.controller';
 
 export const createService = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { locationId } = req.params;
-    const { 
-      name, 
-      description, 
-      type, 
-      slotDuration, 
-      concurrentLimit, 
-      activeDays, 
-      startTime, 
-      endTime 
+    const {
+      name,
+      description,
+      type,
+      slotDuration,
+      concurrentLimit,
+      activeDays,
+      startTime,
+      endTime,
+      requiresName,
+      requiresPhone,
+      allowAnonymous,
+      displayMode,
+      isActive,
+      locationIds,
+      servicePoints,
     } = req.body;
 
-    const service = await prisma.service.create({
-      data: {
-        locationId,
-        name,
-        description,
-        type: type || 'GENERAL',
-        slotDuration: slotDuration || 15,
-        concurrentLimit: concurrentLimit || 1,
-        activeDays: activeDays || '1,2,3,4,5',
-        startTime: startTime || '09:00',
-        endTime: endTime || '17:00',
-      },
+    if (!Array.isArray(locationIds) || locationIds.length === 0) {
+      return res.status(400).json({ error: 'At least one locationId is required' });
+    }
+
+    // Resolve the organization from the first location and verify every
+    // requested location belongs to it, so a caller can't slip in another org's location.
+    const locations = await prisma.location.findMany({ where: { id: { in: locationIds } } });
+    if (locations.length !== locationIds.length) {
+      return res.status(404).json({ error: 'One or more locations not found' });
+    }
+    const organizationId = locations[0].organizationId;
+    if (locations.some((l: typeof locations[number]) => l.organizationId !== organizationId)) {
+      return res.status(400).json({ error: 'All target locations must belong to the same organization' });
+    }
+
+    const { current, limit } = await checkLimit(organizationId, 'services');
+    if (current + locationIds.length > limit) {
+      return res.status(403).json({
+        error: 'Limit reached',
+        message: `Creating ${locationIds.length} service(s) would exceed your plan's limit of ${limit} services (currently at ${current}).`,
+        limitType: 'services',
+        current,
+        limit,
+        upgradeRequired: true,
+      });
+    }
+
+    if (servicePoints && Array.isArray(servicePoints)) {
+      for (const sp of servicePoints) {
+        if (!sp.servicePointId || !sp.capacity || sp.capacity < 1) {
+          return res.status(400).json({ error: 'Each service point assignment needs a servicePointId and a capacity of at least 1' });
+        }
+      }
+    }
+
+    const createdServices = await prisma.$transaction(async (tx) => {
+      const results: Awaited<ReturnType<typeof tx.service.create>>[] = [];
+      for (const locationId of locationIds) {
+        const service = await tx.service.create({
+          data: {
+            locationId,
+            name,
+            description,
+            type: type || 'GENERAL',
+            slotDuration: slotDuration || 15,
+            concurrentLimit: concurrentLimit || 1,
+            activeDays: activeDays || '1,2,3,4,5',
+            startTime: startTime || '09:00',
+            endTime: endTime || '17:00',
+            requiresName: requiresName ?? true,
+            requiresPhone: requiresPhone ?? false,
+            allowAnonymous: allowAnonymous ?? false,
+            displayMode: displayMode || null,
+            isActive: isActive ?? true,
+          },
+        });
+
+        if (servicePoints && Array.isArray(servicePoints)) {
+          for (const sp of servicePoints) {
+            await tx.servicePointService.create({
+              data: { servicePointId: sp.servicePointId, serviceId: service.id, capacity: sp.capacity },
+            });
+          }
+        }
+
+        results.push(service);
+      }
+      return results;
     });
 
-    res.status(201).json(service);
+    // Instance sync happens outside the transaction (it's not itself
+    // transactional business logic, just desk-row bookkeeping).
+    if (servicePoints && Array.isArray(servicePoints)) {
+      for (const service of createdServices) {
+        const links = await prisma.servicePointService.findMany({ where: { serviceId: service.id } });
+        for (const link of links) {
+          await syncInstancesForServicePointService(link.id);
+        }
+      }
+    }
+
+    res.status(201).json({ services: createdServices });
   } catch (error) {
     next(error);
   }
@@ -111,12 +186,55 @@ export const getServiceSchedule = async (req: Request, res: Response, next: Next
 export const updateService = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const { servicePoints, ...updates } = req.body;
 
     const service = await prisma.service.update({
       where: { id },
       data: updates,
     });
+
+    if (servicePoints && Array.isArray(servicePoints)) {
+      for (const sp of servicePoints) {
+        if (!sp.servicePointId || !sp.capacity || sp.capacity < 1) {
+          return res.status(400).json({ error: 'Each service point assignment needs a servicePointId and a capacity of at least 1' });
+        }
+      }
+
+      const existingLinks = await prisma.servicePointService.findMany({
+        where: { serviceId: id, isActive: true },
+      });
+
+      const requestedIds = new Set(servicePoints.map((sp: { servicePointId: string }) => sp.servicePointId));
+
+      // Deactivate links that are no longer selected
+      for (const link of existingLinks) {
+        if (!requestedIds.has(link.servicePointId)) {
+          await prisma.servicePointService.update({
+            where: { id: link.id },
+            data: { isActive: false, isOccupied: false, activatedByUserId: null, activatedAt: null },
+          });
+        }
+      }
+
+      // Create or update the requested links
+      for (const sp of servicePoints) {
+        const existing = existingLinks.find((l: typeof existingLinks[number]) => l.servicePointId === sp.servicePointId);
+        let linkId: string;
+        if (existing) {
+          await prisma.servicePointService.update({
+            where: { id: existing.id },
+            data: { isActive: true, capacity: sp.capacity },
+          });
+          linkId = existing.id;
+        } else {
+          const created = await prisma.servicePointService.create({
+            data: { servicePointId: sp.servicePointId, serviceId: id, capacity: sp.capacity },
+          });
+          linkId = created.id;
+        }
+        await syncInstancesForServicePointService(linkId);
+      }
+    }
 
     res.json(service);
   } catch (error) {
