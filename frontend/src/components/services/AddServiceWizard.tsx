@@ -27,6 +27,17 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organization
     setData(prev => ({ ...prev, [key]: value }));
   };
 
+  const toggleDay = (dayIndex: number) => {
+    const current = data.activeDays ? data.activeDays.split(',').filter(Boolean) : [];
+    const asStrings = current.map(d => d.trim());
+    const dayStr = String(dayIndex);
+    const next = asStrings.includes(dayStr)
+      ? asStrings.filter(d => d !== dayStr)
+      : [...asStrings, dayStr];
+    next.sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    update('activeDays', next.join(','));
+  };
+
   const canProceedFromStep1 = data.name.trim().length > 0;
   const canProceedFromStep2 = data.locationScope === 'all' || !!data.selectedLocationId;
 
@@ -183,6 +194,24 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organization
                 <div className="form-group">
                   <label>End Time</label>
                   <input type="time" value={data.endTime} onChange={e => update('endTime', e.target.value)} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Active Days</label>
+                <div className="day-picker">
+                  {DAY_NAMES.map((label, i) => {
+                    const active = data.activeDays.split(',').map(d => d.trim()).includes(String(i));
+                    return (
+                      <button
+                        key={label}
+                        type="button"
+                        className={`day-btn ${active ? 'selected' : ''}`}
+                        onClick={() => toggleDay(i)}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
               <div className="form-group checkbox-group">
@@ -379,6 +408,26 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organization
           display: grid;
           grid-template-columns: 1fr 1fr;
           gap: 1.25rem;
+        }
+        .day-picker {
+          display: flex;
+          gap: 0.5rem;
+        }
+        .day-btn {
+          flex: 1;
+          padding: 0.6rem 0;
+          border: 2px solid #e5e7eb;
+          border-radius: 8px;
+          background: white;
+          color: #6b7280;
+          font-size: 0.8rem;
+          font-weight: 600;
+          cursor: pointer;
+        }
+        .day-btn.selected {
+          border-color: var(--primary);
+          background: rgba(20, 184, 166, 0.1);
+          color: var(--primary);
         }
         .checkbox-group label {
           display: flex;
