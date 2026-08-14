@@ -346,23 +346,17 @@ const QueueManagementPage: React.FC = () => {
 
   const handleCallNext = async () => {
     if (!operatorData?.queue?.id) return;
-    
-    // Require an instance to be selected (new instance-based flow)
-    // Fall back to legacy service point if instances not available
+
     const instanceId = selectedInstanceId;
     const servicePointId = selectedServicePoint;
-    
+
     if (!instanceId && !servicePointId) {
       setError('Please select a service desk before calling the next customer');
       return;
     }
-    
+
     try {
-      // Use the selected instance's service point ID for the backend call
-      // The backend associates the entry with the service point AND instance
-      const instance = servicePointInstances.find(i => i.id === instanceId);
-      const baseId = instance?.servicePointId || getBaseServicePointId(servicePointId);
-      await api.callNextWithServicePoint(operatorData.queue.id, baseId, instanceId || undefined);
+      await api.callNextWithServicePoint(operatorData.queue.id, instanceId || undefined);
       await refreshQueue();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
