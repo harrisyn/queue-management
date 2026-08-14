@@ -226,7 +226,19 @@ export const getActiveServicePoints = async (req: Request, res: Response, next: 
       };
     });
 
-    res.json(displayData);
+    // A service point linked to multiple services at this location produces
+    // one link-row (and thus one entry above) per service. Dedupe by service
+    // point id before responding, preferring an entry that's currently
+    // serving someone if any of its links has one.
+    const dedupedById = new Map<string, typeof displayData[number]>();
+    for (const entry of displayData) {
+      const existing = dedupedById.get(entry.id);
+      if (!existing || (!existing.currentlyServing && entry.currentlyServing)) {
+        dedupedById.set(entry.id, entry);
+      }
+    }
+
+    res.json(Array.from(dedupedById.values()));
   } catch (error) {
     next(error);
   }
