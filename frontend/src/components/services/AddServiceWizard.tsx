@@ -3,8 +3,10 @@
 import React, { useState } from 'react';
 import type { Location } from '@/types';
 import { initialWizardData, type WizardData } from './wizardTypes';
+import { ServicePointsDeskPicker } from './ServicePointsDeskPicker';
 
 interface AddServiceWizardProps {
+  organizationId: string;
   locations: Location[];
   onClose: () => void;
   onSubmit: (data: WizardData) => Promise<void>;
@@ -12,7 +14,7 @@ interface AddServiceWizardProps {
 
 const STEP_LABELS = ['Basic Info', 'Location(s)', 'Schedule', 'Service Points & Desks', 'Review'];
 
-export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ locations, onClose, onSubmit }) => {
+export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organizationId, locations, onClose, onSubmit }) => {
   const [step, setStep] = useState(0);
   const [data, setData] = useState<WizardData>(initialWizardData);
   const [submitting, setSubmitting] = useState(false);
@@ -158,7 +160,50 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ locations, o
             </div>
           )}
 
-          {/* Steps 2 (schedule) and 3 (service points) are added in the next task */}
+          {step === 2 && (
+            <div className="wizard-step-content">
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Slot Duration (minutes)</label>
+                  <input type="number" min={5} value={data.slotDuration} onChange={e => update('slotDuration', parseInt(e.target.value, 10) || 15)} />
+                </div>
+                <div className="form-group">
+                  <label>Concurrent Limit</label>
+                  <input type="number" min={1} value={data.concurrentLimit} onChange={e => update('concurrentLimit', parseInt(e.target.value, 10) || 1)} />
+                </div>
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Start Time</label>
+                  <input type="time" value={data.startTime} onChange={e => update('startTime', e.target.value)} />
+                </div>
+                <div className="form-group">
+                  <label>End Time</label>
+                  <input type="time" value={data.endTime} onChange={e => update('endTime', e.target.value)} />
+                </div>
+              </div>
+              <div className="form-group checkbox-group">
+                <label>
+                  <input type="checkbox" checked={data.isActive} onChange={e => update('isActive', e.target.checked)} />
+                  Active (customers can join this service's queue)
+                </label>
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="wizard-step-content">
+              <p className="scope-hint">
+                Pick which service points (desks/counters) can serve this service, and how many desks each provides.
+                {data.locationScope === 'all' && ' This same assignment is applied at every selected location.'}
+              </p>
+              <ServicePointsDeskPicker
+                organizationId={organizationId}
+                selected={data.servicePoints}
+                onChange={sps => update('servicePoints', sps)}
+              />
+            </div>
+          )}
         </div>
 
         <div className="wizard-footer">
@@ -166,6 +211,7 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ locations, o
           <div className="wizard-footer-spacer" />
           {step === 0 && <button className="btn-primary" disabled={!canProceedFromStep1} onClick={handleNext}>Next</button>}
           {step === 1 && <button className="btn-primary" disabled={!canProceedFromStep2} onClick={handleNext}>Next</button>}
+          {(step === 2 || step === 3) && <button className="btn-primary" onClick={handleNext}>Next</button>}
           {step === STEP_LABELS.length - 1 && (
             <button className="btn-primary" disabled={submitting} onClick={handleSubmit}>
               {submitting ? 'Creating...' : 'Create Service'}
