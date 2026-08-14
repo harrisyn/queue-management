@@ -7,7 +7,7 @@ import api from '@/api/client';
 import Layout from '@/components/Layout';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { Icon } from '@/components/ui';
-import type { Location, ServicePoint, ServicePointType } from '@/types';
+import type { ServicePoint, ServicePointType } from '@/types';
 
 const SERVICE_POINT_TYPES: { value: ServicePointType; label: string; icon: LucideIcon }[] = [
   { value: 'RECEPTION', label: 'Reception', icon: Building2 },
@@ -22,14 +22,12 @@ const SERVICE_POINT_TYPES: { value: ServicePointType; label: string; icon: Lucid
 
 const ServicePointsPage: React.FC = () => {
   const { user } = useAuthContext();
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [servicePoints, setServicePoints] = useState<ServicePoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingPoint, setEditingPoint] = useState<ServicePoint | null>(null);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -40,44 +38,24 @@ const ServicePointsPage: React.FC = () => {
   });
 
   useEffect(() => {
-    loadLocations();
+    loadServicePoints();
   }, [user]);
 
-  useEffect(() => {
-    if (selectedLocation) {
-      loadServicePoints(selectedLocation);
-    }
-  }, [selectedLocation]);
-
-  const loadLocations = async () => {
+  const loadServicePoints = async () => {
     if (!user?.organizationId) {
-      // No organization on this account (e.g. a superadmin). Never guess an
-      // org - render the empty state instead of leaking another tenant's data.
-      setLocations([]);
+      setServicePoints([]);
       setLoading(false);
       return;
     }
     try {
-      const locs = await api.getLocations(user.organizationId);
-      setLocations(locs);
-      if (locs.length > 0) {
-        setSelectedLocation(locs[0].id);
-      }
-    } catch (err) {
-      console.error('Failed to load locations', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadServicePoints = async (locationId: string) => {
-    try {
-      const points = await api.getServicePoints(locationId);
+      const points = await api.getServicePoints(user.organizationId);
       setServicePoints(points);
       setError('');
     } catch (err) {
       console.error('Failed to load service points', err);
       setError('Failed to load service points');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -111,18 +89,19 @@ const ServicePointsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       if (editingPoint) {
         await api.updateServicePoint(editingPoint.id, formData);
       } else {
+        if (!user?.organizationId) return;
         await api.createServicePoint({
-          locationId: selectedLocation,
+          organizationId: user.organizationId,
           ...formData,
         });
       }
-      
-      await loadServicePoints(selectedLocation);
+
+      await loadServicePoints();
       handleCloseModal();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
@@ -132,10 +111,10 @@ const ServicePointsPage: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this service point?')) return;
-    
+
     try {
       await api.deleteServicePoint(id);
-      await loadServicePoints(selectedLocation);
+      await loadServicePoints();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       setError(error.response?.data?.error || 'Failed to delete service point');
@@ -145,7 +124,7 @@ const ServicePointsPage: React.FC = () => {
   const handleToggleActive = async (point: ServicePoint) => {
     try {
       await api.updateServicePoint(point.id, { isActive: !point.isActive });
-      await loadServicePoints(selectedLocation);
+      await loadServicePoints();
     } catch (err) {
       console.error('Failed to toggle active state', err);
     }
@@ -217,17 +196,6 @@ const ServicePointsPage: React.FC = () => {
             </div>
 
             <div className="header-actions">
-              <div className="selector">
-                <label>Location</label>
-                <select 
-                  value={selectedLocation} 
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                >
-                  {locations.map(loc => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
-                  ))}
-                </select>
-              </div>
               <button className="add-btn" onClick={() => handleOpenModal()}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="12" y1="5" x2="12" y2="19" />
@@ -328,6 +296,10 @@ const ServicePointsPage: React.FC = () => {
                       <span className={`status ${point.isActive ? 'active' : 'inactive'}`}>
                         {point.isActive ? 'Active' : 'Inactive'}
                       </span>
+                    </div>
+                    <div className="detail">
+                      <span className="label">Used In</span>
+                      <span className="value">{point.usedInServicesCount ?? 0} service{point.usedInServicesCount === 1 ? '' : 's'}</span>
                     </div>
                   </div>
                 </div>
@@ -474,27 +446,6 @@ const ServicePointsPage: React.FC = () => {
             display: flex;
             align-items: center;
             gap: 1rem;
-          }
-
-          .selector {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-          }
-
-          .selector label {
-            font-size: 0.75rem;
-            opacity: 0.9;
-          }
-
-          .selector select {
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
-            border: none;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.95);
-            color: var(--text);
-            min-width: 160px;
           }
 
           .add-btn {
