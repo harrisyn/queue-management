@@ -27,15 +27,33 @@ export const createService = async (req: Request, res: Response, next: NextFunct
       return res.status(400).json({ error: 'At least one locationId is required' });
     }
 
-    // Resolve the organization from the first location and verify every
-    // requested location belongs to it, so a caller can't slip in another org's location.
-    const locations = await prisma.location.findMany({ where: { id: { in: locationIds } } });
-    if (locations.length !== locationIds.length) {
-      return res.status(404).json({ error: 'One or more locations not found' });
+    // Resolve the caller's own organization - never trust the org implied by
+    // caller-controlled locationIds/servicePointIds for authorization or limit checks.
+    const callerUserId = (req as any).user?.userId;
+    if (!callerUserId) {
+      return res.status(401).json({ error: 'Authentication required' });
     }
-    const organizationId = locations[0].organizationId;
-    if (locations.some((l: typeof locations[number]) => l.organizationId !== organizationId)) {
-      return res.status(400).json({ error: 'All target locations must belong to the same organization' });
+    const callerUser = await prisma.user.findUnique({ where: { id: callerUserId }, select: { organizationId: true } });
+    if (!callerUser?.organizationId) {
+      return res.status(403).json({ error: 'User is not associated with an organization' });
+    }
+    const organizationId = callerUser.organizationId;
+
+    // Verify every requested location belongs to the caller's own organization.
+    const locations = await prisma.location.findMany({ where: { id: { in: locationIds }, organizationId } });
+    if (locations.length !== locationIds.length) {
+      return res.status(404).json({ error: 'One or more locations not found in your organization' });
+    }
+
+    if (servicePoints && Array.isArray(servicePoints) && servicePoints.length > 0) {
+      const spIds = servicePoints.map((sp: { servicePointId: string }) => sp.servicePointId);
+      const ownedServicePoints = await prisma.servicePoint.findMany({
+        where: { id: { in: spIds }, organizationId },
+        select: { id: true },
+      });
+      if (ownedServicePoints.length !== new Set(spIds).size) {
+        return res.status(404).json({ error: 'One or more service points not found in your organization' });
+      }
     }
 
     const { current, limit } = await checkLimit(organizationId, 'services');
@@ -188,27 +206,34 @@ export const updateService = async (req: Request, res: Response, next: NextFunct
     const { id } = req.params;
     const { servicePoints, ...updates } = req.body;
 
-    const service = await prisma.service.update({
-      where: { id },
-      data: updates,
-    });
-
+    // Validate the servicePoints payload BEFORE writing anything, so a bad
+    // request never commits the service's other field changes first.
     if (servicePoints && Array.isArray(servicePoints)) {
       for (const sp of servicePoints) {
         if (!sp.servicePointId || !sp.capacity || sp.capacity < 1) {
           return res.status(400).json({ error: 'Each service point assignment needs a servicePointId and a capacity of at least 1' });
         }
       }
+    }
 
+    const service = await prisma.service.update({
+      where: { id },
+      data: updates,
+    });
+
+    if (servicePoints && Array.isArray(servicePoints)) {
+      // Fetch ALL links (active or not) - a previously-deactivated link must be found
+      // and reactivated here, not recreated, or it collides with the unique constraint
+      // on (servicePointId, serviceId).
       const existingLinks = await prisma.servicePointService.findMany({
-        where: { serviceId: id, isActive: true },
+        where: { serviceId: id },
       });
 
       const requestedIds = new Set(servicePoints.map((sp: { servicePointId: string }) => sp.servicePointId));
 
-      // Deactivate links that are no longer selected
+      // Deactivate links that are no longer selected (skip already-inactive ones)
       for (const link of existingLinks) {
-        if (!requestedIds.has(link.servicePointId)) {
+        if (link.isActive && !requestedIds.has(link.servicePointId)) {
           await prisma.servicePointService.update({
             where: { id: link.id },
             data: { isActive: false, isOccupied: false, activatedByUserId: null, activatedAt: null },
