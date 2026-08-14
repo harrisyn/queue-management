@@ -1,31 +1,79 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 
-// Get all service points for a location
+// Ensure a service-point-to-service assignment has exactly `capacity` active
+// ServicePointInstance rows. Creates missing instances and deactivates
+// (never deletes) excess ones. Exported so service.controller.ts's bulk
+// service creation (Task 6) can reuse it without duplicating the logic.
+export async function syncInstancesForServicePointService(servicePointServiceId: string) {
+  const link = await prisma.servicePointService.findUnique({
+    where: { id: servicePointServiceId },
+    include: { instances: true, servicePoint: true },
+  });
+
+  if (!link) return;
+
+  const currentCount = link.instances.length;
+  const targetCount = link.capacity;
+
+  if (currentCount < targetCount) {
+    for (let i = currentCount + 1; i <= targetCount; i++) {
+      await prisma.servicePointInstance.create({
+        data: {
+          servicePointServiceId,
+          instanceNumber: i,
+          displayName: `${link.servicePoint.displayName || link.servicePoint.name} ${i}`,
+          isActive: link.isActive,
+        },
+      });
+    }
+  }
+
+  if (currentCount > targetCount) {
+    await prisma.servicePointInstance.updateMany({
+      where: { servicePointServiceId, instanceNumber: { gt: targetCount } },
+      data: { isActive: false },
+    });
+  }
+
+  await prisma.servicePointInstance.updateMany({
+    where: { servicePointServiceId, instanceNumber: { lte: targetCount } },
+    data: { isActive: link.isActive },
+  });
+}
+
+// Get all service point definitions for an organization
 export const getServicePoints = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { locationId } = req.params;
+    const { organizationId } = req.params;
 
     const servicePoints = await prisma.servicePoint.findMany({
-      where: { locationId },
+      where: { organizationId },
       orderBy: [{ type: 'asc' }, { name: 'asc' }],
       include: {
         services: {
-          select: {
-            serviceId: true,
-            isActive: true,
-          },
+          where: { isActive: true },
+          select: { serviceId: true },
         },
       },
     });
 
-    res.json(servicePoints);
+    res.json(servicePoints.map((sp: typeof servicePoints[number]) => ({
+      id: sp.id,
+      organizationId: sp.organizationId,
+      name: sp.name,
+      displayName: sp.displayName,
+      type: sp.type,
+      isActive: sp.isActive,
+      capacity: sp.capacity,
+      usedInServicesCount: sp.services.length,
+    })));
   } catch (error) {
     next(error);
   }
 };
 
-// Get single service point
+// Get a single service point definition, with its current service assignments
 export const getServicePoint = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -33,14 +81,10 @@ export const getServicePoint = async (req: Request, res: Response, next: NextFun
     const servicePoint = await prisma.servicePoint.findUnique({
       where: { id },
       include: {
-        location: true,
-        entries: {
-          where: { status: 'SERVING' },
-          include: {
-            user: {
-              select: { firstName: true, lastName: true },
-            },
-          },
+        organization: { select: { id: true, name: true } },
+        services: {
+          where: { isActive: true },
+          include: { service: { select: { id: true, name: true, locationId: true } } },
         },
       },
     });
@@ -55,23 +99,19 @@ export const getServicePoint = async (req: Request, res: Response, next: NextFun
   }
 };
 
-// Create service point
+// Create a service point definition
 export const createServicePoint = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { locationId, name, displayName, type, capacity } = req.body;
+    const { organizationId, name, displayName, type, capacity } = req.body;
 
-    // Verify location exists
-    const location = await prisma.location.findUnique({
-      where: { id: locationId },
-    });
-
-    if (!location) {
-      return res.status(404).json({ error: 'Location not found' });
+    const organization = await prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
     }
 
     const servicePoint = await prisma.servicePoint.create({
       data: {
-        locationId,
+        organizationId,
         name,
         displayName: displayName || name,
         type: type || 'OTHER',
@@ -85,7 +125,7 @@ export const createServicePoint = async (req: Request, res: Response, next: Next
   }
 };
 
-// Update service point
+// Update a service point definition
 export const updateServicePoint = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
@@ -108,28 +148,22 @@ export const updateServicePoint = async (req: Request, res: Response, next: Next
   }
 };
 
-// Delete service point
+// Delete a service point definition
 export const deleteServicePoint = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
 
-    // Check if any entries are being served at this point
-    const activeEntries = await prisma.queueEntry.count({
-      where: {
-        servicePointId: id,
-        status: 'SERVING',
-      },
+    const activeLinks = await prisma.servicePointService.count({
+      where: { servicePointId: id, isActive: true },
     });
 
-    if (activeEntries > 0) {
-      return res.status(400).json({ 
-        error: 'Cannot delete service point while entries are being served' 
+    if (activeLinks > 0) {
+      return res.status(400).json({
+        error: `This service point is still assigned to ${activeLinks} service${activeLinks > 1 ? 's' : ''}. Remove it from those services first.`,
       });
     }
 
-    await prisma.servicePoint.delete({
-      where: { id },
-    });
+    await prisma.servicePoint.delete({ where: { id } });
 
     res.json({ success: true });
   } catch (error) {
