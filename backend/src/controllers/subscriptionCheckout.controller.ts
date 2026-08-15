@@ -12,7 +12,7 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
     const { planId, provider, billingCycle } = req.body as {
       planId: string;
       provider: ProviderName;
-      billingCycle: 'monthly' | 'yearly';
+      billingCycle: 'monthly' | 'quarterly' | 'yearly';
     };
 
     if (!planId || !provider) {
@@ -42,8 +42,9 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
       throw err;
     }
 
-    const cycle = billingCycle === 'yearly' ? 'yearly' : 'monthly';
-    const amount = cycle === 'yearly' ? Number(plan.priceYearly) : Number(plan.priceMonthly);
+    const cycle: 'monthly' | 'quarterly' | 'yearly' =
+      billingCycle === 'yearly' ? 'yearly' : billingCycle === 'quarterly' ? 'quarterly' : 'monthly';
+    const amount = cycle === 'yearly' ? Number(plan.priceYearly) : cycle === 'quarterly' ? Number(plan.priceQuarterly) : Number(plan.priceMonthly);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8003';
 
     let redirectUrl: string;
