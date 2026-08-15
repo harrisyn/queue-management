@@ -298,6 +298,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
       code,
       description,
       priceMonthly,
+      priceQuarterly,
       priceYearly,
       currency,
       maxLocations,
@@ -306,11 +307,20 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
       maxQueueEntriesPerDay,
       features,
       displayOrder,
+      tierRank,
       isDefault,
+      isRecommended,
+      trialDurationDays,
+      expiredFallbackPlanId,
+      upgradePlanId,
     } = req.body;
 
     if (!name || !code) {
       return res.status(400).json({ error: 'Name and code are required' });
+    }
+
+    if (expiredFallbackPlanId && expiredFallbackPlanId === code) {
+      return res.status(400).json({ error: 'A plan cannot be its own fallback' });
     }
 
     // Check for duplicate code
@@ -329,6 +339,13 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
         data: { isDefault: false },
       });
     }
+    // If this is set as recommended, unset any other recommended plan
+    if (isRecommended) {
+      await prisma.subscriptionPlan.updateMany({
+        where: { isRecommended: true },
+        data: { isRecommended: false },
+      });
+    }
 
     const plan = await prisma.subscriptionPlan.create({
       data: {
@@ -336,6 +353,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
         code,
         description,
         priceMonthly: priceMonthly || 0,
+        priceQuarterly: priceQuarterly || 0,
         priceYearly: priceYearly || 0,
         currency: currency || 'USD',
         maxLocations: maxLocations || null,
@@ -344,7 +362,12 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
         maxQueueEntriesPerDay: maxQueueEntriesPerDay || null,
         features: features || {},
         displayOrder: displayOrder || 0,
+        tierRank: tierRank || 0,
         isDefault: isDefault || false,
+        isRecommended: isRecommended || false,
+        trialDurationDays: trialDurationDays || null,
+        expiredFallbackPlanId: expiredFallbackPlanId || null,
+        upgradePlanId: upgradePlanId || null,
       },
     });
 
@@ -362,6 +385,7 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
       name,
       description,
       priceMonthly,
+      priceQuarterly,
       priceYearly,
       currency,
       maxLocations,
@@ -370,8 +394,13 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
       maxQueueEntriesPerDay,
       features,
       displayOrder,
+      tierRank,
       isActive,
       isDefault,
+      isRecommended,
+      trialDurationDays,
+      expiredFallbackPlanId,
+      upgradePlanId,
     } = req.body;
 
     const existing = await prisma.subscriptionPlan.findUnique({
@@ -382,11 +411,22 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
       return res.status(404).json({ error: 'Plan not found' });
     }
 
+    if (expiredFallbackPlanId === id || upgradePlanId === id) {
+      return res.status(400).json({ error: 'A plan cannot reference itself as its fallback or upgrade target' });
+    }
+
     // If this is set as default, unset other defaults
     if (isDefault && !existing.isDefault) {
       await prisma.subscriptionPlan.updateMany({
         where: { isDefault: true, id: { not: id } },
         data: { isDefault: false },
+      });
+    }
+    // If this is set as recommended, unset any other recommended plan
+    if (isRecommended && !existing.isRecommended) {
+      await prisma.subscriptionPlan.updateMany({
+        where: { isRecommended: true, id: { not: id } },
+        data: { isRecommended: false },
       });
     }
 
@@ -396,6 +436,7 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
         name: name ?? undefined,
         description: description ?? undefined,
         priceMonthly: priceMonthly ?? undefined,
+        priceQuarterly: priceQuarterly ?? undefined,
         priceYearly: priceYearly ?? undefined,
         currency: currency ?? undefined,
         maxLocations: maxLocations === null ? null : (maxLocations ?? undefined),
@@ -404,8 +445,13 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
         maxQueueEntriesPerDay: maxQueueEntriesPerDay === null ? null : (maxQueueEntriesPerDay ?? undefined),
         features: features ?? undefined,
         displayOrder: displayOrder ?? undefined,
+        tierRank: tierRank ?? undefined,
         isActive: isActive ?? undefined,
         isDefault: isDefault ?? undefined,
+        isRecommended: isRecommended ?? undefined,
+        trialDurationDays: trialDurationDays === null ? null : (trialDurationDays ?? undefined),
+        expiredFallbackPlanId: expiredFallbackPlanId === null ? null : (expiredFallbackPlanId ?? undefined),
+        upgradePlanId: upgradePlanId === null ? null : (upgradePlanId ?? undefined),
       },
     });
 
