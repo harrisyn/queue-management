@@ -1,6 +1,14 @@
 import Stripe from 'stripe';
 import { PaymentProvider, CreateCheckoutParams, CheckoutResult, PaymentWebhookEvent } from './types';
 
+// Stripe's `recurring.interval` has no native "quarter" value - quarterly
+// billing is expressed as 3 one-month intervals. Exported for testing.
+export function resolveStripeInterval(billingCycle: 'monthly' | 'quarterly' | 'yearly'): { interval: 'month' | 'year'; interval_count: number } {
+  if (billingCycle === 'yearly') return { interval: 'year', interval_count: 1 };
+  if (billingCycle === 'quarterly') return { interval: 'month', interval_count: 3 };
+  return { interval: 'month', interval_count: 1 };
+}
+
 export class StripeProvider implements PaymentProvider {
   name = 'stripe' as const;
   private client: Stripe;
@@ -23,7 +31,7 @@ export class StripeProvider implements PaymentProvider {
             currency: params.currency.toLowerCase(),
             product_data: { name: `${params.planName} (${params.billingCycle})` },
             unit_amount: Math.round(params.amount * 100),
-            recurring: { interval: params.billingCycle === 'yearly' ? 'year' : 'month' },
+            recurring: resolveStripeInterval(params.billingCycle),
           },
           quantity: 1,
         },

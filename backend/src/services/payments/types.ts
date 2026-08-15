@@ -7,7 +7,7 @@ export interface CreateCheckoutParams {
   planName: string;
   amount: number; // in the plan's base currency unit (e.g. dollars, not cents)
   currency: string;
-  billingCycle: 'monthly' | 'yearly';
+  billingCycle: 'monthly' | 'quarterly' | 'yearly';
   successUrl: string;
   cancelUrl: string;
 }
