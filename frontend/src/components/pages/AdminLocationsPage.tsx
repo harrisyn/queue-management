@@ -1,10 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { MapPin } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
+import { Icon, PageHeader } from '@/components/ui';
 
 interface Location {
   id: string;
@@ -47,7 +49,7 @@ export default function AdminLocationsPage() {
     } else {
       setLoading(false);
     }
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   const loadOrgs = async () => {
     setLoading(true);
@@ -57,9 +59,10 @@ export default function AdminLocationsPage() {
         setOrgs([org]);
         setOrgId(org.id);
       } else {
-        const data = await api.getOrganizations();
-        setOrgs(data);
-        if (data.length) setOrgId(data[0].id);
+        // No organization on this account (e.g. a superadmin). Never guess an
+        // org - render the empty state instead of leaking another tenant's data.
+        setOrgs([]);
+        setOrgId(null);
       }
     } catch (err) {
       console.error(err);
@@ -200,31 +203,26 @@ export default function AdminLocationsPage() {
     );
   }
 
+  if (!loading && !user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
-      <div style={pageContainer}>
-        {/* Header */}
-        <div style={headerSection}>
-          <div style={headerContent}>
-            <div style={headerLeft}>
-              <div style={headerIcon}>
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
-              </div>
-              <div>
-                <h1 style={pageTitle}>Locations</h1>
-                <p style={pageSubtitle}>
-                  Manage your physical locations and their public access codes
-                  <span style={{ marginLeft: '8px', fontSize: '12px', color: '#6b7280' }}>
-                    ({limits.locations.current}/{limits.locations.limit} used)
-                  </span>
-                </p>
-              </div>
-            </div>
-            <button 
-              onClick={() => { resetForm(); setShowForm(true); }} 
+      <div>
+        <PageHeader
+          icon={MapPin}
+          title="Locations"
+          subtitle={`Manage your physical locations and their public access codes (${limits.locations.current}/${limits.locations.limit} used)`}
+          actions={
+            <button
+              onClick={() => { resetForm(); setShowForm(true); }}
               style={{
                 ...addButton,
                 ...(canCreate('locations') ? {} : { opacity: 0.5, cursor: 'not-allowed' }),
@@ -237,8 +235,8 @@ export default function AdminLocationsPage() {
               </svg>
               Add Location
             </button>
-          </div>
-        </div>
+          }
+        />
 
         {/* Upgrade prompt if limit reached */}
         {!canCreate('locations') && (
@@ -561,7 +559,9 @@ export default function AdminLocationsPage() {
           <div style={locationsGrid}>
             {locations.length === 0 && !showForm && (
               <div style={emptyState}>
-                <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📍</div>
+                <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+                  <Icon icon={MapPin} size={48} color="#14b8a6" strokeWidth={1.5} />
+                </div>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>No locations yet</h3>
                 <p style={{ color: '#6b7280', marginBottom: '1rem' }}>Create your first location to start managing queues.</p>
                 <button onClick={() => setShowForm(true)} style={submitButton}>
@@ -640,70 +640,18 @@ export default function AdminLocationsPage() {
 }
 
 // Styles
-const pageContainer: React.CSSProperties = {
-  padding: '0',
-  maxWidth: '1200px',
-  margin: '0 auto',
-};
-
-const headerSection: React.CSSProperties = {
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-  borderRadius: '16px',
-  padding: '2rem',
-  marginBottom: '1.5rem',
-  color: 'white',
-  boxShadow: '0 10px 40px rgba(99, 102, 241, 0.3)',
-};
-
-const headerContent: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  flexWrap: 'wrap',
-  gap: '1rem',
-};
-
-const headerLeft: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '1rem',
-};
-
-const headerIcon: React.CSSProperties = {
-  width: '56px',
-  height: '56px',
-  background: 'rgba(255, 255, 255, 0.2)',
-  borderRadius: '12px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  backdropFilter: 'blur(10px)',
-};
-
-const pageTitle: React.CSSProperties = {
-  margin: 0,
-  fontSize: '1.75rem',
-  fontWeight: 700,
-};
-
-const pageSubtitle: React.CSSProperties = {
-  margin: '0.25rem 0 0',
-  opacity: 0.9,
-};
-
 const addButton: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: 'rgba(255, 255, 255, 0.2)',
-  color: 'white',
-  border: '1px solid rgba(255, 255, 255, 0.3)',
+  background: 'white',
+  color: 'var(--primary)',
+  border: 'none',
   borderRadius: '10px',
   fontSize: '0.95rem',
   fontWeight: 600,
   cursor: 'pointer',
-  backdropFilter: 'blur(10px)',
 };
 
 const filterBar: React.CSSProperties = {
@@ -755,7 +703,7 @@ const detailsHeader: React.CSSProperties = {
   alignItems: 'center',
   padding: '1.25rem 1.5rem',
   borderBottom: '1px solid #e5e7eb',
-  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  background: '#f8fafc',
 };
 
 const detailsTitle: React.CSSProperties = {
@@ -914,7 +862,7 @@ const editButtonLarge: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '8px',
@@ -951,7 +899,7 @@ const formHeader: React.CSSProperties = {
   alignItems: 'center',
   padding: '1.25rem 1.5rem',
   borderBottom: '1px solid #e5e7eb',
-  background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+  background: '#f8fafc',
 };
 
 const formTitle: React.CSSProperties = {
@@ -1029,7 +977,7 @@ const submitButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
   borderRadius: '8px',
   border: 'none',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
@@ -1064,8 +1012,8 @@ const locationCard: React.CSSProperties = {
 };
 
 const locationCardActive: React.CSSProperties = {
-  borderColor: '#6366f1',
-  boxShadow: '0 8px 30px rgba(99, 102, 241, 0.2)',
+  borderColor: '#14b8a6',
+  boxShadow: '0 8px 30px rgba(20, 184, 166, 0.2)',
 };
 
 const cardHeader: React.CSSProperties = {
@@ -1078,12 +1026,12 @@ const cardHeader: React.CSSProperties = {
 const cardIcon: React.CSSProperties = {
   width: '48px',
   height: '48px',
-  background: 'linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%)',
+  background: 'rgba(20, 184, 166, 0.1)',
   borderRadius: '12px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#6366f1',
+  color: '#14b8a6',
 };
 
 const publicCodeBadge: React.CSSProperties = {
@@ -1128,7 +1076,7 @@ const cardUrlPreview: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   fontSize: '0.75rem',
-  color: '#6366f1',
+  color: '#0d9488',
   marginBottom: '1rem',
 };
 

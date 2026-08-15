@@ -1,9 +1,13 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { Info, Settings } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { Icon, PageHeader } from '@/components/ui';
+import { buildTenantUrl } from '@/lib/subdomain';
+import { isReservedSlug } from '@/lib/reservedSlugs';
 
 interface IdentityField {
   key: string;
@@ -63,8 +67,6 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (isAdmin && user?.organizationId) {
       loadOrganization();
-    } else if (isAdmin) {
-      loadFirstOrg();
     } else {
       setLoading(false);
     }
@@ -106,46 +108,14 @@ export default function AdminSettingsPage() {
     }
   };
 
-  const loadFirstOrg = async () => {
-    try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const org = orgs[0];
-        setOrganization(org);
-        setFormData({
-          name: org.name || '',
-          slug: org.slug || '',
-          email: org.email || '',
-          phone: org.phone || '',
-        });
-        
-        if (org.identityFieldsConfig) {
-          const fields = Object.entries(org.identityFieldsConfig).map(([key, config]: [string, any]) => ({
-            key,
-            label: config.label || key,
-            type: config.type || 'text',
-            required: config.required || false,
-          }));
-          setIdentityFields(fields);
-        } else {
-          setIdentityFields(DEFAULT_IDENTITY_FIELDS.slice(0, 3).map(f => ({
-            ...f,
-            required: false,
-          })));
-        }
-        
-        setDisplayMode(org.defaultDisplayMode || 'TICKET_ONLY');
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!organization) return;
+
+    if (formData.slug && isReservedSlug(formData.slug)) {
+      setMessage({ type: 'error', text: 'This slug is reserved and cannot be used.' });
+      return;
+    }
 
     setSaving(true);
     setMessage(null);
@@ -235,6 +205,16 @@ export default function AdminSettingsPage() {
     );
   }
 
+  if (!user?.organizationId && !organization) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
+
   // Available fields that haven't been added yet
   const availableFields = DEFAULT_IDENTITY_FIELDS.filter(
     f => !identityFields.find(existing => existing.key === f.key)
@@ -242,16 +222,12 @@ export default function AdminSettingsPage() {
 
   return (
     <Layout>
-      <div style={{ padding: '1.5rem', maxWidth: '900px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#111827' }}>
-            Organization Settings
-          </h1>
-          <p style={{ color: '#6b7280' }}>
-            Manage your organization details, customer fields, and display preferences.
-          </p>
-        </div>
+      <div>
+        <PageHeader
+          icon={Settings}
+          title="Organization Settings"
+          subtitle="Manage your organization details, customer fields, and display preferences."
+        />
 
         {/* Message */}
         {message && (
@@ -357,8 +333,10 @@ export default function AdminSettingsPage() {
                     </button>
                   </div>
                   <p style={helpText}>
-                    {formData.slug ? (
-                      <>Your public URL will be: <strong>yourdomain.com/{formData.slug}</strong></>
+                    {formData.slug && isReservedSlug(formData.slug) ? (
+                      <span style={{ color: '#dc2626' }}>This slug is reserved and can&apos;t be used.</span>
+                    ) : formData.slug ? (
+                      <>Your workspace URL will be: <strong>{buildTenantUrl(formData.slug).replace(/^https?:\/\//, '')}</strong></>
                     ) : (
                       'Create a memorable URL slug for your organization'
                     )}
@@ -492,8 +470,8 @@ export default function AdminSettingsPage() {
                       key={mode.value}
                       style={{
                         ...displayModeOption,
-                        borderColor: displayMode === mode.value ? '#6366f1' : '#e5e7eb',
-                        background: displayMode === mode.value ? '#eef2ff' : 'white',
+                        borderColor: displayMode === mode.value ? '#14b8a6' : '#e5e7eb',
+                        background: displayMode === mode.value ? 'rgba(20, 184, 166, 0.08)' : 'white',
                       }}
                     >
                       <input
@@ -525,7 +503,9 @@ export default function AdminSettingsPage() {
 
         {/* Organization ID Info */}
         <div style={infoCard}>
-          <div style={{ fontSize: '1.25rem', marginBottom: '0.5rem' }}>ℹ️</div>
+          <div style={{ marginBottom: '0.5rem' }}>
+            <Icon icon={Info} size={20} color="#6b7280" />
+          </div>
           <div>
             <p style={{ color: '#374151', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
               <strong>Organization ID:</strong>
@@ -563,7 +543,7 @@ const tabStyle: React.CSSProperties = {
 
 const activeTabStyle: React.CSSProperties = {
   ...tabStyle,
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
 };
 
@@ -599,7 +579,7 @@ const addFieldButton: React.CSSProperties = {
 const addButton: React.CSSProperties = {
   padding: '0.75rem 1rem',
   border: 'none',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '0.5rem',
   cursor: 'pointer',
@@ -710,12 +690,11 @@ const saveButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
   borderRadius: '0.5rem',
   border: 'none',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
   fontSize: '0.9375rem',
-  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
 };
 
 const infoCard: React.CSSProperties = {

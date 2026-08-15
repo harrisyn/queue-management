@@ -1,9 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { Plug, Database, FileText, Link2, Package, Search, Pause, Play, Pencil, Trash2 } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { Icon, PageHeader } from '@/components/ui';
 
 interface FieldMapping {
   id: string;
@@ -34,11 +37,11 @@ interface OrganizationSettings {
   identityFieldsConfig?: IdentityFieldConfig[];
 }
 
-const DATA_SOURCE_TYPES = [
-  { value: 'API', label: 'REST API', icon: '🔌' },
-  { value: 'DATABASE', label: 'Database', icon: '🗄️' },
-  { value: 'FILE', label: 'File Import', icon: '📁' },
-  { value: 'WEBHOOK', label: 'Webhook', icon: '🔗' },
+const DATA_SOURCE_TYPES: { value: string; label: string; icon: LucideIcon }[] = [
+  { value: 'API', label: 'REST API', icon: Plug },
+  { value: 'DATABASE', label: 'Database', icon: Database },
+  { value: 'FILE', label: 'File Import', icon: FileText },
+  { value: 'WEBHOOK', label: 'Webhook', icon: Link2 },
 ];
 
 const TRANSFORM_OPTIONS = [
@@ -329,19 +332,20 @@ export default function AdminDataSourcesPage() {
   return (
     <Layout>
       <div className="page-container">
-        <div className="page-header">
-          <div>
-            <h1>Data Sources</h1>
-            <p className="subtitle">Connect external systems (EMR, EHR, databases) to enrich customer data</p>
-          </div>
-          <button className="btn-primary" onClick={() => setShowForm(true)}>
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19" />
-              <line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            Add Data Source
-          </button>
-        </div>
+        <PageHeader
+          icon={Database}
+          title="Data Sources"
+          subtitle="Connect external systems (EMR, EHR, databases) to enrich customer data"
+          actions={
+            <button className="btn-primary" onClick={() => setShowForm(true)}>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="12" y1="5" x2="12" y2="19" />
+                <line x1="5" y1="12" x2="19" y2="12" />
+              </svg>
+              Add Data Source
+            </button>
+          }
+        />
 
         {loading ? (
           <div className="loading">Loading data sources...</div>
@@ -350,7 +354,7 @@ export default function AdminDataSourcesPage() {
             <div className="sources-list">
               {dataSources.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon">🔌</div>
+                  <div className="empty-icon"><Icon icon={Plug} size={40} color="#14b8a6" strokeWidth={1.5} /></div>
                   <h3>No data sources configured</h3>
                   <p>Add a data source to connect external systems and enrich customer data.</p>
                 </div>
@@ -363,7 +367,7 @@ export default function AdminDataSourcesPage() {
                   >
                     <div className="source-header">
                       <span className="source-icon">
-                        {DATA_SOURCE_TYPES.find(t => t.value === source.type)?.icon || '📦'}
+                        <Icon icon={DATA_SOURCE_TYPES.find(t => t.value === source.type)?.icon || Package} size={22} color="#14b8a6" />
                       </span>
                       <div className="source-info">
                         <h3>{source.name}</h3>
@@ -387,28 +391,28 @@ export default function AdminDataSourcesPage() {
                         onClick={(e) => { e.stopPropagation(); handleTest(source); }}
                         title="Test connection"
                       >
-                        🔍
+                        <Icon icon={Search} size={16} />
                       </button>
-                      <button 
-                        className="btn-icon" 
+                      <button
+                        className="btn-icon"
                         onClick={(e) => { e.stopPropagation(); handleToggleActive(source); }}
                         title={source.isActive ? 'Deactivate' : 'Activate'}
                       >
-                        {source.isActive ? '⏸️' : '▶️'}
+                        <Icon icon={source.isActive ? Pause : Play} size={16} />
                       </button>
-                      <button 
-                        className="btn-icon" 
+                      <button
+                        className="btn-icon"
                         onClick={(e) => { e.stopPropagation(); openEditForm(source); }}
                         title="Edit"
                       >
-                        ✏️
+                        <Icon icon={Pencil} size={16} />
                       </button>
-                      <button 
-                        className="btn-icon danger" 
+                      <button
+                        className="btn-icon danger"
                         onClick={(e) => { e.stopPropagation(); handleDelete(source.id); }}
                         title="Delete"
                       >
-                        🗑️
+                        <Icon icon={Trash2} size={16} />
                       </button>
                     </div>
                   </div>
@@ -573,7 +577,7 @@ export default function AdminDataSourcesPage() {
                         className={`type-option ${formData.type === type.value ? 'selected' : ''}`}
                         onClick={() => setFormData({ ...formData, type: type.value as any })}
                       >
-                        <span className="type-icon">{type.icon}</span>
+                        <span className="type-icon"><Icon icon={type.icon} size={18} /></span>
                         <span>{type.label}</span>
                       </button>
                     ))}
@@ -740,37 +744,13 @@ export default function AdminDataSourcesPage() {
         )}
 
         <style jsx>{`
-          .page-container {
-            padding: 2rem;
-            max-width: 1600px;
-            margin: 0 auto;
-          }
-
-          .page-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 2rem;
-          }
-
-          .page-header h1 {
-            margin: 0;
-            font-size: 2rem;
-            color: #1f2937;
-          }
-
-          .subtitle {
-            margin: 0.5rem 0 0;
-            color: #6b7280;
-          }
-
           .btn-primary {
             display: flex;
             align-items: center;
             gap: 0.5rem;
             padding: 0.75rem 1.5rem;
-            background: linear-gradient(135deg, #3b82f6, #2563eb);
-            color: white;
+            background: white;
+            color: var(--primary);
             border: none;
             border-radius: 10px;
             font-weight: 600;
@@ -780,7 +760,7 @@ export default function AdminDataSourcesPage() {
 
           .btn-primary:hover {
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
           }
 
           .content-grid {

@@ -32,6 +32,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { href: '/admin/invites', label: 'Invites', icon: InviteIcon, show: isAdmin },
     { href: '/admin/data-sources', label: 'Data Sources', icon: DataSourceIcon, show: isAdmin },
     { href: '/admin/settings', label: 'Settings', icon: SettingsIcon, show: isAdmin },
+    { href: '/admin/billing', label: 'Billing', icon: BillingIcon, show: isAdmin },
     { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon, show: isAdmin },
     { href: '/superadmin', label: 'Super Admin', icon: SuperAdminIcon, show: isSuperAdmin },
   ].filter(item => item.show);
@@ -50,17 +51,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         <Link href="/" style={logoLink}>
           <div style={logoContainer}>
             <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
-              <rect width="48" height="48" rx="12" fill="url(#sidebarGradient)" />
+              <rect width="48" height="48" rx="12" fill="#14b8a6" />
               <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-              <circle cx="24" cy="22" r="4" fill="#6366f1"/>
-              <defs>
-                <linearGradient id="sidebarGradient" x1="0" y1="0" x2="48" y2="48">
-                  <stop stopColor="#6366f1"/>
-                  <stop offset="1" stopColor="#8b5cf6"/>
-                </linearGradient>
-              </defs>
+              <circle cx="24" cy="22" r="4" fill="#0d9488"/>
             </svg>
-            <span style={logoText}>QMS</span>
+            <span style={logoText}>QueueFlow</span>
           </div>
         </Link>
 
@@ -114,17 +109,11 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
         </button>
         <Link href="/" style={mobileLogoLink}>
           <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="url(#mobileGradient)" />
+            <rect width="48" height="48" rx="12" fill="#14b8a6" />
             <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-            <circle cx="24" cy="22" r="4" fill="#6366f1"/>
-            <defs>
-              <linearGradient id="mobileGradient" x1="0" y1="0" x2="48" y2="48">
-                <stop stopColor="#6366f1"/>
-                <stop offset="1" stopColor="#8b5cf6"/>
-              </linearGradient>
-            </defs>
+            <circle cx="24" cy="22" r="4" fill="#0d9488"/>
           </svg>
-          <span style={mobileLogoText}>QMS</span>
+          <span style={mobileLogoText}>QueueFlow</span>
         </Link>
         {user && (
           <button 
@@ -178,51 +167,51 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
 // Icons
 const DashboardIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
   </svg>
 );
 
 const QueueIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
   </svg>
 );
 
 const ServicesIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
   </svg>
 );
 
 const LocationIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
   </svg>
 );
 
 const AnalyticsIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
   </svg>
 );
 
 const QRCodeIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1z" clipRule="evenodd" />
     <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100 2 1 1 0 000-2zM9 13a1 1 0 011-1h1a1 1 0 110 2v2a1 1 0 11-2 0v-3zM16 13a1 1 0 100 2h1a1 1 0 100-2h-1z" />
   </svg>
 );
 
 const InviteIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
     <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
   </svg>
 );
 
 const DataSourceIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
     <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
     <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
@@ -230,31 +219,37 @@ const DataSourceIcon = ({ active }: { active: boolean }) => (
 );
 
 const SettingsIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
   </svg>
 );
 
+const BillingIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
+    <path d="M2 4a2 2 0 012-2h12a2 2 0 012 2v1H2V4zM2 7h16v7a2 2 0 01-2 2H4a2 2 0 01-2-2V7zm2 5a1 1 0 100 2h4a1 1 0 100-2H4z" />
+  </svg>
+);
+
 const ServicePointIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
   </svg>
 );
 
 const FlowIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 100 2h.01a1 1 0 100-2H10zm-4 1a1 1 0 011-1h.01a1 1 0 110 2H7a1 1 0 01-1-1zm1-4a1 1 0 100 2h.01a1 1 0 100-2H7zm2 1a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm4-4a1 1 0 100 2h.01a1 1 0 100-2H13zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zM7 8a1 1 0 000 2h.01a1 1 0 000-2H7z" clipRule="evenodd" />
   </svg>
 );
 
 const TicketIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2a2 2 0 100-4V6z" />
   </svg>
 );
 
 const SuperAdminIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#6366f1' : '#6b7280'}>
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
   </svg>
 );
@@ -326,8 +321,8 @@ const navItemStyle: React.CSSProperties = {
 };
 
 const activeNavItemStyle: React.CSSProperties = {
-  background: '#eef2ff',
-  color: '#6366f1',
+  background: 'rgba(20, 184, 166, 0.1)',
+  color: '#0d9488',
 };
 
 const userSectionStyle: React.CSSProperties = {
@@ -348,7 +343,7 @@ const avatarStyle: React.CSSProperties = {
   width: '40px',
   height: '40px',
   borderRadius: '10px',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   display: 'flex',
   alignItems: 'center',
@@ -448,7 +443,7 @@ const mobileAvatarBtn: React.CSSProperties = {
   height: '40px',
   borderRadius: '10px',
   border: 'none',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   fontWeight: 600,
   fontSize: '0.875rem',
@@ -492,8 +487,8 @@ const mobileNavItem: React.CSSProperties = {
 };
 
 const activeMobileNavItem: React.CSSProperties = {
-  background: '#eef2ff',
-  color: '#6366f1',
+  background: 'rgba(20, 184, 166, 0.1)',
+  color: '#0d9488',
 };
 
 const mobileLogoutBtn: React.CSSProperties = {

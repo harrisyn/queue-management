@@ -2,9 +2,24 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import {
+  ClipboardList,
+  Settings,
+  MapPin,
+  Mail,
+  Building2,
+  BarChart3,
+  CheckCircle2,
+  AlertTriangle,
+  Lightbulb,
+  Rocket,
+  QrCode,
+  ChevronRight,
+} from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { Icon, PageHeader } from '@/components/ui';
 
 interface Stats {
   locations: number;
@@ -40,18 +55,15 @@ const DashboardPage: React.FC = () => {
       if (user?.organizationId) {
         const org = await api.getOrganization(user.organizationId);
         setOrganization(org);
-        
+
         // Get real stats
         const statsData = await api.getDashboardStats(user.organizationId);
         setStats(statsData);
       } else {
-        // Super admin or no org - show all orgs
-        const orgs = await api.getOrganizations();
-        if (orgs.length > 0) {
-          setOrganization(orgs[0]);
-          const statsData = await api.getDashboardStats(orgs[0].id);
-          setStats(statsData);
-        }
+        // No organization on this account (e.g. a superadmin browsing the
+        // regular tenant app shell by mistake). Never guess an org - render
+        // the empty state instead of leaking another tenant's data.
+        setOrganization(null);
       }
     } catch (err: any) {
       console.error('Failed to load dashboard', err);
@@ -72,96 +84,93 @@ const DashboardPage: React.FC = () => {
     );
   }
 
+  if (!loading && !user?.organizationId && !organization) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
+
   const quickActions = [
-    { 
-      href: '/queues', 
-      icon: '📋',
-      title: 'Manage Queues', 
+    {
+      href: '/queues',
+      icon: ClipboardList,
+      title: 'Manage Queues',
       desc: 'View and manage active queues',
-      color: '#6366f1',
-      show: isStaff 
+      show: isStaff,
     },
-    { 
-      href: '/services', 
-      icon: '⚙️',
-      title: 'Services', 
+    {
+      href: '/services',
+      icon: Settings,
+      title: 'Services',
       desc: 'Configure services and schedules',
-      color: '#8b5cf6',
-      show: isAdmin 
+      show: isAdmin,
     },
-    { 
-      href: '/admin/locations', 
-      icon: '📍',
-      title: 'Locations', 
+    {
+      href: '/admin/locations',
+      icon: MapPin,
+      title: 'Locations',
       desc: 'Manage locations and branches',
-      color: '#06b6d4',
-      show: isAdmin 
+      show: isAdmin,
     },
-    { 
-      href: '/admin/invites', 
-      icon: '✉️',
-      title: 'Invites', 
+    {
+      href: '/admin/invites',
+      icon: Mail,
+      title: 'Invites',
       desc: 'Manage staff invitations',
-      color: '#f59e0b',
-      show: isAdmin 
+      show: isAdmin,
     },
-    { 
-      href: '/admin/settings', 
-      icon: '🏢',
-      title: 'Organization', 
+    {
+      href: '/admin/settings',
+      icon: Building2,
+      title: 'Organization',
       desc: 'Edit organization details',
-      color: '#10b981',
-      show: isAdmin 
+      show: isAdmin,
     },
-    { 
-      href: '/analytics', 
-      icon: '📊',
-      title: 'Analytics', 
+    {
+      href: '/analytics',
+      icon: BarChart3,
+      title: 'Analytics',
       desc: 'View reports and metrics',
-      color: '#ec4899',
-      show: isAdmin 
+      show: isAdmin,
     },
   ].filter(action => action.show);
 
   const statCards = [
-    { label: 'Locations', value: stats?.locations ?? 0, icon: '📍', color: '#6366f1' },
-    { label: 'Services', value: stats?.services ?? 0, icon: '⚙️', color: '#8b5cf6' },
-    { label: 'Active Queues', value: stats?.activeQueues ?? 0, icon: '📋', color: '#10b981' },
-    { label: 'Served Today', value: stats?.todayServed ?? 0, icon: '✅', color: '#f59e0b' },
+    { label: 'Locations', value: stats?.locations ?? 0, icon: MapPin },
+    { label: 'Services', value: stats?.services ?? 0, icon: Settings },
+    { label: 'Active Queues', value: stats?.activeQueues ?? 0, icon: ClipboardList },
+    { label: 'Served Today', value: stats?.todayServed ?? 0, icon: CheckCircle2 },
   ];
 
   return (
     <Layout>
       <div style={containerStyle}>
-        {/* Header */}
-        <div style={headerSection}>
-          <div>
-            <h1 style={welcomeTitle}>Welcome back, {user?.firstName}! 👋</h1>
-            <p style={welcomeSubtitle}>
-              {organization ? (
-                <>Managing <strong>{organization.name}</strong></>
-              ) : (
-                'Here\'s what\'s happening with your queues today.'
-              )}
-            </p>
-          </div>
-          <div style={headerActions}>
-            {organization && (
-              <Link href={`/admin/qr`} style={primaryButton}>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1z" clipRule="evenodd" />
-                  <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100 2 1 1 0 000-2zM9 13a1 1 0 011-1h1a1 1 0 110 2v2a1 1 0 11-2 0v-3zM16 13a1 1 0 100 2h1a1 1 0 100-2h-1z" />
-                </svg>
+        <PageHeader
+          icon={ClipboardList}
+          title={`Welcome back, ${user?.firstName}!`}
+          subtitle={
+            organization
+              ? `Managing ${organization.name}`
+              : "Here's what's happening with your queues today."
+          }
+          actions={
+            organization && (
+              <Link href="/admin/qr" className="btn btn-primary">
+                <Icon icon={QrCode} size={18} />
                 <span>Generate QR</span>
               </Link>
-            )}
-          </div>
-        </div>
+            )
+          }
+        />
 
         {/* Error message */}
         {error && (
           <div style={errorAlert}>
-            <span>⚠️</span>
+            <Icon icon={AlertTriangle} size={18} color="#dc2626" />
             <span>{error}</span>
           </div>
         )}
@@ -169,11 +178,11 @@ const DashboardPage: React.FC = () => {
         {/* Stats Grid */}
         <div style={statsGrid}>
           {statCards.map((stat, index) => (
-            <div key={index} style={statCardStyle}>
+            <div key={index} className="card" style={statCardStyle}>
               <div style={statCardHeader}>
-                <span style={{ fontSize: '1.5rem' }}>{stat.icon}</span>
+                <Icon icon={stat.icon} size={22} color="#14b8a6" />
               </div>
-              <div style={{ ...statValue, color: stat.color }}>{stat.value}</div>
+              <div style={statValue}>{stat.value}</div>
               <div style={statLabel}>{stat.label}</div>
             </div>
           ))}
@@ -184,17 +193,15 @@ const DashboardPage: React.FC = () => {
           <h2 style={sectionTitle}>Quick Actions</h2>
           <div style={actionsGrid}>
             {quickActions.map((action, index) => (
-              <Link key={index} href={action.href} style={actionCard}>
-                <div style={{ ...actionIconBox, background: `${action.color}15` }}>
-                  <span style={{ fontSize: '1.5rem' }}>{action.icon}</span>
+              <Link key={index} href={action.href} className="card card-hover" style={actionCard}>
+                <div style={actionIconBox}>
+                  <Icon icon={action.icon} size={22} color="#14b8a6" />
                 </div>
                 <div style={actionContent}>
                   <h3 style={actionTitle}>{action.title}</h3>
                   <p style={actionDesc}>{action.desc}</p>
                 </div>
-                <svg width="20" height="20" viewBox="0 0 20 20" fill="#9ca3af" style={actionArrow}>
-                  <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-                </svg>
+                <Icon icon={ChevronRight} size={18} color="#9ca3af" />
               </Link>
             ))}
           </div>
@@ -203,14 +210,15 @@ const DashboardPage: React.FC = () => {
         {/* Getting Started Card - shown if no locations */}
         {stats && stats.locations === 0 && (
           <div style={gettingStartedCard}>
-            <div style={gettingStartedIcon}>🚀</div>
+            <Icon icon={Rocket} size={28} color="#0d9488" />
             <div style={gettingStartedContent}>
               <h3 style={gettingStartedTitle}>Get Started</h3>
               <p style={gettingStartedText}>
                 Create your first location to start managing queues. Add services to each location and generate QR codes for customers to join.
               </p>
-              <Link href="/admin/locations" style={gettingStartedBtn}>
-                Create First Location →
+              <Link href="/admin/locations" className="btn btn-primary btn-sm">
+                Create First Location
+                <Icon icon={ChevronRight} size={16} />
               </Link>
             </div>
           </div>
@@ -218,7 +226,7 @@ const DashboardPage: React.FC = () => {
 
         {/* Tips Card */}
         <div style={tipsCard}>
-          <div style={tipsIcon}>💡</div>
+          <Icon icon={Lightbulb} size={22} color="#92400e" />
           <div style={tipsContent}>
             <h3 style={tipsTitle}>Pro Tip</h3>
             <p style={tipsText}>
@@ -232,10 +240,7 @@ const DashboardPage: React.FC = () => {
 };
 
 // Styles
-const containerStyle: React.CSSProperties = {
-  maxWidth: '1200px',
-  margin: '0 auto',
-};
+const containerStyle: React.CSSProperties = {};
 
 const loadingContainer: React.CSSProperties = {
   display: 'flex',
@@ -249,47 +254,6 @@ const loadingContainer: React.CSSProperties = {
 const loadingText: React.CSSProperties = {
   color: '#6b7280',
   fontSize: '0.9375rem',
-};
-
-const headerSection: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  marginBottom: '2rem',
-  flexWrap: 'wrap',
-  gap: '1rem',
-};
-
-const welcomeTitle: React.CSSProperties = {
-  fontSize: '1.75rem',
-  fontWeight: 700,
-  color: '#111827',
-  marginBottom: '0.5rem',
-};
-
-const welcomeSubtitle: React.CSSProperties = {
-  color: '#6b7280',
-  fontSize: '1rem',
-};
-
-const headerActions: React.CSSProperties = {
-  display: 'flex',
-  gap: '0.75rem',
-};
-
-const primaryButton: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.5rem',
-  padding: '0.75rem 1.25rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
-  color: 'white',
-  borderRadius: '0.75rem',
-  textDecoration: 'none',
-  fontWeight: 600,
-  fontSize: '0.9375rem',
-  boxShadow: '0 4px 14px rgba(99, 102, 241, 0.3)',
-  transition: 'all 0.2s',
 };
 
 const errorAlert: React.CSSProperties = {
@@ -312,11 +276,7 @@ const statsGrid: React.CSSProperties = {
 };
 
 const statCardStyle: React.CSSProperties = {
-  background: 'white',
   padding: '1.5rem',
-  borderRadius: '1rem',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-  border: '1px solid #e5e7eb',
 };
 
 const statCardHeader: React.CSSProperties = {
@@ -330,6 +290,7 @@ const statValue: React.CSSProperties = {
   fontSize: '2.25rem',
   fontWeight: 700,
   marginBottom: '0.25rem',
+  color: '#111827',
 };
 
 const statLabel: React.CSSProperties = {
@@ -359,12 +320,7 @@ const actionCard: React.CSSProperties = {
   alignItems: 'center',
   gap: '1rem',
   padding: '1.25rem',
-  background: 'white',
-  borderRadius: '1rem',
   textDecoration: 'none',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-  border: '1px solid #e5e7eb',
-  transition: 'all 0.2s',
 };
 
 const actionIconBox: React.CSSProperties = {
@@ -375,6 +331,7 @@ const actionIconBox: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   flexShrink: 0,
+  background: 'rgba(20, 184, 166, 0.1)',
 };
 
 const actionContent: React.CSSProperties = {
@@ -394,24 +351,15 @@ const actionDesc: React.CSSProperties = {
   fontSize: '0.8125rem',
 };
 
-const actionArrow: React.CSSProperties = {
-  flexShrink: 0,
-};
-
 const gettingStartedCard: React.CSSProperties = {
   display: 'flex',
   alignItems: 'flex-start',
   gap: '1.5rem',
   padding: '1.5rem',
-  background: 'linear-gradient(135deg, #ede9fe 0%, #ddd6fe 100%)',
+  background: 'rgba(20, 184, 166, 0.08)',
   borderRadius: '1rem',
-  border: '1px solid #c4b5fd',
+  border: '1px solid rgba(20, 184, 166, 0.25)',
   marginBottom: '2rem',
-};
-
-const gettingStartedIcon: React.CSSProperties = {
-  fontSize: '2rem',
-  flexShrink: 0,
 };
 
 const gettingStartedContent: React.CSSProperties = {
@@ -420,27 +368,16 @@ const gettingStartedContent: React.CSSProperties = {
 
 const gettingStartedTitle: React.CSSProperties = {
   fontWeight: 700,
-  color: '#5b21b6',
+  color: '#0f766e',
   marginBottom: '0.5rem',
   fontSize: '1.125rem',
 };
 
 const gettingStartedText: React.CSSProperties = {
-  color: '#7c3aed',
+  color: '#0d9488',
   fontSize: '0.9375rem',
   lineHeight: 1.5,
   marginBottom: '1rem',
-};
-
-const gettingStartedBtn: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '0.5rem 1rem',
-  background: '#7c3aed',
-  color: 'white',
-  borderRadius: '0.5rem',
-  textDecoration: 'none',
-  fontWeight: 600,
-  fontSize: '0.875rem',
 };
 
 const tipsCard: React.CSSProperties = {
@@ -448,14 +385,9 @@ const tipsCard: React.CSSProperties = {
   alignItems: 'flex-start',
   gap: '1rem',
   padding: '1.25rem',
-  background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
+  background: '#fef3c7',
   borderRadius: '1rem',
   border: '1px solid #fcd34d',
-};
-
-const tipsIcon: React.CSSProperties = {
-  fontSize: '1.5rem',
-  flexShrink: 0,
 };
 
 const tipsContent: React.CSSProperties = {

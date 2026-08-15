@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { PieChart, MapPin } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { PageHeader } from '@/components/ui';
+import { useAuthContext } from '@/contexts/AuthContext';
 import type { Location } from '@/types';
 
 interface ServiceMetrics {
@@ -85,6 +88,7 @@ interface JourneyAnalytics {
 }
 
 const AnalyticsPage: React.FC = () => {
+  const { user } = useAuthContext();
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -94,21 +98,25 @@ const AnalyticsPage: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'overview' | 'services' | 'journeys'>('overview');
 
   const loadData = useCallback(async () => {
+    if (!user?.organizationId) {
+      // No organization on this account (e.g. a superadmin). Never guess an
+      // org - render the empty state instead of leaking another tenant's data.
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const locs = await api.getLocations(orgs[0].id);
-        setLocations(locs);
-        if (locs.length > 0) {
-          setSelectedLocation(locs[0].id);
-        }
+      const locs = await api.getLocations(user.organizationId);
+      setLocations(locs);
+      if (locs.length > 0) {
+        setSelectedLocation(locs[0].id);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   const loadMetrics = useCallback(async (locationId: string) => {
     try {
@@ -135,34 +143,30 @@ const AnalyticsPage: React.FC = () => {
     }
   }, [selectedLocation, loadMetrics]);
 
-  const servedPercentage = metrics?.totals?.total ? 
+  const servedPercentage = metrics?.totals?.total ?
     Math.round((metrics.totals.served / metrics.totals.total) * 100) : 0;
+
+  if (!loading && !user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
       <div className="analytics-page">
-        {/* Page Header */}
-        <div className="page-header">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-                  <path d="M22 12A10 10 0 0 0 12 2v10z" />
-                </svg>
-              </div>
-              <div>
-                <h1 className="page-title">Analytics</h1>
-                <p className="page-subtitle">Track performance metrics and insights</p>
-              </div>
-            </div>
-            
+        <PageHeader
+          icon={PieChart}
+          title="Analytics"
+          subtitle="Track performance metrics and insights"
+          actions={
             <div className="location-selector">
               <label className="selector-label">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                  <circle cx="12" cy="10" r="3" />
-                </svg>
+                <MapPin size={16} />
                 Location
               </label>
               <select
@@ -175,8 +179,8 @@ const AnalyticsPage: React.FC = () => {
                 ))}
               </select>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Tabs Navigation */}
         <div className="tabs-container">
@@ -708,59 +712,12 @@ const AnalyticsPage: React.FC = () => {
 
         <style jsx>{`
           .analytics-page {
-            max-width: 1200px;
-            margin: 0 auto;
             animation: fadeIn 0.3s ease-out;
           }
 
           @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
-          }
-
-          .page-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-            border-radius: 16px;
-            padding: 2rem;
-            margin-bottom: 2rem;
-            color: white;
-            box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
-          }
-
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 1.5rem;
-          }
-
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          .header-icon {
-            width: 56px;
-            height: 56px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            backdrop-filter: blur(10px);
-          }
-
-          .page-title {
-            margin: 0;
-            font-size: 1.75rem;
-            font-weight: 700;
-          }
-
-          .page-subtitle {
-            margin: 0.25rem 0 0;
-            opacity: 0.9;
           }
 
           .location-selector {
@@ -990,7 +947,7 @@ const AnalyticsPage: React.FC = () => {
           .service-icon {
             width: 32px;
             height: 32px;
-            background: linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%);
+            background: rgba(20, 184, 166, 0.1);
             border-radius: 8px;
             display: flex;
             align-items: center;
@@ -1066,7 +1023,7 @@ const AnalyticsPage: React.FC = () => {
           .empty-icon {
             width: 100px;
             height: 100px;
-            background: linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%);
+            background: rgba(20, 184, 166, 0.1);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -1092,20 +1049,6 @@ const AnalyticsPage: React.FC = () => {
           }
 
           @media (max-width: 768px) {
-            .page-header {
-              padding: 1.5rem;
-            }
-
-            .header-content {
-              flex-direction: column;
-              align-items: stretch;
-            }
-
-            .header-left {
-              flex-direction: column;
-              text-align: center;
-            }
-
             .location-selector {
               width: 100%;
             }
@@ -1446,7 +1389,7 @@ const AnalyticsPage: React.FC = () => {
             justify-content: center;
           }
 
-          .journey-card.total .journey-card-icon { background: linear-gradient(135deg, #e0e7ff, #c7d2fe); color: #4f46e5; }
+          .journey-card.total .journey-card-icon { background: rgba(20, 184, 166, 0.12); color: #0d9488; }
           .journey-card.completed .journey-card-icon { background: linear-gradient(135deg, #d1fae5, #a7f3d0); color: #059669; }
           .journey-card.in-progress .journey-card-icon { background: linear-gradient(135deg, #fef3c7, #fde68a); color: #d97706; }
           .journey-card.multi-service .journey-card-icon { background: linear-gradient(135deg, #fce7f3, #fbcfe8); color: #db2777; }
@@ -1531,7 +1474,7 @@ const AnalyticsPage: React.FC = () => {
             width: 40px;
             height: 40px;
             border-radius: 50%;
-            background: linear-gradient(135deg, var(--primary), var(--accent));
+            background: var(--primary);
             color: white;
             display: flex;
             align-items: center;

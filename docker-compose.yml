@@ -23,6 +23,8 @@ services:
       # In production override DATABASE_URL in environment or .env
       DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/qms_db}
       JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
+      # Encrypts payment provider secret keys at rest — override in production
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-dev-only-master-encryption-key-change-in-production}
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: http://localhost:8003
       # Enable polling for file changes in Docker
@@ -64,6 +66,8 @@ services:
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8004/api/v1
       NEXT_PUBLIC_SOCKET_URL: http://localhost:8004
+      NEXT_PUBLIC_APP_DOMAIN: ${NEXT_PUBLIC_APP_DOMAIN:-localhost:8003}
+      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://backend:9000/api/v1}
       NODE_ENV: development
       HOST: 0.0.0.0
       # Enable polling for file changes in Docker (needed for Windows/Mac)

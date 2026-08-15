@@ -1,9 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useRef } from 'react';
+import { QrCode, Lightbulb } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
+import { Icon, PageHeader } from '@/components/ui';
 
 interface Location {
   id: string;
@@ -28,18 +30,19 @@ export default function AdminQRPage() {
   }, [isAdmin, user]);
 
   const loadLocations = async () => {
+    // No organization on this account (e.g. a superadmin). Never guess an
+    // org - render the empty state instead of leaking another tenant's data.
+    const orgId = user?.organizationId;
+    if (!orgId) {
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
     try {
-      let orgId = user?.organizationId;
-      if (!orgId) {
-        const orgs = await api.getOrganizations();
-        if (orgs.length > 0) orgId = orgs[0].id;
-      }
-      if (orgId) {
-        const locs = await api.getLocations(orgId);
-        setLocations(locs.filter((l: Location) => l.publicCode));
-        if (locs.length > 0 && locs[0].publicCode) {
-          setSelectedLocation(locs.find((l: Location) => l.publicCode) || null);
-        }
+      const locs = await api.getLocations(orgId);
+      setLocations(locs.filter((l: Location) => l.publicCode));
+      if (locs.length > 0 && locs[0].publicCode) {
+        setSelectedLocation(locs.find((l: Location) => l.publicCode) || null);
       }
     } catch (err) {
       console.error(err);
@@ -116,7 +119,7 @@ export default function AdminQRPage() {
           h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #111827; }
           p { color: #6b7280; margin-bottom: 2rem; }
           img { max-width: 300px; border: 1px solid #e5e7eb; border-radius: 12px; }
-          .url { margin-top: 1rem; font-family: monospace; color: #6366f1; }
+          .url { margin-top: 1rem; font-family: monospace; color: #14b8a6; }
         </style>
       </head>
       <body>
@@ -141,16 +144,12 @@ export default function AdminQRPage() {
 
   return (
     <Layout>
-      <div style={{ padding: '1.5rem', maxWidth: '800px', margin: '0 auto' }}>
-        {/* Header */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '0.5rem', color: '#111827' }}>
-            QR Code Generator
-          </h1>
-          <p style={{ color: '#6b7280' }}>
-            Generate and print QR codes for your locations. Customers can scan to join queues instantly.
-          </p>
-        </div>
+      <div>
+        <PageHeader
+          icon={QrCode}
+          title="QR Code Generator"
+          subtitle="Generate and print QR codes for your locations. Customers can scan to join queues instantly."
+        />
 
         {loading ? (
           <div style={{ padding: '3rem', textAlign: 'center' }}>
@@ -158,7 +157,9 @@ export default function AdminQRPage() {
           </div>
         ) : locations.length === 0 ? (
           <div style={emptyState}>
-            <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>📱</div>
+            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
+              <Icon icon={QrCode} size={48} color="#14b8a6" strokeWidth={1.5} />
+            </div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>
               No locations with public codes
             </h3>
@@ -202,9 +203,9 @@ export default function AdminQRPage() {
                       onClick={() => setQrSize(size)}
                       style={{
                         ...sizeButton,
-                        background: qrSize === size ? '#6366f1' : 'white',
+                        background: qrSize === size ? '#14b8a6' : 'white',
                         color: qrSize === size ? 'white' : '#374151',
-                        borderColor: qrSize === size ? '#6366f1' : '#e5e7eb',
+                        borderColor: qrSize === size ? '#14b8a6' : '#e5e7eb',
                       }}
                     >
                       {size}px
@@ -261,7 +262,7 @@ export default function AdminQRPage() {
 
         {/* Tips */}
         <div style={tipsCard}>
-          <div style={{ fontSize: '1.25rem' }}>💡</div>
+          <Icon icon={Lightbulb} size={22} color="#92400e" />
           <div>
             <h3 style={{ fontWeight: 600, color: '#92400e', marginBottom: '0.25rem' }}>Tips for using QR codes</h3>
             <ul style={{ color: '#a16207', fontSize: '0.875rem', margin: 0, paddingLeft: '1.25rem' }}>
@@ -291,7 +292,7 @@ const emptyState: React.CSSProperties = {
 const linkButton: React.CSSProperties = {
   display: 'inline-block',
   padding: '0.625rem 1.25rem',
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '0.5rem',
   textDecoration: 'none',
@@ -365,7 +366,7 @@ const urlBox: React.CSSProperties = {
 const codeStyle: React.CSSProperties = {
   fontSize: '0.8125rem',
   fontFamily: 'monospace',
-  color: '#6366f1',
+  color: '#14b8a6',
   wordBreak: 'break-all',
 };
 

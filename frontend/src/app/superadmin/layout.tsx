@@ -3,7 +3,9 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
+import { LayoutDashboard, Building2, CreditCard, Home, ChevronLeft, ChevronRight, Zap, Wallet } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { Icon } from '@/components/ui';
 
 export default function SuperadminLayout({
   children,
@@ -35,9 +37,10 @@ export default function SuperadminLayout({
   }
 
   const navItems = [
-    { href: '/superadmin', label: 'Dashboard', icon: '📊' },
-    { href: '/superadmin/organizations', label: 'Organizations', icon: '🏢' },
-    { href: '/superadmin/plans', label: 'Subscription Plans', icon: '💳' },
+    { href: '/superadmin', label: 'Dashboard', icon: LayoutDashboard },
+    { href: '/superadmin/organizations', label: 'Organizations', icon: Building2 },
+    { href: '/superadmin/plans', label: 'Subscription Plans', icon: CreditCard },
+    { href: '/superadmin/payment-providers', label: 'Payment Providers', icon: Wallet },
   ];
 
   return (
@@ -46,15 +49,15 @@ export default function SuperadminLayout({
       <aside style={{ ...sidebar, width: sidebarOpen ? '260px' : '60px' }}>
         <div style={sidebarHeader}>
           <div style={logoSection}>
-            <span style={logoIcon}>⚡</span>
+            <span style={logoIcon}><Icon icon={Zap} size={22} color="#2dd4bf" /></span>
             {sidebarOpen && <span style={logoText}>SuperAdmin</span>}
           </div>
-          <button 
-            onClick={() => setSidebarOpen(!sidebarOpen)} 
+          <button
+            onClick={() => setSidebarOpen(!sidebarOpen)}
             style={toggleBtn}
             title={sidebarOpen ? 'Collapse' : 'Expand'}
           >
-            {sidebarOpen ? '◀' : '▶'}
+            <Icon icon={sidebarOpen ? ChevronLeft : ChevronRight} size={16} />
           </button>
         </div>
 
@@ -68,7 +71,7 @@ export default function SuperadminLayout({
                 ...(pathname === item.href ? activeNavLink : {}),
               }}
             >
-              <span style={navIcon}>{item.icon}</span>
+              <span style={navIcon}><Icon icon={item.icon} size={20} /></span>
               {sidebarOpen && <span>{item.label}</span>}
             </Link>
           ))}
@@ -76,7 +79,7 @@ export default function SuperadminLayout({
 
         <div style={sidebarFooter}>
           <Link href="/" style={backLink}>
-            <span style={navIcon}>🏠</span>
+            <span style={navIcon}><Icon icon={Home} size={20} /></span>
             {sidebarOpen && <span>Back to App</span>}
           </Link>
         </div>
@@ -104,7 +107,7 @@ const spinner: React.CSSProperties = {
   width: '40px',
   height: '40px',
   border: '4px solid #e2e8f0',
-  borderTop: '4px solid #6366f1',
+  borderTop: '4px solid #14b8a6',
   borderRadius: '50%',
   animation: 'spin 1s linear infinite',
 };
@@ -119,8 +122,8 @@ const sidebar: React.CSSProperties = {
   top: 0,
   left: 0,
   height: '100vh',
-  background: 'linear-gradient(180deg, #1e1b4b 0%, #0f172a 100%)',
-  borderRight: '1px solid rgba(99, 102, 241, 0.2)',
+  background: '#0f172a',
+  borderRight: '1px solid rgba(20, 184, 166, 0.2)',
   display: 'flex',
   flexDirection: 'column',
   transition: 'width 0.3s ease',
@@ -132,7 +135,7 @@ const sidebarHeader: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  borderBottom: '1px solid rgba(99, 102, 241, 0.2)',
+  borderBottom: '1px solid rgba(20, 184, 166, 0.2)',
 };
 
 const logoSection: React.CSSProperties = {
@@ -153,13 +156,16 @@ const logoText: React.CSSProperties = {
 };
 
 const toggleBtn: React.CSSProperties = {
-  background: 'rgba(99, 102, 241, 0.2)',
+  background: 'rgba(20, 184, 166, 0.15)',
   border: 'none',
-  color: '#a5b4fc',
+  color: '#2dd4bf',
   padding: '0.5rem',
   borderRadius: '6px',
   cursor: 'pointer',
   fontSize: '0.875rem',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
 };
 
 const navContainer: React.CSSProperties = {
@@ -184,8 +190,8 @@ const navLink: React.CSSProperties = {
 };
 
 const activeNavLink: React.CSSProperties = {
-  background: 'rgba(99, 102, 241, 0.2)',
-  color: '#a5b4fc',
+  background: 'rgba(20, 184, 166, 0.15)',
+  color: '#2dd4bf',
 };
 
 const navIcon: React.CSSProperties = {
@@ -196,7 +202,7 @@ const navIcon: React.CSSProperties = {
 
 const sidebarFooter: React.CSSProperties = {
   padding: '1rem 0.75rem',
-  borderTop: '1px solid rgba(99, 102, 241, 0.2)',
+  borderTop: '1px solid rgba(20, 184, 166, 0.2)',
 };
 
 const backLink: React.CSSProperties = {

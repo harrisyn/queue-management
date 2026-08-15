@@ -35,10 +35,10 @@ export const useAuth = () => {
     }
   };
 
-  const login = useCallback(async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string, options?: { slug?: string; adminLogin?: boolean }) => {
     setError(null);
     try {
-      const response: AuthResponse = await api.login(email, password);
+      const response: AuthResponse = await api.login(email, password, options);
       if (typeof window !== 'undefined') {
         localStorage.setItem('token', response.token);
       }

@@ -3,7 +3,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Building2, Zap, QrCode, BarChart3, Mail, Lock, Lightbulb, AlertTriangle } from 'lucide-react';
 import api from '@/api/client';
+import { isReservedSlug } from '@/lib/reservedSlugs';
+import { buildTenantUrl } from '@/lib/subdomain';
+import { Button, Icon } from '@/components/ui';
 
 // ============================================================================
 // MULTI-STEP REGISTRATION COMPONENT
@@ -11,6 +15,7 @@ import api from '@/api/client';
 
 interface RegistrationData {
   organizationName: string;
+  slug?: string;
   email: string;
   phone: string;
   countryCode: string;
@@ -164,7 +169,7 @@ const RegisterPage: React.FC = () => {
     try {
       const fullPhone = formData.phone ? `${formData.countryCode}${formData.phone.replace(/\D/g, '')}` : undefined;
       
-      const { token } = await api.registerOrganization({
+      const { token, organization } = await api.registerOrganization({
         organizationName: formData.organizationName,
         email: formData.email,
         phone: fullPhone,
@@ -172,13 +177,13 @@ const RegisterPage: React.FC = () => {
         adminLastName: formData.lastName,
         adminPassword: formData.password,
         emailVerified: formData.emailVerified,
+        slug: formData.slug || undefined,
       });
 
-      localStorage.setItem('token', token);
       setSuccess(true);
-      
+
       setTimeout(() => {
-        window.location.href = '/';
+        window.location.href = buildTenantUrl(organization.slug);
       }, 2000);
     } catch (err: any) {
       setError(err.response?.data?.error || 'Registration failed');
@@ -195,6 +200,10 @@ const RegisterPage: React.FC = () => {
       }
       if (!formData.firstName.trim() || !formData.lastName.trim()) {
         setError('Your name is required');
+        return;
+      }
+      if (formData.slug && isReservedSlug(formData.slug)) {
+        setError('This workspace name is reserved. Please choose another.');
         return;
       }
     }
@@ -237,7 +246,7 @@ const RegisterPage: React.FC = () => {
                 <path d="M24 40L35 51L56 30" stroke="#10b981" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
               </svg>
             </div>
-            <h2 style={styles.successTitle}>Welcome Aboard! 🎉</h2>
+            <h2 style={styles.successTitle}>Welcome aboard</h2>
             <p style={styles.successText}>
               Your organization has been created successfully.
               <br />Redirecting to your dashboard...
@@ -270,13 +279,13 @@ const RegisterPage: React.FC = () => {
         <div style={styles.infoPanel}>
           <div style={styles.infoPanelContent}>
             <Link href="/" style={styles.logoLink}>
-              <span style={styles.logoIcon}>🏥</span>
+              <Icon icon={Building2} size={28} color="#2dd4bf" />
               <span style={styles.logoText}>QueueFlow</span>
             </Link>
 
             <h1 style={styles.infoTitle}>
               Streamline your<br />
-              <span style={styles.gradientText}>queue management</span>
+              <span style={styles.accentText}>queue management</span>
             </h1>
 
             <p style={styles.infoSubtitle}>
@@ -285,37 +294,30 @@ const RegisterPage: React.FC = () => {
 
             <div style={styles.featureList}>
               <div style={styles.featureItem}>
-                <div style={styles.featureIcon}>⚡</div>
+                <div style={styles.featureIcon}>
+                  <Icon icon={Zap} size={20} color="#2dd4bf" />
+                </div>
                 <div>
                   <h4 style={styles.featureTitle}>Real-time Updates</h4>
                   <p style={styles.featureDesc}>Customers get instant notifications</p>
                 </div>
               </div>
               <div style={styles.featureItem}>
-                <div style={styles.featureIcon}>📱</div>
+                <div style={styles.featureIcon}>
+                  <Icon icon={QrCode} size={20} color="#2dd4bf" />
+                </div>
                 <div>
                   <h4 style={styles.featureTitle}>QR Check-in</h4>
                   <p style={styles.featureDesc}>Scan and join in seconds</p>
                 </div>
               </div>
               <div style={styles.featureItem}>
-                <div style={styles.featureIcon}>📊</div>
+                <div style={styles.featureIcon}>
+                  <Icon icon={BarChart3} size={20} color="#2dd4bf" />
+                </div>
                 <div>
                   <h4 style={styles.featureTitle}>Analytics</h4>
                   <p style={styles.featureDesc}>Insights to optimize flow</p>
-                </div>
-              </div>
-            </div>
-
-            <div style={styles.testimonial}>
-              <p style={styles.testimonialText}>
-                &ldquo;QueueFlow reduced our wait times by 40% in the first month.&rdquo;
-              </p>
-              <div style={styles.testimonialAuthor}>
-                <div style={styles.testimonialAvatar}>JD</div>
-                <div>
-                  <strong>Dr. James Davis</strong>
-                  <span style={styles.testimonialRole}>City General Hospital</span>
                 </div>
               </div>
             </div>
@@ -372,6 +374,23 @@ const RegisterPage: React.FC = () => {
                       style={styles.input}
                       autoFocus
                     />
+                  </div>
+
+                  <div style={styles.formGroup}>
+                    <label style={styles.label}>Workspace URL</label>
+                    <input
+                      type="text"
+                      name="slug"
+                      value={formData.slug || ''}
+                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                      placeholder="your-org"
+                      style={styles.input}
+                    />
+                    <p style={styles.hint}>
+                      {formData.slug && isReservedSlug(formData.slug)
+                        ? <span style={{ color: '#dc2626' }}>This name is reserved — pick another.</span>
+                        : <>Your workspace will be at <strong>{buildTenantUrl(formData.slug || 'your-org').replace(/^https?:\/\//, '')}</strong></>}
+                    </p>
                   </div>
 
                   <div style={styles.formRow}>
@@ -451,11 +470,11 @@ const RegisterPage: React.FC = () => {
               {/* Step 3: OTP Verification */}
               {step === 3 && (
                 <div style={styles.stepContent}>
-                  <div style={styles.iconLarge}>📧</div>
+                  <div style={styles.iconLarge}><Icon icon={Mail} size={56} color="#2dd4bf" /></div>
                   <h2 style={styles.stepTitle}>Check your email</h2>
                   <p style={styles.stepSubtitle}>
                     We sent a 6-digit code to<br />
-                    <strong style={{ color: '#6366f1' }}>{formData.email}</strong>
+                    <strong style={{ color: '#2dd4bf' }}>{formData.email}</strong>
                   </p>
 
                   <div style={styles.otpContainer} onPaste={handleOtpPaste}>
@@ -470,7 +489,7 @@ const RegisterPage: React.FC = () => {
                         onKeyDown={e => handleOtpKeyDown(i, e)}
                         style={{
                           ...styles.otpInput,
-                          borderColor: formData.otpCode[i] ? '#6366f1' : 'rgba(255,255,255,0.2)',
+                          borderColor: formData.otpCode[i] ? '#14b8a6' : 'rgba(255,255,255,0.2)',
                         }}
                         autoFocus={i === 0}
                       />
@@ -495,7 +514,7 @@ const RegisterPage: React.FC = () => {
                   </div>
 
                   <div style={styles.devNote}>
-                    <span style={styles.devNoteIcon}>💡</span>
+                    <Icon icon={Lightbulb} size={16} color="rgba(255,255,255,0.6)" />
                     <span>In development mode, check your console for the OTP code.</span>
                   </div>
                 </div>
@@ -504,7 +523,7 @@ const RegisterPage: React.FC = () => {
               {/* Step 4: Create Password */}
               {step === 4 && (
                 <div style={styles.stepContent}>
-                  <div style={styles.iconLarge}>🔐</div>
+                  <div style={styles.iconLarge}><Icon icon={Lock} size={56} color="#2dd4bf" /></div>
                   <h2 style={styles.stepTitle}>Secure your account</h2>
                   <p style={styles.stepSubtitle}>Create a strong password</p>
 
@@ -547,7 +566,7 @@ const RegisterPage: React.FC = () => {
               {/* Error message */}
               {error && (
                 <div style={styles.errorBox}>
-                  <span style={styles.errorIcon}>⚠️</span>
+                  <Icon icon={AlertTriangle} size={18} color="#fca5a5" />
                   {error}
                 </div>
               )}
@@ -555,32 +574,35 @@ const RegisterPage: React.FC = () => {
               {/* Navigation buttons */}
               <div style={styles.buttonRow}>
                 {step > 1 && (
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="lg"
                     onClick={prevStep}
-                    style={styles.backButton}
                     disabled={loading}
                   >
                     ← Back
-                  </button>
+                  </Button>
                 )}
-                
-                <button
+
+                <Button
                   type="button"
+                  variant="primary"
+                  size="lg"
                   onClick={step === 3 ? verifyOTP : step === 4 ? completeRegistration : nextStep}
-                  style={loading ? styles.primaryButtonLoading : styles.primaryButton}
                   disabled={loading}
+                  style={{ flex: 1 }}
                 >
                   {loading ? (
                     <span className="spinner" style={{ width: 20, height: 20 }} />
                   ) : step === 3 ? (
                     'Verify Email'
                   ) : step === 4 ? (
-                    'Create Account 🚀'
+                    'Create Account'
                   ) : (
                     'Continue →'
                   )}
-                </button>
+                </Button>
               </div>
 
               {/* Footer */}
@@ -630,13 +652,13 @@ const styles: Record<string, React.CSSProperties> = {
   bgGradient: {
     position: 'absolute',
     inset: 0,
-    background: 'radial-gradient(ellipse at 30% 20%, rgba(99, 102, 241, 0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 40%)',
+    background: 'radial-gradient(ellipse at 30% 20%, rgba(20, 184, 166, 0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(13, 148, 136, 0.1) 0%, transparent 40%)',
     zIndex: 0,
   },
   bgPattern: {
     position: 'absolute',
     inset: 0,
-    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%236366f1' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2314b8a6' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
     zIndex: 0,
   },
   floatingOrb1: {
@@ -646,7 +668,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '300px',
     height: '300px',
     borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(99, 102, 241, 0.2) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, rgba(20, 184, 166, 0.2) 0%, transparent 70%)',
     filter: 'blur(40px)',
     animation: 'float 8s ease-in-out infinite',
     zIndex: 0,
@@ -658,7 +680,7 @@ const styles: Record<string, React.CSSProperties> = {
     width: '250px',
     height: '250px',
     borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, transparent 70%)',
+    background: 'radial-gradient(circle, rgba(13, 148, 136, 0.15) 0%, transparent 70%)',
     filter: 'blur(40px)',
     animation: 'float 10s ease-in-out infinite reverse',
     zIndex: 0,
@@ -685,7 +707,7 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'none',
     width: '50%',
     padding: '3rem',
-    background: 'linear-gradient(135deg, rgba(99, 102, 241, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%)',
+    background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.05) 0%, rgba(13, 148, 136, 0.05) 100%)',
     borderRight: '1px solid rgba(255,255,255,0.05)',
   },
   infoPanelContent: {
@@ -704,9 +726,6 @@ const styles: Record<string, React.CSSProperties> = {
     textDecoration: 'none',
     marginBottom: '3rem',
   },
-  logoIcon: {
-    fontSize: '2rem',
-  },
   logoText: {
     fontSize: '1.5rem',
     fontWeight: 700,
@@ -719,11 +738,8 @@ const styles: Record<string, React.CSSProperties> = {
     lineHeight: 1.2,
     marginBottom: '1.5rem',
   },
-  gradientText: {
-    background: 'linear-gradient(135deg, #6366f1, #a855f7, #ec4899)',
-    WebkitBackgroundClip: 'text',
-    WebkitTextFillColor: 'transparent',
-    backgroundClip: 'text',
+  accentText: {
+    color: '#2dd4bf',
   },
   infoSubtitle: {
     fontSize: '1.1rem',
@@ -746,11 +762,10 @@ const styles: Record<string, React.CSSProperties> = {
     width: '44px',
     height: '44px',
     borderRadius: '12px',
-    background: 'rgba(99, 102, 241, 0.1)',
+    background: 'rgba(20, 184, 166, 0.1)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontSize: '1.25rem',
     flexShrink: 0,
   },
   featureTitle: {
@@ -763,41 +778,6 @@ const styles: Record<string, React.CSSProperties> = {
     color: 'rgba(255,255,255,0.5)',
     fontSize: '0.85rem',
     margin: 0,
-  },
-  testimonial: {
-    background: 'rgba(255,255,255,0.03)',
-    borderRadius: '16px',
-    padding: '1.5rem',
-    border: '1px solid rgba(255,255,255,0.05)',
-  },
-  testimonialText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: '1rem',
-    fontStyle: 'italic',
-    lineHeight: 1.6,
-    marginBottom: '1rem',
-  },
-  testimonialAuthor: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-  },
-  testimonialAvatar: {
-    width: '40px',
-    height: '40px',
-    borderRadius: '50%',
-    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    color: 'white',
-    fontWeight: 600,
-    fontSize: '0.85rem',
-  },
-  testimonialRole: {
-    display: 'block',
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: '0.8rem',
   },
   formPanel: {
     flex: 1,
@@ -822,7 +802,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   progressFill: {
     height: '100%',
-    background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+    background: '#14b8a6',
     borderRadius: '2px',
     transition: 'width 0.4s ease',
   },
@@ -853,12 +833,11 @@ const styles: Record<string, React.CSSProperties> = {
     borderColor: 'transparent',
   },
   stepDotActive: {
-    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
+    background: '#14b8a6',
     color: 'white',
-    boxShadow: '0 0 20px rgba(99, 102, 241, 0.5)',
     borderWidth: '2px',
     borderStyle: 'solid',
-    borderColor: 'rgba(99, 102, 241, 0.3)',
+    borderColor: 'rgba(20, 184, 166, 0.3)',
   },
   stepDotComplete: {
     background: '#10b981',
@@ -995,7 +974,7 @@ const styles: Record<string, React.CSSProperties> = {
   resendButton: {
     background: 'none',
     border: 'none',
-    color: '#a855f7',
+    color: '#2dd4bf',
     fontSize: '0.9rem',
     cursor: 'pointer',
     textDecoration: 'underline',
@@ -1006,13 +985,10 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: 'center',
     gap: '0.5rem',
     padding: '0.75rem',
-    background: 'rgba(139, 92, 246, 0.1)',
+    background: 'rgba(20, 184, 166, 0.1)',
     borderRadius: '8px',
     fontSize: '0.8rem',
     color: 'rgba(255,255,255,0.6)',
-  },
-  devNoteIcon: {
-    fontSize: '1rem',
   },
   passwordHints: {
     display: 'flex',
@@ -1040,49 +1016,9 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9rem',
     marginBottom: '1.5rem',
   },
-  errorIcon: {
-    fontSize: '1.1rem',
-  },
   buttonRow: {
     display: 'flex',
     gap: '1rem',
-  },
-  backButton: {
-    padding: '0.875rem 1.5rem',
-    background: 'rgba(255,255,255,0.05)',
-    border: '1px solid rgba(255,255,255,0.1)',
-    borderRadius: '12px',
-    color: 'rgba(255,255,255,0.7)',
-    fontSize: '1rem',
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-  },
-  primaryButton: {
-    flex: 1,
-    padding: '0.875rem 1.5rem',
-    background: 'linear-gradient(135deg, #6366f1, #a855f7)',
-    border: 'none',
-    borderRadius: '12px',
-    color: 'white',
-    fontSize: '1rem',
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: 'all 0.2s ease',
-    boxShadow: '0 4px 15px rgba(99, 102, 241, 0.4)',
-  },
-  primaryButtonLoading: {
-    flex: 1,
-    padding: '0.875rem 1.5rem',
-    background: 'rgba(99, 102, 241, 0.5)',
-    border: 'none',
-    borderRadius: '12px',
-    color: 'white',
-    fontSize: '1rem',
-    fontWeight: 600,
-    cursor: 'not-allowed',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
   },
   footer: {
     textAlign: 'center',
@@ -1091,7 +1027,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: '0.9rem',
   },
   loginLink: {
-    color: '#a855f7',
+    color: '#2dd4bf',
     textDecoration: 'none',
     fontWeight: 500,
   },

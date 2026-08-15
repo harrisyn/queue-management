@@ -1,8 +1,11 @@
 'use client';
 
 import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { Workflow } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
+import { PageHeader } from '@/components/ui';
+import { useAuthContext } from '@/contexts/AuthContext';
 import type { Location, Service, ServiceFlow } from '@/types';
 
 interface FlowNode {
@@ -30,6 +33,7 @@ interface DragState {
 }
 
 const FlowDesignerPage: React.FC = () => {
+  const { user } = useAuthContext();
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [services, setServices] = useState<Service[]>([]);
@@ -66,7 +70,7 @@ const FlowDesignerPage: React.FC = () => {
 
   useEffect(() => {
     loadLocations();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     if (selectedLocation) {
@@ -75,14 +79,18 @@ const FlowDesignerPage: React.FC = () => {
   }, [selectedLocation]);
 
   const loadLocations = async () => {
+    if (!user?.organizationId) {
+      // No organization on this account (e.g. a superadmin). Never guess an
+      // org - render the empty state instead of leaking another tenant's data.
+      setLocations([]);
+      setLoading(false);
+      return;
+    }
     try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const locs = await api.getLocations(orgs[0].id);
-        setLocations(locs);
-        if (locs.length > 0) {
-          setSelectedLocation(locs[0].id);
-        }
+      const locs = await api.getLocations(user.organizationId);
+      setLocations(locs);
+      if (locs.length > 0) {
+        setSelectedLocation(locs[0].id);
       }
     } catch (err) {
       console.error('Failed to load locations', err);
@@ -369,29 +377,29 @@ const FlowDesignerPage: React.FC = () => {
     );
   }
 
+  if (!user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="flow-designer">
-        {/* Header */}
-        <div className="header">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                </svg>
-              </div>
-              <div>
-                <h1>Patient Flow Designer</h1>
-                <p>Design how patients move between services</p>
-              </div>
-            </div>
-
+        <PageHeader
+          icon={Workflow}
+          title="Patient Flow Designer"
+          subtitle="Design how patients move between services"
+          actions={
             <div className="header-actions">
               <div className="selector">
                 <label>Location</label>
-                <select 
-                  value={selectedLocation} 
+                <select
+                  value={selectedLocation}
                   onChange={(e) => setSelectedLocation(e.target.value)}
                 >
                   {locations.map(loc => (
@@ -407,8 +415,8 @@ const FlowDesignerPage: React.FC = () => {
                 Add Connection
               </button>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {error && (
           <div className="error-alert">
@@ -655,54 +663,6 @@ const FlowDesignerPage: React.FC = () => {
         )}
 
         <style jsx>{`
-          .flow-designer {
-            max-width: 1400px;
-            margin: 0 auto;
-          }
-
-          .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-radius: 16px;
-            padding: 1.5rem 2rem;
-            margin-bottom: 1.5rem;
-            color: white;
-          }
-
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-          }
-
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          .header-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-          }
-
-          .header p {
-            margin: 0.25rem 0 0;
-            opacity: 0.9;
-            font-size: 0.9rem;
-          }
-
           .header-actions {
             display: flex;
             align-items: center;
@@ -900,7 +860,7 @@ const FlowDesignerPage: React.FC = () => {
             text-transform: uppercase;
             padding: 0.125rem 0.375rem;
             border-radius: 4px;
-            background: #e0e7ff;
+            background: rgba(20, 184, 166, 0.1);
             color: var(--primary);
           }
 
@@ -1111,11 +1071,6 @@ const FlowDesignerPage: React.FC = () => {
           }
 
           @media (max-width: 768px) {
-            .header-content {
-              flex-direction: column;
-              align-items: stretch;
-            }
-
             .header-actions {
               flex-direction: column;
             }

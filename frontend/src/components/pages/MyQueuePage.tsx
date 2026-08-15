@@ -251,12 +251,11 @@ const MyQueuePage: React.FC = () => {
           }
 
           .page-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            background: var(--primary);
             border-radius: 16px;
             padding: 2rem;
             margin-bottom: 2rem;
             color: white;
-            box-shadow: 0 10px 40px rgba(99, 102, 241, 0.3);
           }
 
           .header-content {
@@ -332,7 +331,7 @@ const MyQueuePage: React.FC = () => {
           .empty-icon {
             width: 100px;
             height: 100px;
-            background: linear-gradient(135deg, #f0f0ff 0%, #e8e8ff 100%);
+            background: rgba(20, 184, 166, 0.1);
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -394,7 +393,7 @@ const MyQueuePage: React.FC = () => {
           .service-select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+            box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.15);
           }
 
           .join-btn {
@@ -404,18 +403,16 @@ const MyQueuePage: React.FC = () => {
             padding: 0.875rem 1.5rem;
             font-size: 1rem;
             font-weight: 600;
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            background: var(--success-600);
             color: white;
             border: none;
             border-radius: 12px;
             cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
+            transition: all 0.2s;
           }
 
           .join-btn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5);
+            background: var(--success-700);
           }
 
           .join-btn:disabled {
@@ -424,8 +421,7 @@ const MyQueuePage: React.FC = () => {
           }
 
           .join-btn.loading {
-            background: linear-gradient(135deg, #94a3b8 0%, #64748b 100%);
-            box-shadow: 0 4px 15px rgba(100, 116, 139, 0.3);
+            background: #64748b;
           }
 
           .btn-spinner {

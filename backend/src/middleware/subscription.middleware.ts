@@ -146,7 +146,8 @@ export const loadSubscription = async (req: Request, res: Response, next: NextFu
       return next();
     }
 
-    // Get organization's subscription
+    // Get organization's subscription (subscription lives on Organization.subscriptionId,
+    // not the other way around — OrganizationSubscription has no organizationId field)
     const org = await prisma.organization.findUnique({
       where: { id: user.organizationId },
       select: { subscription: { include: { plan: true } } },
@@ -337,6 +338,12 @@ export const getMySubscription = async (req: Request, res: Response) => {
       select: { organizationId: true },
     });
 
+    const activeProviderRows = await prisma.paymentProviderConfig.findMany({
+      where: { isActive: true },
+      select: { provider: true },
+    });
+    const activeProviders = activeProviderRows.map(r => r.provider);
+
     if (!user?.organizationId) {
       return res.json({
         subscription: null,
@@ -346,6 +353,7 @@ export const getMySubscription = async (req: Request, res: Response) => {
           services: { current: 0, limit: DEFAULT_FEATURES.maxServices, allowed: true },
           users: { current: 0, limit: DEFAULT_FEATURES.maxUsers, allowed: true },
         },
+        activeProviders,
       });
     }
 
@@ -413,6 +421,7 @@ export const getMySubscription = async (req: Request, res: Response) => {
           allowed: userCount < (mergedFeatures.maxUsers || 0),
         },
       },
+      activeProviders,
       upgradePlan,
       isExpiredNoFallback,
     });

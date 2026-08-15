@@ -52,7 +52,7 @@ export default function LocationsPage() {
               </div>
               <div style={{ textAlign: 'right' }}>
                 {loc.publicCode ? (
-                  <Link href={`/join/${loc.publicCode}`} style={{ display: 'inline-block', padding: '0.5rem 1rem', background: 'linear-gradient(135deg,#6366f1,#8b5cf6)', color: 'white', borderRadius: 8 }}>Join</Link>
+                  <Link href={`/join/${loc.publicCode}`} style={{ display: 'inline-block', padding: '0.5rem 1rem', background: '#14b8a6', color: 'white', borderRadius: 8 }}>Join</Link>
                 ) : (
                   <span style={{ fontSize: 12, color: '#9ca3af' }}>No join code</span>
                 )}

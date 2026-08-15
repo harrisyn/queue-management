@@ -35,7 +35,6 @@ export interface Location {
   externalReference?: string;
   publicCode?: string;
   services?: Service[];
-  servicePoints?: ServicePoint[];
 }
 
 // Service Point types
@@ -43,15 +42,13 @@ export type ServicePointType = 'RECEPTION' | 'TRIAGE' | 'CONSULTATION' | 'CASHIE
 
 export interface ServicePoint {
   id: string;
-  locationId: string;
+  organizationId: string;
   name: string;
   displayName?: string;
   type: ServicePointType;
   isActive: boolean;
   capacity: number;
-  displayMode?: string; // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
-  location?: Location;
-  entries?: QueueEntry[];
+  usedInServicesCount?: number;
   currentlyServing?: {
     ticketNumber: string;
     customerName: string;
@@ -74,6 +71,10 @@ export interface Service {
   startTime: string;
   endTime: string;
   isActive: boolean;
+  requiresName?: boolean;
+  requiresPhone?: boolean;
+  allowAnonymous?: boolean;
+  displayMode?: string;
   location?: Location;
   practitioners?: Practitioner[];
 }

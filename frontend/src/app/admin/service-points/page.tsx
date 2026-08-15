@@ -1,30 +1,33 @@
 'use client';
 
 import React, { useEffect, useState, useCallback } from 'react';
+import type { LucideIcon } from 'lucide-react';
+import { Building2, Syringe, Stethoscope, Wallet, Pill, FlaskConical, Camera, MapPin } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
-import type { Location, ServicePoint, ServicePointType } from '@/types';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { Icon, PageHeader } from '@/components/ui';
+import type { ServicePoint, ServicePointType } from '@/types';
 
-const SERVICE_POINT_TYPES: { value: ServicePointType; label: string; icon: string }[] = [
-  { value: 'RECEPTION', label: 'Reception', icon: '🏢' },
-  { value: 'TRIAGE', label: 'Triage', icon: '💉' },
-  { value: 'CONSULTATION', label: 'Consultation', icon: '👨‍⚕️' },
-  { value: 'CASHIER', label: 'Cashier', icon: '💰' },
-  { value: 'PHARMACY', label: 'Pharmacy', icon: '💊' },
-  { value: 'LAB', label: 'Laboratory', icon: '🔬' },
-  { value: 'IMAGING', label: 'Imaging', icon: '📷' },
-  { value: 'OTHER', label: 'Other', icon: '📍' },
+const SERVICE_POINT_TYPES: { value: ServicePointType; label: string; icon: LucideIcon }[] = [
+  { value: 'RECEPTION', label: 'Reception', icon: Building2 },
+  { value: 'TRIAGE', label: 'Triage', icon: Syringe },
+  { value: 'CONSULTATION', label: 'Consultation', icon: Stethoscope },
+  { value: 'CASHIER', label: 'Cashier', icon: Wallet },
+  { value: 'PHARMACY', label: 'Pharmacy', icon: Pill },
+  { value: 'LAB', label: 'Laboratory', icon: FlaskConical },
+  { value: 'IMAGING', label: 'Imaging', icon: Camera },
+  { value: 'OTHER', label: 'Other', icon: MapPin },
 ];
 
 const ServicePointsPage: React.FC = () => {
-  const [locations, setLocations] = useState<Location[]>([]);
-  const [selectedLocation, setSelectedLocation] = useState<string>('');
+  const { user } = useAuthContext();
   const [servicePoints, setServicePoints] = useState<ServicePoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [editingPoint, setEditingPoint] = useState<ServicePoint | null>(null);
-  
+
   // Form state
   const [formData, setFormData] = useState({
     name: '',
@@ -35,40 +38,24 @@ const ServicePointsPage: React.FC = () => {
   });
 
   useEffect(() => {
-    loadLocations();
-  }, []);
+    loadServicePoints();
+  }, [user]);
 
-  useEffect(() => {
-    if (selectedLocation) {
-      loadServicePoints(selectedLocation);
-    }
-  }, [selectedLocation]);
-
-  const loadLocations = async () => {
-    try {
-      const orgs = await api.getOrganizations();
-      if (orgs.length > 0) {
-        const locs = await api.getLocations(orgs[0].id);
-        setLocations(locs);
-        if (locs.length > 0) {
-          setSelectedLocation(locs[0].id);
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load locations', err);
-    } finally {
+  const loadServicePoints = async () => {
+    if (!user?.organizationId) {
+      setServicePoints([]);
       setLoading(false);
+      return;
     }
-  };
-
-  const loadServicePoints = async (locationId: string) => {
     try {
-      const points = await api.getServicePoints(locationId);
+      const points = await api.getServicePoints(user.organizationId);
       setServicePoints(points);
       setError('');
     } catch (err) {
       console.error('Failed to load service points', err);
       setError('Failed to load service points');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -102,18 +89,19 @@ const ServicePointsPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       if (editingPoint) {
         await api.updateServicePoint(editingPoint.id, formData);
       } else {
+        if (!user?.organizationId) return;
         await api.createServicePoint({
-          locationId: selectedLocation,
+          organizationId: user.organizationId,
           ...formData,
         });
       }
-      
-      await loadServicePoints(selectedLocation);
+
+      await loadServicePoints();
       handleCloseModal();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
@@ -123,10 +111,10 @@ const ServicePointsPage: React.FC = () => {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this service point?')) return;
-    
+
     try {
       await api.deleteServicePoint(id);
-      await loadServicePoints(selectedLocation);
+      await loadServicePoints();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       setError(error.response?.data?.error || 'Failed to delete service point');
@@ -136,7 +124,7 @@ const ServicePointsPage: React.FC = () => {
   const handleToggleActive = async (point: ServicePoint) => {
     try {
       await api.updateServicePoint(point.id, { isActive: !point.isActive });
-      await loadServicePoints(selectedLocation);
+      await loadServicePoints();
     } catch (err) {
       console.error('Failed to toggle active state', err);
     }
@@ -178,37 +166,25 @@ const ServicePointsPage: React.FC = () => {
     );
   }
 
+  if (!user?.organizationId) {
+    return (
+      <Layout>
+        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
+          No organization is associated with this account.
+        </div>
+      </Layout>
+    );
+  }
+
   return (
     <Layout>
       <div className="service-points-page">
-        {/* Header */}
-        <div className="header">
-          <div className="header-content">
-            <div className="header-left">
-              <div className="header-icon">
-                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />
-                  <polyline points="9 22 9 12 15 12 15 22" />
-                </svg>
-              </div>
-              <div>
-                <h1>Service Points</h1>
-                <p>Manage reception desks, consultation rooms, and more</p>
-              </div>
-            </div>
-
+        <PageHeader
+          icon={Building2}
+          title="Service Points"
+          subtitle="Manage reception desks, consultation rooms, and more"
+          actions={
             <div className="header-actions">
-              <div className="selector">
-                <label>Location</label>
-                <select 
-                  value={selectedLocation} 
-                  onChange={(e) => setSelectedLocation(e.target.value)}
-                >
-                  {locations.map(loc => (
-                    <option key={loc.id} value={loc.id}>{loc.name}</option>
-                  ))}
-                </select>
-              </div>
               <button className="add-btn" onClick={() => handleOpenModal()}>
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <line x1="12" y1="5" x2="12" y2="19" />
@@ -217,8 +193,8 @@ const ServicePointsPage: React.FC = () => {
                 Add Service Point
               </button>
             </div>
-          </div>
-        </div>
+          }
+        />
 
         {error && (
           <div className="error-alert">
@@ -250,7 +226,7 @@ const ServicePointsPage: React.FC = () => {
                   className={`point-card ${!point.isActive ? 'inactive' : ''}`}
                 >
                   <div className="point-header">
-                    <span className="point-icon">{typeInfo.icon}</span>
+                    <span className="point-icon"><Icon icon={typeInfo.icon} size={28} color="#14b8a6" /></span>
                     <div className="point-title">
                       <h3>{point.name}</h3>
                       {point.displayName && point.displayName !== point.name && (
@@ -310,6 +286,10 @@ const ServicePointsPage: React.FC = () => {
                         {point.isActive ? 'Active' : 'Inactive'}
                       </span>
                     </div>
+                    <div className="detail">
+                      <span className="label">Used In</span>
+                      <span className="value">{point.usedInServicesCount ?? 0} service{point.usedInServicesCount === 1 ? '' : 's'}</span>
+                    </div>
                   </div>
                 </div>
               );
@@ -355,7 +335,7 @@ const ServicePointsPage: React.FC = () => {
                         className={`type-option ${formData.type === type.value ? 'selected' : ''}`}
                         onClick={() => setFormData({ ...formData, type: type.value })}
                       >
-                        <span className="type-icon">{type.icon}</span>
+                        <span className="type-icon"><Icon icon={type.icon} size={18} /></span>
                         <span>{type.label}</span>
                       </button>
                     ))}
@@ -403,79 +383,10 @@ const ServicePointsPage: React.FC = () => {
         )}
 
         <style jsx>{`
-          .service-points-page {
-            max-width: 1200px;
-            margin: 0 auto;
-          }
-
-          .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            border-radius: 16px;
-            padding: 1.5rem 2rem;
-            margin-bottom: 1.5rem;
-            color: white;
-          }
-
-          .header-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            gap: 2rem;
-            flex-wrap: wrap;
-          }
-
-          .header-left {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-          }
-
-          .header-icon {
-            width: 48px;
-            height: 48px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-          }
-
-          .header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-          }
-
-          .header p {
-            margin: 0.25rem 0 0;
-            opacity: 0.9;
-            font-size: 0.9rem;
-          }
-
           .header-actions {
             display: flex;
             align-items: center;
             gap: 1rem;
-          }
-
-          .selector {
-            display: flex;
-            flex-direction: column;
-            gap: 0.25rem;
-          }
-
-          .selector label {
-            font-size: 0.75rem;
-            opacity: 0.9;
-          }
-
-          .selector select {
-            padding: 0.5rem 1rem;
-            font-size: 0.9rem;
-            border: none;
-            border-radius: 8px;
-            background: rgba(255, 255, 255, 0.95);
-            color: var(--text);
-            min-width: 160px;
           }
 
           .add-btn {
@@ -628,7 +539,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .edit-btn:hover {
-            background: #e0e7ff;
+            background: rgba(20, 184, 166, 0.1);
             color: var(--primary);
           }
 
@@ -761,7 +672,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .type-option.selected {
-            background: #e0e7ff;
+            background: rgba(20, 184, 166, 0.1);
             border-color: var(--primary);
             color: var(--primary);
           }
@@ -829,11 +740,6 @@ const ServicePointsPage: React.FC = () => {
           }
 
           @media (max-width: 768px) {
-            .header-content {
-              flex-direction: column;
-              align-items: stretch;
-            }
-
             .header-actions {
               flex-direction: column;
             }

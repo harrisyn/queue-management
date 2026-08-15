@@ -277,7 +277,7 @@ export default function QueueStatusPage({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'WAITING': return '#6366f1';
+      case 'WAITING': return '#14b8a6';
       case 'SERVING': return '#f59e0b';
       case 'SERVED': return '#10b981';
       case 'CANCELLED': case 'NO_SHOW': return '#ef4444';
@@ -356,7 +356,7 @@ export default function QueueStatusPage({
             <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
               <rect width="48" height="48" rx="12" fill="white" fillOpacity="0.2" />
               <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-              <circle cx="24" cy="22" r="4" fill={isCalled ? '#f59e0b' : '#6366f1'}/>
+              <circle cx="24" cy="22" r="4" fill={isCalled ? '#f59e0b' : '#14b8a6'}/>
             </svg>
           </div>
           <div style={headerInfo}>
@@ -407,7 +407,7 @@ export default function QueueStatusPage({
                     cy="80"
                     r="70"
                     fill="none"
-                    stroke="#6366f1"
+                    stroke="#14b8a6"
                     strokeWidth="8"
                     strokeLinecap="round"
                     strokeDasharray={`${((status.totalInQueue - status.position) / status.totalInQueue) * 439.82} 439.82`}
@@ -451,7 +451,7 @@ export default function QueueStatusPage({
           {status.status === 'WAITING' && (
             <div style={infoGrid}>
               <div style={infoItem}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#6366f1" strokeWidth="2">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14b8a6" strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M12 6v6l4 2" />
                 </svg>
@@ -733,7 +733,7 @@ export default function QueueStatusPage({
         </p>
 
         <p style={footerText}>
-          Powered by <strong>QMS</strong>
+          Powered by <strong>QueueFlow</strong>
         </p>
       </div>
     </div>
@@ -795,7 +795,7 @@ const spinner: React.CSSProperties = {
   width: '48px',
   height: '48px',
   border: '4px solid rgba(255, 255, 255, 0.2)',
-  borderTopColor: '#6366f1',
+  borderTopColor: '#14b8a6',
   borderRadius: '50%',
   animation: 'spin 1s linear infinite',
 };
@@ -832,7 +832,7 @@ const errorSubtitle: React.CSSProperties = {
 
 const homeButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
   borderRadius: '0.75rem',
   textDecoration: 'none',
@@ -925,7 +925,7 @@ const ticketNumber: React.CSSProperties = {
   display: 'block',
   fontSize: '2.5rem',
   fontWeight: 800,
-  background: 'linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%)',
+  background: 'var(--gradient-ticket)',
   WebkitBackgroundClip: 'text',
   WebkitTextFillColor: 'transparent',
 };
@@ -1153,9 +1153,9 @@ const shareButton: React.CSSProperties = {
   gap: '0.5rem',
   flex: 1,
   padding: '0.875rem',
-  background: 'rgba(99, 102, 241, 0.2)',
+  background: 'rgba(20, 184, 166, 0.2)',
   color: 'white',
-  border: '1px solid rgba(99, 102, 241, 0.3)',
+  border: '1px solid rgba(20, 184, 166, 0.3)',
   borderRadius: '0.75rem',
   fontWeight: 500,
   cursor: 'pointer',
@@ -1226,7 +1226,7 @@ const qrTicketInfo: React.CSSProperties = {
 const qrTicketLabel: React.CSSProperties = {
   fontSize: '1.125rem',
   fontWeight: 600,
-  color: '#6366f1',
+  color: '#14b8a6',
 };
 
 const shareUrlButton: React.CSSProperties = {
@@ -1236,7 +1236,7 @@ const shareUrlButton: React.CSSProperties = {
   gap: '0.5rem',
   width: '100%',
   padding: '0.875rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '0.75rem',
@@ -1365,7 +1365,7 @@ const identitySaveButton: React.CSSProperties = {
   width: '100%',
   marginTop: '1rem',
   padding: '0.75rem',
-  background: '#6366f1',
+  background: '#14b8a6',
   color: 'white',
   border: 'none',
   borderRadius: '0.5rem',

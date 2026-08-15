@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import routes from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { setSocketIO } from './lib/socket';
+import { handleStripeWebhook, handlePaystackWebhook } from './controllers/paymentWebhook.controller';
 
 // dotenv is loaded above via import 'dotenv/config'
 // This ensures environment variables (DATABASE_URL) are available
@@ -31,6 +32,12 @@ const io = new Server(httpServer, {
 
 // Initialize socket
 setSocketIO(io);
+
+// Webhook routes need the raw body for signature verification, so they're
+// registered before express.json() runs (which would otherwise consume and
+// parse the body, leaving nothing for verifyWebhookSignature to check).
+app.post('/api/v1/webhooks/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
+app.post('/api/v1/webhooks/paystack', express.raw({ type: 'application/json' }), handlePaystackWebhook);
 
 // Middleware
 app.use(cors({

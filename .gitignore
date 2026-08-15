@@ -109,3 +109,4 @@ temp/
 *.log.*
 !.keep
 .gstack/
+.playwright-mcp/

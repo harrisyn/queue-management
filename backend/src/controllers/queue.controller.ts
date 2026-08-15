@@ -910,9 +910,8 @@ export const reorderEntries = async (req: Request, res: Response, next: NextFunc
 export const callNextWithServicePoint = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { servicePointId, servicePointInstanceId } = req.body;
+    const { servicePointInstanceId } = req.body;
 
-    // Get the queue to know which service it belongs to
     const queue = await prisma.queue.findUnique({
       where: { id },
       select: { serviceId: true }
@@ -922,75 +921,32 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
       return res.status(404).json({ error: 'Queue not found' });
     }
 
-    let resolvedServicePointId = servicePointId;
-
-    // If instanceId is provided, validate it and get the service point
     if (servicePointInstanceId) {
       const instance = await prisma.servicePointInstance.findUnique({
         where: { id: servicePointInstanceId },
-        include: {
-          servicePoint: {
-            include: {
-              services: {
-                where: { 
-                  serviceId: queue.serviceId,
-                  isActive: true 
-                }
-              }
-            }
-          }
-        }
+        include: { servicePointService: { include: { servicePoint: true } } },
       });
 
       if (!instance || !instance.isActive) {
         return res.status(400).json({ error: 'Invalid or inactive service point instance' });
       }
 
-      if (!instance.servicePoint.isActive) {
+      if (!instance.servicePointService.servicePoint.isActive || !instance.servicePointService.isActive) {
         return res.status(400).json({ error: 'Invalid or inactive service point' });
       }
 
-      if (instance.servicePoint.services.length === 0) {
-        return res.status(400).json({ 
-          error: 'Service point is not authorized for this service. Please link the service point to this service in admin settings.' 
-        });
-      }
-
-      resolvedServicePointId = instance.servicePointId;
-    } else if (servicePointId) {
-      // Verify service point exists, is active, and is linked to this service (legacy path)
-      const servicePoint = await prisma.servicePoint.findUnique({
-        where: { id: servicePointId },
-        include: {
-          services: {
-            where: { 
-              serviceId: queue.serviceId,
-              isActive: true 
-            }
-          }
-        }
-      });
-
-      if (!servicePoint || !servicePoint.isActive) {
-        return res.status(400).json({ error: 'Invalid or inactive service point' });
-      }
-
-      // Check if service point is linked to this service
-      if (servicePoint.services.length === 0) {
-        return res.status(400).json({ 
-          error: 'Service point is not authorized for this service. Please link the service point to this service in admin settings.' 
-        });
+      if (instance.servicePointService.serviceId !== queue.serviceId) {
+        return res.status(400).json({ error: 'Service point instance is not authorized for this service' });
       }
     }
 
-    // Find next waiting entry (sorted by priority, sortOrder, then joinedAt)
     const nextEntry = await prisma.queueEntry.findFirst({
       where: {
         queueId: id,
         status: 'WAITING',
       },
       orderBy: [
-        { priority: 'desc' }, 
+        { priority: 'desc' },
         { sortOrder: 'asc' },
         { joinedAt: 'asc' }
       ],
@@ -1000,36 +956,36 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
       return res.status(404).json({ error: 'No waiting entries in queue' });
     }
 
-    // Update status to serving with service point and instance
     const entry = await prisma.queueEntry.update({
       where: { id: nextEntry.id },
       data: {
         status: 'SERVING',
         calledAt: new Date(),
-        servicePointId: resolvedServicePointId || null,
         servicePointInstanceId: servicePointInstanceId || null,
       },
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true, phone: true },
         },
-        servicePoint: true,
-        servicePointInstance: true,
+        servicePointInstance: {
+          include: { servicePointService: { include: { servicePoint: true } } },
+        },
       },
     });
 
-    // Emit real-time update to both queue and location rooms
+    const servicePointForPayload = entry.servicePointInstance?.servicePointService?.servicePoint ?? null;
+
     const locationId = await getLocationIdFromQueue(id);
     emitToQueueAndLocation(id, locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
       queueId: id,
       entryId: entry.id,
       status: 'SERVING',
-      entry,
-      servicePoint: entry.servicePoint,
+      entry: { ...entry, servicePoint: servicePointForPayload },
+      servicePoint: servicePointForPayload,
       servicePointInstance: entry.servicePointInstance,
     });
 
-    res.json(entry);
+    res.json({ ...entry, servicePoint: servicePointForPayload });
   } catch (error) {
     next(error);
   }
@@ -1068,7 +1024,9 @@ export const getQueueEntriesForOperator = async (req: Request, res: Response, ne
             user: {
               select: { id: true, firstName: true, lastName: true, phone: true },
             },
-            servicePoint: true,
+            servicePointInstance: {
+              include: { servicePointService: { include: { servicePoint: true } } },
+            },
           },
         },
       },
@@ -1079,8 +1037,19 @@ export const getQueueEntriesForOperator = async (req: Request, res: Response, ne
     }
 
     // Split entries into serving and waiting
-    const serving = queue.entries.filter(e => e.status === 'SERVING');
-    const waiting = queue.entries.filter(e => e.status === 'WAITING');
+    const attachServicePoint = (e: typeof queue.entries[number]) => ({
+      ...e,
+      servicePoint: e.servicePointInstance?.servicePointService?.servicePoint
+        ? {
+            id: e.servicePointInstance.servicePointService.servicePoint.id,
+            name: e.servicePointInstance.servicePointService.servicePoint.name,
+            displayName: e.servicePointInstance.servicePointService.servicePoint.displayName,
+          }
+        : null,
+    });
+
+    const serving = queue.entries.filter(e => e.status === 'SERVING').map(attachServicePoint);
+    const waiting = queue.entries.filter(e => e.status === 'WAITING').map(attachServicePoint);
 
     // Get next service suggestions
     const nextServices = queue.service.flowsFrom.map(flow => ({
@@ -1503,8 +1472,12 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
                 user: {
                   select: { id: true, firstName: true, lastName: true }
                 },
-                servicePoint: {
-                  select: { id: true, name: true, displayName: true }
+                servicePointInstance: {
+                  include: {
+                    servicePointService: {
+                      include: { servicePoint: { select: { id: true, name: true, displayName: true } } }
+                    }
+                  }
                 }
               },
               take: 20, // Limit entries per queue for display
@@ -1523,7 +1496,8 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
     const spLinks = await prisma.servicePointService.findMany({
       where: {
         isActive: true,
-        servicePoint: { locationId, isActive: true },
+        servicePoint: { isActive: true },
+        service: { locationId, isActive: true },
       },
       include: {
         servicePoint: { select: { id: true, name: true, displayName: true, isActive: true } },
@@ -1619,7 +1593,9 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
           id: e.id,
           ticketNumber: e.ticketNumber,
           customerName: `${e.user.firstName} ${e.user.lastName}`,
-          servicePoint: e.servicePoint ? (e.servicePoint.displayName || e.servicePoint.name) : null,
+          servicePoint: e.servicePointInstance?.servicePointService?.servicePoint
+            ? (e.servicePointInstance.servicePointService.servicePoint.displayName || e.servicePointInstance.servicePointService.servicePoint.name)
+            : null,
           calledAt: e.calledAt,
         })),
         waitingList: waiting.slice(0, 10).map((e, index) => {

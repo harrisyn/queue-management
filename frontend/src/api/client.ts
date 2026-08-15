@@ -41,8 +41,8 @@ class ApiClient {
   }
 
   // Auth
-  async login(email: string, password: string) {
-    const { data } = await this.client.post('/auth/login', { email, password });
+  async login(email: string, password: string, options?: { slug?: string; adminLogin?: boolean }) {
+    const { data } = await this.client.post('/auth/login', { email, password, ...options });
     return data;
   }
 
@@ -104,9 +104,12 @@ class ApiClient {
     return data;
   }
 
-  async createService(locationId: string, service: Partial<Service>) {
-    const { data } = await this.client.post(`/services/locations/${locationId}/services`, service);
-    return data;
+  async createService(payload: Partial<Service> & {
+    locationIds: string[];
+    servicePoints?: { servicePointId: string; capacity: number }[];
+  }) {
+    const { data } = await this.client.post('/services', payload);
+    return data as { services: Service[] };
   }
 
   // Queues
@@ -193,6 +196,16 @@ class ApiClient {
   // Subscription
   async getMySubscription() {
     const { data } = await this.client.get('/subscription');
+    return data;
+  }
+
+  async getPlans() {
+    const { data } = await this.client.get('/plans', { params: { includeInactive: false } });
+    return data;
+  }
+
+  async createSubscriptionCheckout(payload: { planId: string; provider: 'stripe' | 'paystack'; billingCycle: 'monthly' | 'yearly' }) {
+    const { data } = await this.client.post('/tenant/subscription/checkout', payload);
     return data;
   }
 
@@ -331,8 +344,8 @@ class ApiClient {
   }
 
   // Service Points
-  async getServicePoints(locationId: string) {
-    const { data } = await this.client.get(`/service-points/location/${locationId}`);
+  async getServicePoints(organizationId: string) {
+    const { data } = await this.client.get(`/service-points/organization/${organizationId}`);
     return data;
   }
 
@@ -347,7 +360,7 @@ class ApiClient {
   }
 
   async createServicePoint(payload: {
-    locationId: string;
+    organizationId: string;
     name: string;
     displayName?: string;
     type?: string;
@@ -373,8 +386,8 @@ class ApiClient {
   }
 
   // Service point linking to services (admin)
-  async linkServicePointToService(servicePointId: string, serviceId: string) {
-    const { data } = await this.client.post('/service-points/link', { servicePointId, serviceId });
+  async linkServicePointToService(servicePointId: string, serviceId: string, capacity: number) {
+    const { data } = await this.client.post('/service-points/link', { servicePointId, serviceId, capacity });
     return data;
   }
 
@@ -402,11 +415,6 @@ class ApiClient {
   // Service Point Instances
   async getServicePointInstances(servicePointId: string) {
     const { data } = await this.client.get(`/service-points/${servicePointId}/instances`);
-    return data;
-  }
-
-  async syncServicePointInstances(servicePointId: string) {
-    const { data } = await this.client.post(`/service-points/${servicePointId}/instances/sync`);
     return data;
   }
 
@@ -495,10 +503,9 @@ class ApiClient {
     return data;
   }
 
-  async callNextWithServicePoint(queueId: string, servicePointId?: string, servicePointInstanceId?: string) {
-    const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, { 
-      servicePointId, 
-      servicePointInstanceId 
+  async callNextWithServicePoint(queueId: string, servicePointInstanceId?: string) {
+    const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, {
+      servicePointInstanceId
     });
     return data;
   }
@@ -517,6 +524,7 @@ class ApiClient {
     adminLastName: string;
     adminPassword: string;
     emailVerified?: boolean;
+    slug?: string;
   }) {
     const { data } = await this.client.post('/public/register-org', payload);
     return data;
@@ -638,7 +646,9 @@ class ApiClient {
   }
 
   // Service management
-  async updateService(id: string, payload: Partial<Service>) {
+  async updateService(id: string, payload: Partial<Service> & {
+    servicePoints?: { servicePointId: string; capacity: number }[];
+  }) {
     const { data } = await this.client.put(`/services/${id}`, payload);
     return data;
   }
@@ -714,7 +724,7 @@ class ApiClient {
     status?: string;
     billingCycle?: string;
     trialEndsAt?: string;
-    externalPaymentId?: string;
+    externalProviderSubscriptionId?: string;
   }) {
     const { data } = await this.client.patch(`/superadmin/organizations/${id}/subscription`, payload);
     return data;
@@ -776,6 +786,21 @@ class ApiClient {
 
   async deleteSubscriptionPlan(id: string) {
     const { data } = await this.client.delete(`/superadmin/plans/${id}`);
+    return data;
+  }
+
+  async getPaymentProviders() {
+    const { data } = await this.client.get('/superadmin/payment-providers');
+    return data;
+  }
+
+  async savePaymentProvider(provider: 'stripe' | 'paystack', payload: { publicKey?: string; secretKey: string; webhookSecret: string; isActive: boolean }) {
+    const { data } = await this.client.put(`/superadmin/payment-providers/${provider}`, payload);
+    return data;
+  }
+
+  async testPaymentProvider(provider: 'stripe' | 'paystack') {
+    const { data } = await this.client.post(`/superadmin/payment-providers/${provider}/test`);
     return data;
   }
 }

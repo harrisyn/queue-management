@@ -42,6 +42,7 @@ interface SubscriptionContextType {
     services: LimitInfo;
     users: LimitInfo;
   };
+  activeProviders: string[];
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -77,6 +78,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [subscription, setSubscription] = useState<SubscriptionInfo | null>(null);
   const [features, setFeatures] = useState<SubscriptionFeatures>(DEFAULT_FEATURES);
   const [limits, setLimits] = useState(DEFAULT_LIMITS);
+  const [activeProviders, setActiveProviders] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -85,6 +87,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setSubscription(null);
       setFeatures(DEFAULT_FEATURES);
       setLimits(DEFAULT_LIMITS);
+      setActiveProviders([]);
       setLoading(false);
       return;
     }
@@ -96,6 +99,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setSubscription(data.subscription);
       setFeatures({ ...DEFAULT_FEATURES, ...data.features });
       setLimits(data.limits);
+      setActiveProviders(data.activeProviders || []);
     } catch (err) {
       console.error('Failed to fetch subscription:', err);
       setError('Failed to load subscription info');
@@ -103,6 +107,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setSubscription(null);
       setFeatures(DEFAULT_FEATURES);
       setLimits(DEFAULT_LIMITS);
+      setActiveProviders([]);
     } finally {
       setLoading(false);
     }
@@ -131,6 +136,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
         subscription,
         features,
         limits,
+        activeProviders,
         loading,
         error,
         refresh: fetchSubscription,
@@ -229,7 +235,7 @@ export const UpgradePrompt: React.FC<{
         <p style={{ margin: 0, color: '#92400e', fontWeight: 500 }}>{message}</p>
       </div>
       <button
-        onClick={() => window.location.href = '/admin/settings?tab=billing'}
+        onClick={() => window.location.href = '/admin/billing'}
         style={{
           padding: '8px 16px',
           background: '#f59e0b',
