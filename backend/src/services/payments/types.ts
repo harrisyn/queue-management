@@ -28,6 +28,8 @@ export interface PaymentWebhookEvent {
   organizationId: string | null;
   externalSubscriptionId: string | null;
   currentPeriodEnd: Date | null;
+  planId: string | null;
+  billingCycle: 'monthly' | 'quarterly' | 'yearly' | null;
 }
 
 export interface PaymentProvider {

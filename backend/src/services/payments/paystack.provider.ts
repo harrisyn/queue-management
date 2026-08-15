@@ -66,14 +66,18 @@ export class PaystackProvider implements PaymentProvider {
     const eventId = event.data?.id ? String(event.data.id) : `${event.event}-${event.data?.reference}`;
 
     switch (event.event) {
-      case 'charge.success':
+      case 'charge.success': {
+        const billingCycle = event.data?.metadata?.billingCycle;
         return {
           eventId,
           type: 'checkout_completed',
           organizationId: event.data?.metadata?.organizationId ?? null,
           externalSubscriptionId: event.data?.reference ?? null,
           currentPeriodEnd: null,
+          planId: event.data?.metadata?.planId ?? null,
+          billingCycle: billingCycle === 'monthly' || billingCycle === 'quarterly' || billingCycle === 'yearly' ? billingCycle : null,
         };
+      }
       case 'invoice.payment_failed':
         return {
           eventId,
@@ -81,6 +85,8 @@ export class PaystackProvider implements PaymentProvider {
           organizationId: null,
           externalSubscriptionId: event.data?.subscription?.subscription_code ?? null,
           currentPeriodEnd: null,
+          planId: null,
+          billingCycle: null,
         };
       case 'subscription.not_renew':
       case 'subscription.disable':
@@ -90,6 +96,8 @@ export class PaystackProvider implements PaymentProvider {
           organizationId: null,
           externalSubscriptionId: event.data?.subscription_code ?? null,
           currentPeriodEnd: null,
+          planId: null,
+          billingCycle: null,
         };
       default:
         return null;

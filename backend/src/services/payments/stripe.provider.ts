@@ -41,6 +41,7 @@ export class StripeProvider implements PaymentProvider {
       metadata: {
         organizationId: params.organizationId,
         planId: params.planId,
+        billingCycle: params.billingCycle,
       },
     });
 
@@ -62,12 +63,15 @@ export class StripeProvider implements PaymentProvider {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+        const billingCycle = session.metadata?.billingCycle;
         return {
           eventId: event.id,
           type: 'checkout_completed',
           organizationId: session.metadata?.organizationId ?? null,
           externalSubscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
           currentPeriodEnd: null,
+          planId: session.metadata?.planId ?? null,
+          billingCycle: billingCycle === 'monthly' || billingCycle === 'quarterly' || billingCycle === 'yearly' ? billingCycle : null,
         };
       }
       case 'invoice.payment_succeeded': {
@@ -81,6 +85,8 @@ export class StripeProvider implements PaymentProvider {
           currentPeriodEnd: invoice.lines.data[0]?.period?.end
             ? new Date(invoice.lines.data[0].period.end * 1000)
             : null,
+          planId: null,
+          billingCycle: null,
         };
       }
       case 'invoice.payment_failed': {
@@ -92,6 +98,8 @@ export class StripeProvider implements PaymentProvider {
           organizationId: null,
           externalSubscriptionId: subId,
           currentPeriodEnd: null,
+          planId: null,
+          billingCycle: null,
         };
       }
       case 'customer.subscription.deleted': {
@@ -102,6 +110,8 @@ export class StripeProvider implements PaymentProvider {
           organizationId: null,
           externalSubscriptionId: sub.id,
           currentPeriodEnd: null,
+          planId: null,
+          billingCycle: null,
         };
       }
       default:

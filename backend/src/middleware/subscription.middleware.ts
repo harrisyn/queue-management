@@ -159,11 +159,14 @@ export const loadSubscription = async (req: Request, res: Response, next: NextFu
     }
 
     if (!subscription || (subscription.status !== 'ACTIVE' && subscription.status !== 'TRIAL')) {
+      // EXPIRED (with no fallback plan) is a deliberate lockdown state — the
+      // org should see no features, not the wide-open DEFAULT_FEATURES set
+      // that unauthenticated/no-org requests get. Matches getOrganizationFeatures.
       req.subscription = {
         planId: null,
         planName: null,
         status: subscription?.status || null,
-        features: DEFAULT_FEATURES,
+        features: subscription?.status === 'EXPIRED' ? {} : DEFAULT_FEATURES,
       };
       return next();
     }
@@ -231,7 +234,18 @@ export const checkLimit = async (
   }
 
   const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
-  const features = (isUsable ? subscription!.plan.features : {}) as SubscriptionFeatures;
+  // Limit numbers live on the plan's dedicated columns (maxLocations /
+  // maxServicesPerLoc / maxUsersPerOrg), not in the features JSON blob —
+  // nothing populates those keys in `features`. An unusable subscription
+  // (e.g. EXPIRED with no fallback) still resolves to a hard 0, matching
+  // the previous features-based fallback behavior for that case.
+  const planLimits = isUsable
+    ? {
+        maxLocations: subscription!.plan.maxLocations,
+        maxServicesPerLoc: subscription!.plan.maxServicesPerLoc,
+        maxUsersPerOrg: subscription!.plan.maxUsersPerOrg,
+      }
+    : { maxLocations: 0, maxServicesPerLoc: 0, maxUsersPerOrg: 0 };
 
   let current = 0;
   let limit = 0;
@@ -239,17 +253,17 @@ export const checkLimit = async (
   switch (limitType) {
     case 'locations':
       current = await prisma.location.count({ where: { organizationId } });
-      limit = features.maxLocations || DEFAULT_FEATURES.maxLocations || 1;
+      limit = planLimits.maxLocations ?? DEFAULT_FEATURES.maxLocations ?? 1;
       break;
     case 'services':
       current = await prisma.service.count({
         where: { location: { organizationId } },
       });
-      limit = features.maxServices || DEFAULT_FEATURES.maxServices || 3;
+      limit = planLimits.maxServicesPerLoc ?? DEFAULT_FEATURES.maxServices ?? 3;
       break;
     case 'users':
       current = await prisma.user.count({ where: { organizationId } });
-      limit = features.maxUsers || DEFAULT_FEATURES.maxUsers || 5;
+      limit = planLimits.maxUsersPerOrg ?? DEFAULT_FEATURES.maxUsers ?? 5;
       break;
   }
 
@@ -370,6 +384,27 @@ export const getMySubscription = async (req: Request, res: Response) => {
     const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
     const features = (isUsable ? subscription!.plan.features : {}) as SubscriptionFeatures;
     const mergedFeatures = isExpiredNoFallback ? {} : { ...DEFAULT_FEATURES, ...features };
+    // Limit numbers come from the plan's dedicated columns, not the features
+    // JSON blob (nothing populates maxLocations/etc there). An unusable
+    // subscription (EXPIRED, no fallback) resolves to a hard 0 rather than
+    // falling back to DEFAULT_FEATURES, so the lockdown actually locks.
+    const planLimits: { maxLocations?: number | null; maxServicesPerLoc?: number | null; maxUsersPerOrg?: number | null } = isUsable
+      ? {
+          maxLocations: subscription!.plan.maxLocations,
+          maxServicesPerLoc: subscription!.plan.maxServicesPerLoc,
+          maxUsersPerOrg: subscription!.plan.maxUsersPerOrg,
+        }
+      : {};
+    // EXPIRED-no-fallback is a hard lockdown (0, no DEFAULT_FEATURES
+    // fallback). Any other non-usable state (no subscription, PAST_DUE,
+    // etc.) still falls back to DEFAULT_FEATURES, same as `mergedFeatures`.
+    const mergedLimits = isExpiredNoFallback
+      ? { maxLocations: 0, maxServicesPerLoc: 0, maxUsersPerOrg: 0 }
+      : {
+          maxLocations: planLimits.maxLocations ?? DEFAULT_FEATURES.maxLocations ?? 0,
+          maxServicesPerLoc: planLimits.maxServicesPerLoc ?? DEFAULT_FEATURES.maxServices ?? 0,
+          maxUsersPerOrg: planLimits.maxUsersPerOrg ?? DEFAULT_FEATURES.maxUsers ?? 0,
+        };
 
     let upgradePlan: { id: string; name: string } | null = null;
     if (subscription?.plan.upgradePlanId) {
@@ -407,18 +442,18 @@ export const getMySubscription = async (req: Request, res: Response) => {
       limits: {
         locations: {
           current: locationCount,
-          limit: mergedFeatures.maxLocations || 0,
-          allowed: locationCount < (mergedFeatures.maxLocations || 0),
+          limit: mergedLimits.maxLocations,
+          allowed: locationCount < mergedLimits.maxLocations,
         },
         services: {
           current: serviceCount,
-          limit: mergedFeatures.maxServices || 0,
-          allowed: serviceCount < (mergedFeatures.maxServices || 0),
+          limit: mergedLimits.maxServicesPerLoc,
+          allowed: serviceCount < mergedLimits.maxServicesPerLoc,
         },
         users: {
           current: userCount,
-          limit: mergedFeatures.maxUsers || 0,
-          allowed: userCount < (mergedFeatures.maxUsers || 0),
+          limit: mergedLimits.maxUsersPerOrg,
+          allowed: userCount < mergedLimits.maxUsersPerOrg,
         },
       },
       activeProviders,

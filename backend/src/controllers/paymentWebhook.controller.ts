@@ -42,7 +42,7 @@ async function handleWebhook(providerName: ProviderName, req: Request, res: Resp
 
 async function applyWebhookEvent(
   providerName: ProviderName,
-  event: { type: string; organizationId: string | null; externalSubscriptionId: string | null; currentPeriodEnd: Date | null }
+  event: { type: string; organizationId: string | null; externalSubscriptionId: string | null; currentPeriodEnd: Date | null; planId: string | null; billingCycle: string | null }
 ) {
   let organizationId = event.organizationId;
 
@@ -79,6 +79,11 @@ async function applyWebhookEvent(
       })();
 
       if (org.subscription) {
+        // On checkout_completed, the org must actually move onto the plan the
+        // customer just paid for — not just have its existing (often Free)
+        // subscription row flipped to ACTIVE. Renewal events don't carry a
+        // planId (the org is already on the right plan by then), so only
+        // apply it when present.
         await prisma.organizationSubscription.update({
           where: { id: org.subscription.id },
           data: {
@@ -86,6 +91,8 @@ async function applyWebhookEvent(
             provider: providerName,
             externalProviderSubscriptionId: event.externalSubscriptionId ?? org.subscription.externalProviderSubscriptionId,
             currentPeriodEnd: periodEnd,
+            ...(event.planId ? { planId: event.planId } : {}),
+            ...(event.billingCycle ? { billingCycle: event.billingCycle } : {}),
           },
         });
       } else {

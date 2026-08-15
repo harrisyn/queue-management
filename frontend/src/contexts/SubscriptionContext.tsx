@@ -97,7 +97,12 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setError(null);
       const data = await api.getMySubscription();
       setSubscription(data.subscription);
-      setFeatures({ ...DEFAULT_FEATURES, ...data.features });
+      // Only backfill DEFAULT_FEATURES when there's no subscription at all.
+      // When the backend deliberately sends `features: {}` for an
+      // EXPIRED-no-fallback org (a locked-down account), merging in the
+      // defaults here would silently re-enable every feature client-side
+      // and undo the lockdown.
+      setFeatures(data.subscription === null ? { ...DEFAULT_FEATURES, ...data.features } : { ...data.features } as typeof DEFAULT_FEATURES);
       setLimits(data.limits);
       setActiveProviders(data.activeProviders || []);
     } catch (err) {

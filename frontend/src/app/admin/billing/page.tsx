@@ -165,14 +165,21 @@ export default function BillingPage() {
           </Card>
         )}
 
-        {data?.upgradePlan && data.upgradePlan.id !== currentPlanId && (
-          <Card style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', background: '#f0fdfa', border: '1px solid #99f6e4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#0f766e', fontSize: '0.875rem' }}>
-              Need more room to grow? <strong>Upgrade to {data.upgradePlan.name}</strong> for higher limits and more features.
-            </span>
-            <Button variant="primary" size="sm" onClick={() => handleChoosePlan(data.upgradePlan!.id)}>Upgrade to {data.upgradePlan.name}</Button>
-          </Card>
-        )}
+        {data?.upgradePlan && data.upgradePlan.id !== currentPlanId && (() => {
+          const upgradeTargetPlan = plans.find(p => p.id === data.upgradePlan!.id);
+          const upgradeTargetIsFree = upgradeTargetPlan
+            ? Number(upgradeTargetPlan.priceMonthly) === 0 && Number(upgradeTargetPlan.priceQuarterly) === 0 && Number(upgradeTargetPlan.priceYearly) === 0
+            : true;
+          const upgradeDisabled = !upgradeTargetIsFree && activeProviders.length === 0;
+          return (
+            <Card style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', background: '#f0fdfa', border: '1px solid #99f6e4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: '#0f766e', fontSize: '0.875rem' }}>
+                Need more room to grow? <strong>Upgrade to {data.upgradePlan.name}</strong> for higher limits and more features.
+              </span>
+              <Button variant="primary" size="sm" disabled={upgradeDisabled} onClick={() => handleChoosePlan(data.upgradePlan!.id)}>Upgrade to {data.upgradePlan.name}</Button>
+            </Card>
+          );
+        })()}
 
         <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
           {(['monthly', 'quarterly', 'yearly'] as BillingCycle[]).map(cycle => {
