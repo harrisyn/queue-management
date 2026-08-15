@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
+import { resolveExpiry } from '../lib/subscriptionExpiry';
 
 // Feature keys that can be checked
 export type FeatureKey = 
@@ -40,6 +41,65 @@ const DEFAULT_FEATURES: SubscriptionFeatures = {
   serviceFlows: false,
   servicePoints: true,
 };
+
+// Applies resolveExpiry's decision to a subscription row, writing the
+// resulting state to the DB if anything changed. Returns the up-to-date
+// subscription (with `plan` freshly re-fetched if the plan changed).
+async function applyExpiryIfNeeded<T extends {
+  id: string;
+  status: string;
+  trialEndsAt: Date | null;
+  planId: string;
+  plan: { id: string; expiredFallbackPlanId: string | null };
+}>(subscription: T): Promise<T> {
+  const resolution = resolveExpiry(
+    { status: subscription.status, trialEndsAt: subscription.trialEndsAt, planId: subscription.planId, expiredFallbackPlanId: subscription.plan.expiredFallbackPlanId },
+    new Date()
+  );
+
+  if (resolution.action === 'none') {
+    return subscription;
+  }
+
+  if (resolution.action === 'expire') {
+    await prisma.organizationSubscription.update({
+      where: { id: subscription.id },
+      data: { status: 'EXPIRED' },
+    });
+    return { ...subscription, status: 'EXPIRED' };
+  }
+
+  // action === 'fallback'
+  const fallbackPlan = await prisma.subscriptionPlan.findUnique({ where: { id: resolution.newPlanId } });
+  if (!fallbackPlan) {
+    // Misconfigured fallback (plan was deleted) - fall through to expire rather than crash.
+    await prisma.organizationSubscription.update({
+      where: { id: subscription.id },
+      data: { status: 'EXPIRED' },
+    });
+    return { ...subscription, status: 'EXPIRED' };
+  }
+
+  const now = new Date();
+  const newStatus = fallbackPlan.trialDurationDays ? 'TRIAL' : 'ACTIVE';
+  const newTrialEndsAt = fallbackPlan.trialDurationDays
+    ? new Date(now.getTime() + fallbackPlan.trialDurationDays * 24 * 60 * 60 * 1000)
+    : null;
+
+  const updated = await prisma.organizationSubscription.update({
+    where: { id: subscription.id },
+    data: {
+      planId: fallbackPlan.id,
+      status: newStatus,
+      trialEndsAt: newTrialEndsAt,
+      currentPeriodStart: now,
+      currentPeriodEnd: newTrialEndsAt || new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()),
+    },
+    include: { plan: true },
+  });
+
+  return updated as unknown as T;
+}
 
 // Extend Request to include subscription info
 declare global {
@@ -87,14 +147,17 @@ export const loadSubscription = async (req: Request, res: Response, next: NextFu
     }
 
     // Get organization's subscription
-    const subscription = await prisma.organizationSubscription.findUnique({
-      where: { organizationId: user.organizationId },
-      include: {
-        plan: true,
-      },
+    const org = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { subscription: { include: { plan: true } } },
     });
+    let subscription = org?.subscription ?? null;
 
-    if (!subscription || subscription.status !== 'ACTIVE') {
+    if (subscription) {
+      subscription = await applyExpiryIfNeeded(subscription);
+    }
+
+    if (!subscription || (subscription.status !== 'ACTIVE' && subscription.status !== 'TRIAL')) {
       req.subscription = {
         planId: null,
         planName: null,
@@ -157,13 +220,18 @@ export const checkLimit = async (
   organizationId: string,
   limitType: 'locations' | 'services' | 'users'
 ): Promise<{ current: number; limit: number; allowed: boolean }> => {
-  const subscription = await prisma.organizationSubscription.findUnique({
-    where: { organizationId },
-    include: { plan: true },
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { subscription: { include: { plan: true } } },
   });
+  let subscription = org?.subscription ?? null;
+  if (subscription) {
+    subscription = await applyExpiryIfNeeded(subscription);
+  }
 
-  const features = subscription?.plan?.features as SubscriptionFeatures || DEFAULT_FEATURES;
-  
+  const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
+  const features = (isUsable ? subscription!.plan.features : {}) as SubscriptionFeatures;
+
   let current = 0;
   let limit = 0;
 
@@ -236,13 +304,17 @@ export const enforceLimit = (limitType: 'locations' | 'services' | 'users') => {
  * Get subscription info for a specific organization
  */
 export const getOrganizationFeatures = async (organizationId: string): Promise<SubscriptionFeatures> => {
-  const subscription = await prisma.organizationSubscription.findUnique({
-    where: { organizationId },
-    include: { plan: true },
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { subscription: { include: { plan: true } } },
   });
+  let subscription = org?.subscription ?? null;
+  if (subscription) {
+    subscription = await applyExpiryIfNeeded(subscription);
+  }
 
-  if (!subscription || subscription.status !== 'ACTIVE') {
-    return DEFAULT_FEATURES;
+  if (!subscription || (subscription.status !== 'ACTIVE' && subscription.status !== 'TRIAL')) {
+    return subscription?.status === 'EXPIRED' ? {} : DEFAULT_FEATURES;
   }
 
   return {
@@ -277,13 +349,34 @@ export const getMySubscription = async (req: Request, res: Response) => {
       });
     }
 
-    const subscription = await prisma.organizationSubscription.findUnique({
-      where: { organizationId: user.organizationId },
-      include: { plan: true },
+    const org = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { subscription: { include: { plan: true } } },
     });
+    let subscription = org?.subscription ?? null;
+    if (subscription) {
+      subscription = await applyExpiryIfNeeded(subscription);
+    }
 
-    const features = subscription?.plan?.features as SubscriptionFeatures || DEFAULT_FEATURES;
-    const mergedFeatures = { ...DEFAULT_FEATURES, ...features };
+    const isExpiredNoFallback = subscription?.status === 'EXPIRED';
+    const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
+    const features = (isUsable ? subscription!.plan.features : {}) as SubscriptionFeatures;
+    const mergedFeatures = isExpiredNoFallback ? {} : { ...DEFAULT_FEATURES, ...features };
+
+    let upgradePlan: { id: string; name: string } | null = null;
+    if (subscription?.plan.upgradePlanId) {
+      const upgrade = await prisma.subscriptionPlan.findUnique({
+        where: { id: subscription.plan.upgradePlanId },
+        select: { id: true, name: true },
+      });
+      upgradePlan = upgrade;
+    } else if (!subscription) {
+      // No subscription at all - shouldn't happen post-backfill, but if it
+      // does, point at whatever plan is currently marked isDefault so the
+      // upsell still has somewhere to send the user.
+      const defaultPlan = await prisma.subscriptionPlan.findFirst({ where: { isDefault: true }, select: { id: true, name: true } });
+      upgradePlan = defaultPlan;
+    }
 
     // Get current counts
     const [locationCount, serviceCount, userCount] = await Promise.all([
@@ -306,20 +399,22 @@ export const getMySubscription = async (req: Request, res: Response) => {
       limits: {
         locations: {
           current: locationCount,
-          limit: mergedFeatures.maxLocations || 1,
-          allowed: locationCount < (mergedFeatures.maxLocations || 1),
+          limit: mergedFeatures.maxLocations || 0,
+          allowed: locationCount < (mergedFeatures.maxLocations || 0),
         },
         services: {
           current: serviceCount,
-          limit: mergedFeatures.maxServices || 3,
-          allowed: serviceCount < (mergedFeatures.maxServices || 3),
+          limit: mergedFeatures.maxServices || 0,
+          allowed: serviceCount < (mergedFeatures.maxServices || 0),
         },
         users: {
           current: userCount,
-          limit: mergedFeatures.maxUsers || 5,
-          allowed: userCount < (mergedFeatures.maxUsers || 5),
+          limit: mergedFeatures.maxUsers || 0,
+          allowed: userCount < (mergedFeatures.maxUsers || 0),
         },
       },
+      upgradePlan,
+      isExpiredNoFallback,
     });
   } catch (error) {
     console.error('Error getting subscription:', error);
