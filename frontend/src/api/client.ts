@@ -204,9 +204,14 @@ class ApiClient {
     return data;
   }
 
-  async createSubscriptionCheckout(payload: { planId: string; provider: 'stripe' | 'paystack'; billingCycle: 'monthly' | 'yearly' }) {
+  async createSubscriptionCheckout(payload: { planId: string; provider: 'stripe' | 'paystack'; billingCycle: 'monthly' | 'quarterly' | 'yearly' }) {
     const { data } = await this.client.post('/tenant/subscription/checkout', payload);
     return data;
+  }
+
+  async switchToFreePlan(planId: string) {
+    const { data } = await this.client.post(`/tenant/subscription/switch/${planId}`);
+    return data as { success: boolean; planId: string; planName: string };
   }
 
   async getUsers(params?: { organizationId?: string; role?: string }) {
@@ -751,6 +756,7 @@ class ApiClient {
     code: string;
     description?: string;
     priceMonthly?: number;
+    priceQuarterly?: number;
     priceYearly?: number;
     currency?: string;
     maxLocations?: number | null;
@@ -759,7 +765,12 @@ class ApiClient {
     maxQueueEntriesPerDay?: number | null;
     features?: Record<string, boolean>;
     displayOrder?: number;
+    tierRank?: number;
     isDefault?: boolean;
+    isRecommended?: boolean;
+    trialDurationDays?: number | null;
+    expiredFallbackPlanId?: string | null;
+    upgradePlanId?: string | null;
   }) {
     const { data } = await this.client.post('/superadmin/plans', payload);
     return data;
@@ -769,6 +780,7 @@ class ApiClient {
     name?: string;
     description?: string;
     priceMonthly?: number;
+    priceQuarterly?: number;
     priceYearly?: number;
     currency?: string;
     maxLocations?: number | null;
@@ -777,8 +789,13 @@ class ApiClient {
     maxQueueEntriesPerDay?: number | null;
     features?: Record<string, boolean>;
     displayOrder?: number;
+    tierRank?: number;
     isActive?: boolean;
     isDefault?: boolean;
+    isRecommended?: boolean;
+    trialDurationDays?: number | null;
+    expiredFallbackPlanId?: string | null;
+    upgradePlanId?: string | null;
   }) {
     const { data } = await this.client.patch(`/superadmin/plans/${id}`, payload);
     return data;
