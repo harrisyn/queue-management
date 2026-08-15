@@ -72,3 +72,73 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
     next(error);
   }
 };
+
+export const switchToFreePlan = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    if (!req.user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    const { planId } = req.params;
+
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.userId },
+      select: { organizationId: true },
+    });
+    if (!user?.organizationId) {
+      return res.status(400).json({ error: 'User has no organization' });
+    }
+
+    const plan = await prisma.subscriptionPlan.findUnique({ where: { id: planId } });
+    if (!plan || !plan.isActive) {
+      return res.status(404).json({ error: 'Plan not found' });
+    }
+
+    const isFree = Number(plan.priceMonthly) === 0 && Number(plan.priceQuarterly) === 0 && Number(plan.priceYearly) === 0;
+    if (!isFree) {
+      return res.status(400).json({ error: 'This plan requires payment; use checkout instead' });
+    }
+
+    const org = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { subscriptionId: true },
+    });
+
+    const now = new Date();
+    const periodEnd = new Date(now.getFullYear() + 1, now.getMonth(), now.getDate());
+
+    let subscriptionId: string;
+    if (org?.subscriptionId) {
+      const updated = await prisma.organizationSubscription.update({
+        where: { id: org.subscriptionId },
+        data: {
+          planId: plan.id,
+          status: 'ACTIVE',
+          trialEndsAt: null,
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+        },
+      });
+      subscriptionId = updated.id;
+    } else {
+      const created = await prisma.organizationSubscription.create({
+        data: {
+          planId: plan.id,
+          status: 'ACTIVE',
+          billingCycle: 'monthly',
+          currentPeriodStart: now,
+          currentPeriodEnd: periodEnd,
+        },
+      });
+      subscriptionId = created.id;
+      await prisma.organization.update({
+        where: { id: user.organizationId },
+        data: { subscriptionId },
+      });
+    }
+
+    res.json({ success: true, planId: plan.id, planName: plan.name });
+  } catch (error) {
+    next(error);
+  }
+};
