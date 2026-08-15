@@ -99,8 +99,10 @@ export const switchToFreePlan = async (req: Request, res: Response, next: NextFu
       return res.status(400).json({ error: 'This plan requires payment; use checkout instead' });
     }
 
+    const organizationId = user.organizationId;
+
     const org = await prisma.organization.findUnique({
-      where: { id: user.organizationId },
+      where: { id: organizationId },
       select: { subscriptionId: true },
     });
 
@@ -121,19 +123,21 @@ export const switchToFreePlan = async (req: Request, res: Response, next: NextFu
       });
       subscriptionId = updated.id;
     } else {
-      const created = await prisma.organizationSubscription.create({
-        data: {
-          planId: plan.id,
-          status: 'ACTIVE',
-          billingCycle: 'monthly',
-          currentPeriodStart: now,
-          currentPeriodEnd: periodEnd,
-        },
-      });
-      subscriptionId = created.id;
-      await prisma.organization.update({
-        where: { id: user.organizationId },
-        data: { subscriptionId },
+      subscriptionId = await prisma.$transaction(async (tx) => {
+        const created = await tx.organizationSubscription.create({
+          data: {
+            planId: plan.id,
+            status: 'ACTIVE',
+            billingCycle: 'monthly',
+            currentPeriodStart: now,
+            currentPeriodEnd: periodEnd,
+          },
+        });
+        await tx.organization.update({
+          where: { id: organizationId },
+          data: { subscriptionId: created.id },
+        });
+        return created.id;
       });
     }
 
