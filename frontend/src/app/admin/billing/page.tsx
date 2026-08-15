@@ -276,7 +276,7 @@ export default function BillingPage() {
                   <Button
                     variant={isCurrent ? 'secondary' : 'primary'}
                     size="sm"
-                    disabled={isCurrent}
+                    disabled={isCurrent || (!isFree && activeProviders.length === 0)}
                     onClick={() => handleChoosePlan(plan.id)}
                   >
                     {isCurrent ? <><Icon icon={CheckCircle2} size={14} /> Current Plan</> : isFree ? 'Switch to Free' : 'Subscribe'}
