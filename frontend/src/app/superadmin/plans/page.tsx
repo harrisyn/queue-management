@@ -11,6 +11,7 @@ interface SubscriptionPlan {
   code: string;
   description: string | null;
   priceMonthly: string;
+  priceQuarterly: string;
   priceYearly: string;
   currency: string;
   maxLocations: number | null;
@@ -19,8 +20,13 @@ interface SubscriptionPlan {
   maxQueueEntriesPerDay: number | null;
   features: Record<string, boolean>;
   displayOrder: number;
+  tierRank: number;
   isActive: boolean;
   isDefault: boolean;
+  isRecommended: boolean;
+  trialDurationDays: number | null;
+  expiredFallbackPlanId: string | null;
+  upgradePlanId: string | null;
   _count: {
     subscriptions: number;
   };
@@ -52,6 +58,7 @@ export default function PlansPage() {
     code: '',
     description: '',
     priceMonthly: 0,
+    priceQuarterly: 0,
     priceYearly: 0,
     currency: 'USD',
     maxLocations: null as number | null,
@@ -60,8 +67,13 @@ export default function PlansPage() {
     maxQueueEntriesPerDay: null as number | null,
     features: {} as Record<string, boolean>,
     displayOrder: 0,
+    tierRank: 0,
     isActive: true,
     isDefault: false,
+    isRecommended: false,
+    trialDurationDays: null as number | null,
+    expiredFallbackPlanId: null as string | null,
+    upgradePlanId: null as string | null,
   });
 
   useEffect(() => {
@@ -88,6 +100,7 @@ export default function PlansPage() {
       code: '',
       description: '',
       priceMonthly: 0,
+      priceQuarterly: 0,
       priceYearly: 0,
       currency: 'USD',
       maxLocations: null,
@@ -96,8 +109,13 @@ export default function PlansPage() {
       maxQueueEntriesPerDay: null,
       features: {},
       displayOrder: plans.length,
+      tierRank: plans.length,
       isActive: true,
       isDefault: false,
+      isRecommended: false,
+      trialDurationDays: null,
+      expiredFallbackPlanId: null,
+      upgradePlanId: null,
     });
     setShowModal(true);
   };
@@ -109,6 +127,7 @@ export default function PlansPage() {
       code: plan.code,
       description: plan.description || '',
       priceMonthly: parseFloat(plan.priceMonthly),
+      priceQuarterly: parseFloat(plan.priceQuarterly),
       priceYearly: parseFloat(plan.priceYearly),
       currency: plan.currency,
       maxLocations: plan.maxLocations,
@@ -117,8 +136,13 @@ export default function PlansPage() {
       maxQueueEntriesPerDay: plan.maxQueueEntriesPerDay,
       features: plan.features || {},
       displayOrder: plan.displayOrder,
+      tierRank: plan.tierRank,
       isActive: plan.isActive,
       isDefault: plan.isDefault,
+      isRecommended: plan.isRecommended,
+      trialDurationDays: plan.trialDurationDays,
+      expiredFallbackPlanId: plan.expiredFallbackPlanId,
+      upgradePlanId: plan.upgradePlanId,
     });
     setShowModal(true);
   };
@@ -146,6 +170,12 @@ export default function PlansPage() {
           displayOrder: form.displayOrder,
           isActive: form.isActive,
           isDefault: form.isDefault,
+          priceQuarterly: form.priceQuarterly,
+          tierRank: form.tierRank,
+          isRecommended: form.isRecommended,
+          trialDurationDays: form.trialDurationDays,
+          expiredFallbackPlanId: form.expiredFallbackPlanId,
+          upgradePlanId: form.upgradePlanId,
         });
       } else {
         await api.createSubscriptionPlan({
@@ -162,6 +192,12 @@ export default function PlansPage() {
           features: form.features,
           displayOrder: form.displayOrder,
           isDefault: form.isDefault,
+          priceQuarterly: form.priceQuarterly,
+          tierRank: form.tierRank,
+          isRecommended: form.isRecommended,
+          trialDurationDays: form.trialDurationDays,
+          expiredFallbackPlanId: form.expiredFallbackPlanId,
+          upgradePlanId: form.upgradePlanId,
         });
       }
       setShowModal(false);
@@ -230,6 +266,7 @@ export default function PlansPage() {
                 <div style={planTitleRow}>
                   <h3 style={planName}>{plan.name}</h3>
                   {plan.isDefault && <span style={defaultBadge}>Default</span>}
+                  {plan.isRecommended && <span style={defaultBadge}>Recommended</span>}
                   {!plan.isActive && <span style={inactiveBadge}>Inactive</span>}
                 </div>
                 <span style={planCode}>{plan.code}</span>
@@ -239,6 +276,10 @@ export default function PlansPage() {
                 <div style={priceRow}>
                   <span style={priceLabel}>Monthly</span>
                   <span style={priceValue}>${plan.priceMonthly}</span>
+                </div>
+                <div style={priceRow}>
+                  <span style={priceLabel}>Quarterly</span>
+                  <span style={priceValue}>${plan.priceQuarterly}</span>
                 </div>
                 <div style={priceRow}>
                   <span style={priceLabel}>Yearly</span>
@@ -364,6 +405,19 @@ export default function PlansPage() {
                   />
                 </div>
                 <div style={formGroup}>
+                  <label style={formLabel}>Quarterly Price ($)</label>
+                  <input
+                    type="number"
+                    value={form.priceQuarterly}
+                    onChange={(e) => setForm({ ...form, priceQuarterly: parseFloat(e.target.value) || 0 })}
+                    style={formInput}
+                    min="0"
+                    step="0.01"
+                  />
+                </div>
+              </div>
+              <div style={formRow}>
+                <div style={formGroup}>
                   <label style={formLabel}>Yearly Price ($)</label>
                   <input
                     type="number"
@@ -372,6 +426,17 @@ export default function PlansPage() {
                     style={formInput}
                     min="0"
                     step="0.01"
+                  />
+                </div>
+                <div style={formGroup}>
+                  <label style={formLabel}>Trial Duration (days, blank = no limit)</label>
+                  <input
+                    type="number"
+                    value={form.trialDurationDays ?? ''}
+                    onChange={(e) => setForm({ ...form, trialDurationDays: e.target.value ? parseInt(e.target.value) : null })}
+                    style={formInput}
+                    min="1"
+                    placeholder="No time limit"
                   />
                 </div>
               </div>
@@ -451,24 +516,70 @@ export default function PlansPage() {
                     min="0"
                   />
                 </div>
-                <div style={{ ...formGroup, display: 'flex', alignItems: 'center', gap: '1.5rem', paddingTop: '1.5rem' }}>
-                  <label style={featureCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={form.isActive}
-                      onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                    />
-                    <span>Active</span>
-                  </label>
-                  <label style={featureCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={form.isDefault}
-                      onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-                    />
-                    <span>Default for new orgs</span>
-                  </label>
+                <div style={formGroup}>
+                  <label style={formLabel}>Tier Rank (for upgrade/recommended comparisons)</label>
+                  <input
+                    type="number"
+                    value={form.tierRank}
+                    onChange={(e) => setForm({ ...form, tierRank: parseInt(e.target.value) || 0 })}
+                    style={formInput}
+                    min="0"
+                  />
                 </div>
+              </div>
+              <div style={formRow}>
+                <div style={formGroup}>
+                  <label style={formLabel}>Falls back to (when this plan's trial expires)</label>
+                  <select
+                    value={form.expiredFallbackPlanId ?? ''}
+                    onChange={(e) => setForm({ ...form, expiredFallbackPlanId: e.target.value || null })}
+                    style={formInput}
+                  >
+                    <option value="">Lock down (no fallback)</option>
+                    {plans.filter(p => p.id !== editingPlan?.id).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={formGroup}>
+                  <label style={formLabel}>Upgrade target</label>
+                  <select
+                    value={form.upgradePlanId ?? ''}
+                    onChange={(e) => setForm({ ...form, upgradePlanId: e.target.value || null })}
+                    style={formInput}
+                  >
+                    <option value="">No upgrade suggested</option>
+                    {plans.filter(p => p.id !== editingPlan?.id).map(p => (
+                      <option key={p.id} value={p.id}>{p.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <div style={{ ...formGroup, display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
+                <label style={featureCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={form.isActive}
+                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                  />
+                  <span>Active</span>
+                </label>
+                <label style={featureCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={form.isDefault}
+                    onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
+                  />
+                  <span>Default for new orgs</span>
+                </label>
+                <label style={featureCheckbox}>
+                  <input
+                    type="checkbox"
+                    checked={form.isRecommended}
+                    onChange={(e) => setForm({ ...form, isRecommended: e.target.checked })}
+                  />
+                  <span>Recommended</span>
+                </label>
               </div>
             </div>
             <div style={modalFooter}>
