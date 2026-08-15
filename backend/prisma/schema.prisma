@@ -463,11 +463,21 @@ model SubscriptionPlan {
   displayOrder          Int                      @default(0)
   isActive              Boolean                  @default(true)
   isDefault             Boolean                  @default(false) // Default plan for new orgs
-  
+  priceQuarterly        Decimal                  @default(0)
+  trialDurationDays     Int?                     // null = no time limit
+  tierRank              Int                      @default(0) // separate from displayOrder; upgrade/recommended comparisons only
+  isRecommended         Boolean                  @default(false) // one plan at a time
+  expiredFallbackPlanId String?
+  expiredFallbackPlan   SubscriptionPlan?        @relation("PlanFallback", fields: [expiredFallbackPlanId], references: [id], onDelete: SetNull)
+  fallbackForPlans      SubscriptionPlan[]       @relation("PlanFallback")
+  upgradePlanId         String?
+  upgradePlan           SubscriptionPlan?        @relation("PlanUpgrade", fields: [upgradePlanId], references: [id], onDelete: SetNull)
+  upgradeForPlans        SubscriptionPlan[]       @relation("PlanUpgrade")
+
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   subscriptions         OrganizationSubscription[]
-  
+
   @@index([code])
   @@index([isActive])
 }
