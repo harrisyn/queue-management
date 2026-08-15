@@ -96,6 +96,30 @@ export const registerOrganization = async (req: Request, res: Response, next: Ne
         },
       });
 
+      // Assign the default plan (e.g. Free) so every org starts with a real
+      // subscription instead of relying on the null-subscription fallback.
+      const defaultPlan = await tx.subscriptionPlan.findFirst({ where: { isDefault: true, isActive: true } });
+      if (defaultPlan) {
+        const now = new Date();
+        const trialEndsAt = defaultPlan.trialDurationDays
+          ? new Date(now.getTime() + defaultPlan.trialDurationDays * 24 * 60 * 60 * 1000)
+          : null;
+        const subscription = await tx.organizationSubscription.create({
+          data: {
+            planId: defaultPlan.id,
+            status: defaultPlan.trialDurationDays ? 'TRIAL' : 'ACTIVE',
+            billingCycle: 'monthly',
+            trialEndsAt,
+            currentPeriodStart: now,
+            currentPeriodEnd: trialEndsAt || new Date(now.getFullYear() + 1, now.getMonth(), now.getDate()),
+          },
+        });
+        await tx.organization.update({
+          where: { id: organization.id },
+          data: { subscriptionId: subscription.id },
+        });
+      }
+
       return { organization, adminUser };
     });
 
