@@ -229,6 +229,39 @@ export const cancelOrganizationSubscription = async (req: Request, res: Response
   }
 };
 
+// Manually grant (or debit) credits for an organization - e.g. a goodwill
+// top-up after a support incident. Records a signed CreditLedgerEntry;
+// positive amount = grant, negative = debit.
+export const grantCredits = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { creditType, amount, reason } = req.body as { creditType: string; amount: number; reason: string };
+
+    if (!CREDIT_TYPES.includes(creditType as any)) {
+      return res.status(400).json({ error: 'creditType must be one of AI, EMAIL, SMS' });
+    }
+    if (!Number.isInteger(amount) || amount === 0) {
+      return res.status(400).json({ error: 'amount must be a non-zero integer' });
+    }
+    if (!reason) {
+      return res.status(400).json({ error: 'reason is required' });
+    }
+
+    const organization = await prisma.organization.findUnique({ where: { id } });
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    const entry = await prisma.creditLedgerEntry.create({
+      data: { organizationId: id, creditType: creditType as any, amount, reason },
+    });
+
+    res.status(201).json(entry);
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Delete organization (with all related data)
 export const deleteOrganization = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -280,6 +313,7 @@ export const listPlans = async (req: Request, res: Response, next: NextFunction)
             subscriptions: true,
           },
         },
+        creditAllowances: true,
       },
       orderBy: { displayOrder: 'asc' },
     });
@@ -291,6 +325,22 @@ export const listPlans = async (req: Request, res: Response, next: NextFunction)
 };
 
 // Create subscription plan
+const CREDIT_TYPES = ['AI', 'EMAIL', 'SMS'] as const;
+
+// Upserts the given credit types' monthly allowance for one plan. Only
+// touches keys present in `creditAllowances` - omitted types are left as-is.
+async function upsertCreditAllowances(planId: string, creditAllowances: Record<string, number | null | undefined>) {
+  for (const creditType of CREDIT_TYPES) {
+    if (!(creditType in creditAllowances)) continue;
+    const monthlyAllowance = creditAllowances[creditType];
+    await prisma.planCreditAllowance.upsert({
+      where: { planId_creditType: { planId, creditType } },
+      create: { planId, creditType, monthlyAllowance: monthlyAllowance ?? null },
+      update: { monthlyAllowance: monthlyAllowance ?? null },
+    });
+  }
+}
+
 export const createPlan = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const {
@@ -313,6 +363,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
       trialDurationDays,
       expiredFallbackPlanId,
       upgradePlanId,
+      creditAllowances,
     } = req.body;
 
     if (!name || !code) {
@@ -371,6 +422,10 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
       },
     });
 
+    if (creditAllowances) {
+      await upsertCreditAllowances(plan.id, creditAllowances);
+    }
+
     res.status(201).json(plan);
   } catch (error) {
     next(error);
@@ -401,6 +456,7 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
       trialDurationDays,
       expiredFallbackPlanId,
       upgradePlanId,
+      creditAllowances,
     } = req.body;
 
     const existing = await prisma.subscriptionPlan.findUnique({
@@ -454,6 +510,10 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
         upgradePlanId: upgradePlanId === null ? null : (upgradePlanId ?? undefined),
       },
     });
+
+    if (creditAllowances) {
+      await upsertCreditAllowances(plan.id, creditAllowances);
+    }
 
     res.json(plan);
   } catch (error) {

@@ -5,6 +5,7 @@ import {
   getOrganization,
   updateOrganizationSubscription,
   cancelOrganizationSubscription,
+  grantCredits,
   deleteOrganization,
   listPlans,
   createPlan,
@@ -31,6 +32,7 @@ router.get('/organizations/:id', getOrganization);
 router.get('/organizations/:id/usage', getOrganizationUsage);
 router.patch('/organizations/:id/subscription', updateOrganizationSubscription);
 router.post('/organizations/:id/cancel', cancelOrganizationSubscription);
+router.post('/organizations/:id/credits/grant', grantCredits);
 router.delete('/organizations/:id', deleteOrganization);
 
 // Subscription plan management
