@@ -814,6 +814,7 @@ class ApiClient {
     trialDurationDays?: number | null;
     expiredFallbackPlanId?: string | null;
     upgradePlanId?: string | null;
+    creditAllowances?: Partial<Record<'AI' | 'EMAIL' | 'SMS', number | null>>;
   }) {
     const { data } = await this.client.post('/superadmin/plans', payload);
     return data;
@@ -839,8 +840,14 @@ class ApiClient {
     trialDurationDays?: number | null;
     expiredFallbackPlanId?: string | null;
     upgradePlanId?: string | null;
+    creditAllowances?: Partial<Record<'AI' | 'EMAIL' | 'SMS', number | null>>;
   }) {
     const { data } = await this.client.patch(`/superadmin/plans/${id}`, payload);
+    return data;
+  }
+
+  async grantCredits(organizationId: string, payload: { creditType: 'AI' | 'EMAIL' | 'SMS'; amount: number; reason: string }) {
+    const { data } = await this.client.post(`/superadmin/organizations/${organizationId}/credits/grant`, payload);
     return data;
   }
 

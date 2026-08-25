@@ -1,9 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Plus } from 'lucide-react';
+import { Plus, CreditCard, Pencil, Trash2, Check, X } from 'lucide-react';
 import api from '@/api/client';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader, Card, Badge, Button, Modal, Checkbox, Switch, Input, Textarea, Select } from '@/components/ui';
 
 interface SubscriptionPlan {
   id: string;
@@ -27,9 +27,20 @@ interface SubscriptionPlan {
   trialDurationDays: number | null;
   expiredFallbackPlanId: string | null;
   upgradePlanId: string | null;
+  creditAllowances?: { creditType: 'AI' | 'EMAIL' | 'SMS'; monthlyAllowance: number | null }[];
   _count: {
     subscriptions: number;
   };
+}
+
+type CreditAllowances = { AI: number | null; EMAIL: number | null; SMS: number | null };
+
+function creditAllowancesToForm(rows: SubscriptionPlan['creditAllowances']): CreditAllowances {
+  const form: CreditAllowances = { AI: null, EMAIL: null, SMS: null };
+  for (const row of rows || []) {
+    form[row.creditType] = row.monthlyAllowance;
+  }
+  return form;
 }
 
 const defaultFeatures = [
@@ -52,7 +63,7 @@ export default function PlansPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingPlan, setEditingPlan] = useState<SubscriptionPlan | null>(null);
   const [saving, setSaving] = useState(false);
-  
+
   const [form, setForm] = useState({
     name: '',
     code: '',
@@ -74,6 +85,7 @@ export default function PlansPage() {
     trialDurationDays: null as number | null,
     expiredFallbackPlanId: null as string | null,
     upgradePlanId: null as string | null,
+    creditAllowances: { AI: null, EMAIL: null, SMS: null } as CreditAllowances,
   });
 
   useEffect(() => {
@@ -116,6 +128,7 @@ export default function PlansPage() {
       trialDurationDays: null,
       expiredFallbackPlanId: null,
       upgradePlanId: null,
+      creditAllowances: { AI: null, EMAIL: null, SMS: null },
     });
     setShowModal(true);
   };
@@ -143,6 +156,7 @@ export default function PlansPage() {
       trialDurationDays: plan.trialDurationDays,
       expiredFallbackPlanId: plan.expiredFallbackPlanId,
       upgradePlanId: plan.upgradePlanId,
+      creditAllowances: creditAllowancesToForm(plan.creditAllowances),
     });
     setShowModal(true);
   };
@@ -176,6 +190,7 @@ export default function PlansPage() {
           trialDurationDays: form.trialDurationDays,
           expiredFallbackPlanId: form.expiredFallbackPlanId,
           upgradePlanId: form.upgradePlanId,
+          creditAllowances: form.creditAllowances,
         });
       } else {
         await api.createSubscriptionPlan({
@@ -198,6 +213,7 @@ export default function PlansPage() {
           trialDurationDays: form.trialDurationDays,
           expiredFallbackPlanId: form.expiredFallbackPlanId,
           upgradePlanId: form.upgradePlanId,
+          creditAllowances: form.creditAllowances,
         });
       }
       setShowModal(false);
@@ -235,39 +251,42 @@ export default function PlansPage() {
   };
 
   return (
-    <div style={pageContainer}>
-      <header style={header}>
-        <div>
-          <h1 style={pageTitle}>Subscription Plans</h1>
-          <p style={subtitle}>Define pricing tiers and feature limits</p>
-        </div>
-        <button onClick={openCreateModal} style={createBtn}>
-          <Icon icon={Plus} size={16} /> Create Plan
-        </button>
-      </header>
+    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+      <PageHeader
+        title="Subscription Plans"
+        subtitle="Define pricing tiers and feature limits"
+        icon={CreditCard}
+        actions={
+          <Button variant="primary" onClick={openCreateModal}>
+            <Icon icon={Plus} size={16} /> Create Plan
+          </Button>
+        }
+      />
 
       {error && (
         <div style={errorBanner}>
           <span>{error}</span>
-          <button onClick={() => setError('')} style={dismissBtn}>✕</button>
+          <button onClick={() => setError('')} style={dismissBtn} aria-label="Dismiss">
+            <Icon icon={X} size={16} />
+          </button>
         </div>
       )}
 
       {loading ? (
-        <div style={loadingState}>
-          <div style={spinner} />
-          <p>Loading plans...</p>
+        <div style={{ padding: '3rem', textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 1rem' }} />
+          <p style={{ color: 'var(--gray-500)' }}>Loading plans...</p>
         </div>
       ) : (
         <div style={plansGrid}>
           {plans.map(plan => (
-            <div key={plan.id} style={{ ...planCard, opacity: plan.isActive ? 1 : 0.6 }}>
+            <Card key={plan.id} style={{ opacity: plan.isActive ? 1 : 0.65, overflow: 'hidden' }}>
               <div style={planHeader}>
                 <div style={planTitleRow}>
                   <h3 style={planName}>{plan.name}</h3>
-                  {plan.isDefault && <span style={defaultBadge}>Default</span>}
-                  {plan.isRecommended && <span style={defaultBadge}>Recommended</span>}
-                  {!plan.isActive && <span style={inactiveBadge}>Inactive</span>}
+                  {plan.isDefault && <Badge tone="success">Default</Badge>}
+                  {plan.isRecommended && <Badge tone="primary">Recommended</Badge>}
+                  {!plan.isActive && <Badge tone="neutral">Inactive</Badge>}
                 </div>
                 <span style={planCode}>{plan.code}</span>
               </div>
@@ -287,7 +306,7 @@ export default function PlansPage() {
                 </div>
               </div>
 
-              <div style={limitsSection}>
+              <div style={sectionPad}>
                 <h4 style={sectionTitle}>Limits</h4>
                 <div style={limitsGrid}>
                   <div style={limitItem}>
@@ -309,15 +328,15 @@ export default function PlansPage() {
                 </div>
               </div>
 
-              <div style={featuresSection}>
+              <div style={{ ...sectionPad, borderTop: '1px solid var(--gray-100)' }}>
                 <h4 style={sectionTitle}>Features</h4>
                 <div style={featuresList}>
                   {defaultFeatures.map(f => (
-                    <span 
-                      key={f.key} 
+                    <span
+                      key={f.key}
                       style={plan.features?.[f.key] ? featureEnabled : featureDisabled}
                     >
-                      {plan.features?.[f.key] ? '✓' : '✗'} {f.label}
+                      <Icon icon={plan.features?.[f.key] ? Check : X} size={11} strokeWidth={3} /> {f.label}
                     </span>
                   ))}
                 </div>
@@ -325,349 +344,248 @@ export default function PlansPage() {
 
               <div style={planFooter}>
                 <span style={subCount}>{plan._count.subscriptions} orgs</span>
-                <div style={planActions}>
-                  <button onClick={() => openEditModal(plan)} style={editBtn}>Edit</button>
-                  <button 
-                    onClick={() => handleDelete(plan)} 
-                    style={deleteBtn}
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                  <Button variant="secondary" size="sm" onClick={() => openEditModal(plan)}>
+                    <Icon icon={Pencil} size={14} /> Edit
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => handleDelete(plan)}
                     disabled={plan._count.subscriptions > 0}
                     title={plan._count.subscriptions > 0 ? 'Cannot delete plan with active subscriptions' : 'Delete plan'}
+                    style={{ color: 'var(--error-600)' }}
                   >
-                    Delete
-                  </button>
+                    <Icon icon={Trash2} size={14} /> Delete
+                  </Button>
                 </div>
               </div>
-            </div>
+            </Card>
           ))}
 
           {plans.length === 0 && (
             <div style={emptyState}>
-              <p>No subscription plans created yet.</p>
-              <button onClick={openCreateModal} style={createBtn}>Create your first plan</button>
+              <p style={{ marginBottom: '1rem' }}>No subscription plans created yet.</p>
+              <Button variant="primary" onClick={openCreateModal}>Create your first plan</Button>
             </div>
           )}
         </div>
       )}
 
-      {/* Modal */}
-      {showModal && (
-        <div style={modalOverlay} onClick={() => setShowModal(false)}>
-          <div style={modal} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeader}>
-              <h2 style={modalTitle}>{editingPlan ? 'Edit Plan' : 'Create Plan'}</h2>
-              <button onClick={() => setShowModal(false)} style={closeBtn}>✕</button>
-            </div>
-            <div style={modalBody}>
-              <div style={formRow}>
-                <div style={formGroup}>
-                  <label style={formLabel}>Name *</label>
-                  <input
-                    type="text"
-                    value={form.name}
-                    onChange={(e) => setForm({ ...form, name: e.target.value })}
-                    style={formInput}
-                    placeholder="e.g. Professional"
-                  />
-                </div>
-                <div style={formGroup}>
-                  <label style={formLabel}>Code *</label>
-                  <input
-                    type="text"
-                    value={form.code}
-                    onChange={(e) => setForm({ ...form, code: e.target.value })}
-                    style={formInput}
-                    placeholder="e.g. pro"
-                    disabled={!!editingPlan}
-                  />
-                </div>
-              </div>
+      <Modal
+        open={showModal}
+        onClose={() => setShowModal(false)}
+        title={editingPlan ? 'Edit Plan' : 'Create Plan'}
+        maxWidth="680px"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setShowModal(false)}>Cancel</Button>
+            <Button variant="primary" onClick={handleSave} disabled={saving}>
+              {saving ? 'Saving...' : (editingPlan ? 'Save Changes' : 'Create Plan')}
+            </Button>
+          </>
+        }
+      >
+        <div style={formStack}>
+          <div style={formRow}>
+            <Input label="Name *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="e.g. Professional" />
+            <Input label="Code *" value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="e.g. pro" disabled={!!editingPlan} />
+          </div>
 
-              <div style={formGroup}>
-                <label style={formLabel}>Description</label>
-                <textarea
-                  value={form.description}
-                  onChange={(e) => setForm({ ...form, description: e.target.value })}
-                  style={{ ...formInput, minHeight: '80px' }}
-                  placeholder="Brief description of this plan"
-                />
-              </div>
+          <Textarea
+            label="Description"
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            style={{ minHeight: '80px' }}
+            placeholder="Brief description of this plan"
+          />
 
-              <div style={formRow}>
-                <div style={formGroup}>
-                  <label style={formLabel}>Monthly Price ($)</label>
-                  <input
-                    type="number"
-                    value={form.priceMonthly}
-                    onChange={(e) => setForm({ ...form, priceMonthly: parseFloat(e.target.value) || 0 })}
-                    style={formInput}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div style={formGroup}>
-                  <label style={formLabel}>Quarterly Price ($)</label>
-                  <input
-                    type="number"
-                    value={form.priceQuarterly}
-                    onChange={(e) => setForm({ ...form, priceQuarterly: parseFloat(e.target.value) || 0 })}
-                    style={formInput}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-              </div>
-              <div style={formRow}>
-                <div style={formGroup}>
-                  <label style={formLabel}>Yearly Price ($)</label>
-                  <input
-                    type="number"
-                    value={form.priceYearly}
-                    onChange={(e) => setForm({ ...form, priceYearly: parseFloat(e.target.value) || 0 })}
-                    style={formInput}
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div style={formGroup}>
-                  <label style={formLabel}>Trial Duration (days, blank = no limit)</label>
-                  <input
-                    type="number"
-                    value={form.trialDurationDays ?? ''}
-                    onChange={(e) => setForm({ ...form, trialDurationDays: e.target.value ? parseInt(e.target.value) : null })}
-                    style={formInput}
-                    min="1"
-                    placeholder="No time limit"
-                  />
-                </div>
-              </div>
+          <div style={formRow}>
+            <Input
+              label="Monthly Price ($)"
+              type="number"
+              value={form.priceMonthly}
+              onChange={(e) => setForm({ ...form, priceMonthly: parseFloat(e.target.value) || 0 })}
+              min="0"
+              step="0.01"
+            />
+            <Input
+              label="Quarterly Price ($)"
+              type="number"
+              value={form.priceQuarterly}
+              onChange={(e) => setForm({ ...form, priceQuarterly: parseFloat(e.target.value) || 0 })}
+              min="0"
+              step="0.01"
+            />
+          </div>
+          <div style={formRow}>
+            <Input
+              label="Yearly Price ($)"
+              type="number"
+              value={form.priceYearly}
+              onChange={(e) => setForm({ ...form, priceYearly: parseFloat(e.target.value) || 0 })}
+              min="0"
+              step="0.01"
+            />
+            <Input
+              label="Trial Duration (days, blank = no limit)"
+              type="number"
+              value={form.trialDurationDays ?? ''}
+              onChange={(e) => setForm({ ...form, trialDurationDays: e.target.value ? parseInt(e.target.value) : null })}
+              min="1"
+              placeholder="No time limit"
+            />
+          </div>
 
-              <h4 style={{ ...sectionTitle, marginTop: '1.5rem' }}>Limits (leave empty for unlimited)</h4>
-              <div style={formRow}>
-                <div style={formGroup}>
-                  <label style={formLabel}>Max Locations</label>
-                  <input
-                    type="number"
-                    value={form.maxLocations ?? ''}
-                    onChange={(e) => setForm({ ...form, maxLocations: e.target.value ? parseInt(e.target.value) : null })}
-                    style={formInput}
-                    min="1"
-                    placeholder="Unlimited"
-                  />
-                </div>
-                <div style={formGroup}>
-                  <label style={formLabel}>Max Services/Location</label>
-                  <input
-                    type="number"
-                    value={form.maxServicesPerLoc ?? ''}
-                    onChange={(e) => setForm({ ...form, maxServicesPerLoc: e.target.value ? parseInt(e.target.value) : null })}
-                    style={formInput}
-                    min="1"
-                    placeholder="Unlimited"
-                  />
-                </div>
-              </div>
-              <div style={formRow}>
-                <div style={formGroup}>
-                  <label style={formLabel}>Max Users</label>
-                  <input
-                    type="number"
-                    value={form.maxUsersPerOrg ?? ''}
-                    onChange={(e) => setForm({ ...form, maxUsersPerOrg: e.target.value ? parseInt(e.target.value) : null })}
-                    style={formInput}
-                    min="1"
-                    placeholder="Unlimited"
-                  />
-                </div>
-                <div style={formGroup}>
-                  <label style={formLabel}>Max Queue Entries/Day</label>
-                  <input
-                    type="number"
-                    value={form.maxQueueEntriesPerDay ?? ''}
-                    onChange={(e) => setForm({ ...form, maxQueueEntriesPerDay: e.target.value ? parseInt(e.target.value) : null })}
-                    style={formInput}
-                    min="1"
-                    placeholder="Unlimited"
-                  />
-                </div>
-              </div>
+          <h4 style={{ ...sectionTitle, marginTop: '0.5rem' }}>Limits (leave empty for unlimited)</h4>
+          <div style={formRow}>
+            <Input
+              label="Max Locations"
+              type="number"
+              value={form.maxLocations ?? ''}
+              onChange={(e) => setForm({ ...form, maxLocations: e.target.value ? parseInt(e.target.value) : null })}
+              min="1"
+              placeholder="Unlimited"
+            />
+            <Input
+              label="Max Services/Location"
+              type="number"
+              value={form.maxServicesPerLoc ?? ''}
+              onChange={(e) => setForm({ ...form, maxServicesPerLoc: e.target.value ? parseInt(e.target.value) : null })}
+              min="1"
+              placeholder="Unlimited"
+            />
+          </div>
+          <div style={formRow}>
+            <Input
+              label="Max Users"
+              type="number"
+              value={form.maxUsersPerOrg ?? ''}
+              onChange={(e) => setForm({ ...form, maxUsersPerOrg: e.target.value ? parseInt(e.target.value) : null })}
+              min="1"
+              placeholder="Unlimited"
+            />
+            <Input
+              label="Max Queue Entries/Day"
+              type="number"
+              value={form.maxQueueEntriesPerDay ?? ''}
+              onChange={(e) => setForm({ ...form, maxQueueEntriesPerDay: e.target.value ? parseInt(e.target.value) : null })}
+              min="1"
+              placeholder="Unlimited"
+            />
+          </div>
 
-              <h4 style={{ ...sectionTitle, marginTop: '1.5rem' }}>Features</h4>
-              <div style={featuresGrid}>
-                {defaultFeatures.map(f => (
-                  <label key={f.key} style={featureCheckbox}>
-                    <input
-                      type="checkbox"
-                      checked={form.features[f.key] || false}
-                      onChange={() => toggleFeature(f.key)}
-                    />
-                    <span>{f.label}</span>
-                  </label>
-                ))}
-              </div>
+          <h4 style={{ ...sectionTitle, marginTop: '0.5rem' }}>Credit Allowances / Month (leave empty for unlimited)</h4>
+          <div style={formRow}>
+            <Input
+              label="AI Credits"
+              type="number"
+              value={form.creditAllowances.AI ?? ''}
+              onChange={(e) => setForm({ ...form, creditAllowances: { ...form.creditAllowances, AI: e.target.value ? parseInt(e.target.value) : null } })}
+              min="0"
+              placeholder="Unlimited"
+            />
+            <Input
+              label="Email Credits"
+              type="number"
+              value={form.creditAllowances.EMAIL ?? ''}
+              onChange={(e) => setForm({ ...form, creditAllowances: { ...form.creditAllowances, EMAIL: e.target.value ? parseInt(e.target.value) : null } })}
+              min="0"
+              placeholder="Unlimited"
+            />
+          </div>
+          <div style={formRow}>
+            <Input
+              label="SMS Credits"
+              type="number"
+              value={form.creditAllowances.SMS ?? ''}
+              onChange={(e) => setForm({ ...form, creditAllowances: { ...form.creditAllowances, SMS: e.target.value ? parseInt(e.target.value) : null } })}
+              min="0"
+              placeholder="Unlimited"
+            />
+          </div>
 
-              <div style={formRow}>
-                <div style={formGroup}>
-                  <label style={formLabel}>Display Order</label>
-                  <input
-                    type="number"
-                    value={form.displayOrder}
-                    onChange={(e) => setForm({ ...form, displayOrder: parseInt(e.target.value) || 0 })}
-                    style={formInput}
-                    min="0"
-                  />
-                </div>
-                <div style={formGroup}>
-                  <label style={formLabel}>Tier Rank (for upgrade/recommended comparisons)</label>
-                  <input
-                    type="number"
-                    value={form.tierRank}
-                    onChange={(e) => setForm({ ...form, tierRank: parseInt(e.target.value) || 0 })}
-                    style={formInput}
-                    min="0"
-                  />
-                </div>
-              </div>
-              <div style={formRow}>
-                <div style={formGroup}>
-                  <label style={formLabel}>Falls back to (when this plan's trial expires)</label>
-                  <select
-                    value={form.expiredFallbackPlanId ?? ''}
-                    onChange={(e) => setForm({ ...form, expiredFallbackPlanId: e.target.value || null })}
-                    style={formInput}
-                  >
-                    <option value="">Lock down (no fallback)</option>
-                    {plans.filter(p => p.id !== editingPlan?.id).map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={formGroup}>
-                  <label style={formLabel}>Upgrade target</label>
-                  <select
-                    value={form.upgradePlanId ?? ''}
-                    onChange={(e) => setForm({ ...form, upgradePlanId: e.target.value || null })}
-                    style={formInput}
-                  >
-                    <option value="">No upgrade suggested</option>
-                    {plans.filter(p => p.id !== editingPlan?.id).map(p => (
-                      <option key={p.id} value={p.id}>{p.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-              <div style={{ ...formGroup, display: 'flex', alignItems: 'center', gap: '1.5rem' }}>
-                <label style={featureCheckbox}>
-                  <input
-                    type="checkbox"
-                    checked={form.isActive}
-                    onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                  />
-                  <span>Active</span>
-                </label>
-                <label style={featureCheckbox}>
-                  <input
-                    type="checkbox"
-                    checked={form.isDefault}
-                    onChange={(e) => setForm({ ...form, isDefault: e.target.checked })}
-                  />
-                  <span>Default for new orgs</span>
-                </label>
-                <label style={featureCheckbox}>
-                  <input
-                    type="checkbox"
-                    checked={form.isRecommended}
-                    onChange={(e) => setForm({ ...form, isRecommended: e.target.checked })}
-                  />
-                  <span>Recommended</span>
-                </label>
-              </div>
-            </div>
-            <div style={modalFooter}>
-              <button onClick={() => setShowModal(false)} style={cancelBtn}>Cancel</button>
-              <button onClick={handleSave} disabled={saving} style={saveBtn}>
-                {saving ? 'Saving...' : (editingPlan ? 'Save Changes' : 'Create Plan')}
-              </button>
-            </div>
+          <h4 style={{ ...sectionTitle, marginTop: '0.5rem' }}>Features</h4>
+          <div style={featuresGrid}>
+            {defaultFeatures.map(f => (
+              <Checkbox
+                key={f.key}
+                label={f.label}
+                checked={form.features[f.key] || false}
+                onChange={() => toggleFeature(f.key)}
+              />
+            ))}
+          </div>
+
+          <div style={formRow}>
+            <Select
+              label="Falls back to (when this plan's trial expires)"
+              value={form.expiredFallbackPlanId ?? ''}
+              onChange={(e) => setForm({ ...form, expiredFallbackPlanId: e.target.value || null })}
+            >
+              <option value="">Lock down (no fallback)</option>
+              {plans.filter(p => p.id !== editingPlan?.id).map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </Select>
+            <Select
+              label="Upgrade target"
+              value={form.upgradePlanId ?? ''}
+              onChange={(e) => setForm({ ...form, upgradePlanId: e.target.value || null })}
+            >
+              <option value="">No upgrade suggested</option>
+              {plans.filter(p => p.id !== editingPlan?.id).map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </Select>
+          </div>
+          <div style={formRow}>
+            <Input
+              label="Display Order"
+              type="number"
+              value={form.displayOrder}
+              onChange={(e) => setForm({ ...form, displayOrder: parseInt(e.target.value) || 0 })}
+              min="0"
+            />
+            <Input
+              label="Tier Rank (for upgrade/recommended comparisons)"
+              type="number"
+              value={form.tierRank}
+              onChange={(e) => setForm({ ...form, tierRank: parseInt(e.target.value) || 0 })}
+              min="0"
+            />
+          </div>
+
+          <div style={{ display: 'flex', gap: '1.75rem', flexWrap: 'wrap', paddingTop: '0.25rem' }}>
+            <Switch label="Active" checked={form.isActive} onChange={(e) => setForm({ ...form, isActive: e.target.checked })} />
+            <Switch label="Default for new orgs" checked={form.isDefault} onChange={(e) => setForm({ ...form, isDefault: e.target.checked })} />
+            <Switch label="Recommended" checked={form.isRecommended} onChange={(e) => setForm({ ...form, isRecommended: e.target.checked })} />
           </div>
         </div>
-      )}
+      </Modal>
     </div>
   );
 }
 
 // Styles
-const pageContainer: React.CSSProperties = {
-  maxWidth: '1400px',
-  margin: '0 auto',
-};
-
-const header: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'flex-start',
-  marginBottom: '2rem',
-};
-
-const pageTitle: React.CSSProperties = {
-  fontSize: '2rem',
-  fontWeight: 700,
-  color: '#fff',
-  marginBottom: '0.5rem',
-};
-
-const subtitle: React.CSSProperties = {
-  color: '#94a3b8',
-  fontSize: '1rem',
-};
-
-const createBtn: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.5rem',
-  padding: '0.75rem 1.25rem',
-  background: '#14b8a6',
-  border: 'none',
-  borderRadius: '8px',
-  color: '#fff',
-  fontSize: '0.9375rem',
-  fontWeight: 500,
-  cursor: 'pointer',
-};
-
 const errorBanner: React.CSSProperties = {
-  background: 'rgba(239, 68, 68, 0.2)',
-  border: '1px solid rgba(239, 68, 68, 0.3)',
-  borderRadius: '8px',
+  background: 'var(--error-50)',
+  border: '1px solid var(--error-100)',
+  borderRadius: 'var(--radius-lg)',
   padding: '1rem',
   marginBottom: '1.5rem',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  color: '#f87171',
+  color: 'var(--error-600)',
 };
 
 const dismissBtn: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#f87171',
+  color: 'var(--error-600)',
   cursor: 'pointer',
-  fontSize: '1.25rem',
-};
-
-const loadingState: React.CSSProperties = {
-  padding: '3rem',
-  textAlign: 'center' as const,
-  color: '#94a3b8',
-};
-
-const spinner: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  border: '4px solid #1e293b',
-  borderTop: '4px solid #14b8a6',
-  borderRadius: '50%',
-  margin: '0 auto 1rem',
-  animation: 'spin 1s linear infinite',
+  display: 'inline-flex',
 };
 
 const plansGrid: React.CSSProperties = {
@@ -676,16 +594,9 @@ const plansGrid: React.CSSProperties = {
   gap: '1.5rem',
 };
 
-const planCard: React.CSSProperties = {
-  background: '#1e293b',
-  borderRadius: '12px',
-  border: '1px solid rgba(20, 184, 166, 0.2)',
-  overflow: 'hidden',
-};
-
 const planHeader: React.CSSProperties = {
   padding: '1.25rem 1.5rem',
-  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
+  borderBottom: '1px solid var(--gray-100)',
 };
 
 const planTitleRow: React.CSSProperties = {
@@ -693,43 +604,24 @@ const planTitleRow: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   marginBottom: '0.25rem',
+  flexWrap: 'wrap' as const,
 };
 
 const planName: React.CSSProperties = {
   fontSize: '1.25rem',
-  fontWeight: 600,
-  color: '#fff',
-};
-
-const defaultBadge: React.CSSProperties = {
-  background: 'rgba(16, 185, 129, 0.2)',
-  color: '#10b981',
-  padding: '0.125rem 0.5rem',
-  borderRadius: '4px',
-  fontSize: '0.625rem',
-  fontWeight: 600,
-  textTransform: 'uppercase' as const,
-};
-
-const inactiveBadge: React.CSSProperties = {
-  background: 'rgba(100, 116, 139, 0.2)',
-  color: '#94a3b8',
-  padding: '0.125rem 0.5rem',
-  borderRadius: '4px',
-  fontSize: '0.625rem',
-  fontWeight: 600,
-  textTransform: 'uppercase' as const,
+  fontWeight: 700,
+  color: 'var(--gray-900)',
 };
 
 const planCode: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
-  fontFamily: 'monospace',
+  fontFamily: 'var(--font-mono)',
 };
 
 const priceSection: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  background: 'rgba(15, 23, 42, 0.5)',
+  background: 'var(--gray-50)',
 };
 
 const priceRow: React.CSSProperties = {
@@ -739,23 +631,23 @@ const priceRow: React.CSSProperties = {
 };
 
 const priceLabel: React.CSSProperties = {
-  color: '#94a3b8',
+  color: 'var(--gray-500)',
   fontSize: '0.875rem',
 };
 
 const priceValue: React.CSSProperties = {
-  color: '#fff',
+  color: 'var(--gray-900)',
   fontWeight: 600,
 };
 
-const limitsSection: React.CSSProperties = {
+const sectionPad: React.CSSProperties = {
   padding: '1rem 1.5rem',
 };
 
 const sectionTitle: React.CSSProperties = {
-  color: '#94a3b8',
+  color: 'var(--gray-500)',
   fontSize: '0.75rem',
-  fontWeight: 600,
+  fontWeight: 700,
   textTransform: 'uppercase' as const,
   letterSpacing: '0.05em',
   marginBottom: '0.75rem',
@@ -770,25 +662,20 @@ const limitsGrid: React.CSSProperties = {
 const limitItem: React.CSSProperties = {
   textAlign: 'center' as const,
   padding: '0.5rem',
-  background: 'rgba(15, 23, 42, 0.5)',
-  borderRadius: '6px',
+  background: 'var(--gray-50)',
+  borderRadius: 'var(--radius-md)',
 };
 
 const limitValue: React.CSSProperties = {
   display: 'block',
-  color: '#5eead4',
+  color: 'var(--primary-600)',
   fontSize: '1.25rem',
-  fontWeight: 600,
+  fontWeight: 700,
 };
 
 const limitLabel: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
-};
-
-const featuresSection: React.CSSProperties = {
-  padding: '1rem 1.5rem',
-  borderTop: '1px solid rgba(20, 184, 166, 0.1)',
 };
 
 const featuresList: React.CSSProperties = {
@@ -798,122 +685,55 @@ const featuresList: React.CSSProperties = {
 };
 
 const featureEnabled: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.3rem',
   padding: '0.25rem 0.5rem',
-  background: 'rgba(16, 185, 129, 0.15)',
-  color: '#10b981',
-  borderRadius: '4px',
+  background: 'var(--success-100)',
+  color: 'var(--success-700)',
+  borderRadius: 'var(--radius-sm)',
   fontSize: '0.75rem',
+  fontWeight: 500,
 };
 
 const featureDisabled: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.3rem',
   padding: '0.25rem 0.5rem',
-  background: 'rgba(100, 116, 139, 0.15)',
-  color: '#64748b',
-  borderRadius: '4px',
+  background: 'var(--gray-100)',
+  color: 'var(--gray-400)',
+  borderRadius: 'var(--radius-sm)',
   fontSize: '0.75rem',
 };
 
 const planFooter: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  borderTop: '1px solid rgba(20, 184, 166, 0.1)',
+  borderTop: '1px solid var(--gray-100)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
 };
 
 const subCount: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.875rem',
-};
-
-const planActions: React.CSSProperties = {
-  display: 'flex',
-  gap: '0.5rem',
-};
-
-const editBtn: React.CSSProperties = {
-  padding: '0.5rem 0.75rem',
-  background: 'rgba(20, 184, 166, 0.2)',
-  color: '#5eead4',
-  border: 'none',
-  borderRadius: '6px',
-  fontSize: '0.75rem',
-  fontWeight: 500,
-  cursor: 'pointer',
-};
-
-const deleteBtn: React.CSSProperties = {
-  padding: '0.5rem 0.75rem',
-  background: 'rgba(239, 68, 68, 0.2)',
-  color: '#f87171',
-  border: 'none',
-  borderRadius: '6px',
-  fontSize: '0.75rem',
-  fontWeight: 500,
-  cursor: 'pointer',
 };
 
 const emptyState: React.CSSProperties = {
   gridColumn: '1 / -1',
   padding: '3rem',
   textAlign: 'center' as const,
-  color: '#64748b',
-  background: '#1e293b',
-  borderRadius: '12px',
-  border: '1px solid rgba(20, 184, 166, 0.2)',
+  color: 'var(--gray-500)',
+  background: 'white',
+  borderRadius: 'var(--radius-xl)',
+  boxShadow: 'var(--shadow-md)',
 };
 
-const modalOverlay: React.CSSProperties = {
-  position: 'fixed' as const,
-  top: 0,
-  left: 0,
-  right: 0,
-  bottom: 0,
-  background: 'rgba(0, 0, 0, 0.7)',
+const formStack: React.CSSProperties = {
   display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 1000,
-  padding: '2rem',
-};
-
-const modal: React.CSSProperties = {
-  background: '#1e293b',
-  borderRadius: '12px',
-  width: '100%',
-  maxWidth: '600px',
-  maxHeight: '90vh',
-  overflow: 'auto',
-  border: '1px solid rgba(20, 184, 166, 0.3)',
-};
-
-const modalHeader: React.CSSProperties = {
-  padding: '1.25rem 1.5rem',
-  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  position: 'sticky' as const,
-  top: 0,
-  background: '#1e293b',
-};
-
-const modalTitle: React.CSSProperties = {
-  fontSize: '1.25rem',
-  fontWeight: 600,
-  color: '#fff',
-};
-
-const closeBtn: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  color: '#64748b',
-  fontSize: '1.5rem',
-  cursor: 'pointer',
-};
-
-const modalBody: React.CSSProperties = {
-  padding: '1.5rem',
+  flexDirection: 'column',
+  gap: '1.1rem',
 };
 
 const formRow: React.CSSProperties = {
@@ -922,70 +742,8 @@ const formRow: React.CSSProperties = {
   gap: '1rem',
 };
 
-const formGroup: React.CSSProperties = {
-  marginBottom: '1rem',
-};
-
-const formLabel: React.CSSProperties = {
-  display: 'block',
-  color: '#94a3b8',
-  fontSize: '0.875rem',
-  marginBottom: '0.5rem',
-};
-
-const formInput: React.CSSProperties = {
-  width: '100%',
-  padding: '0.75rem',
-  background: '#0f172a',
-  border: '1px solid rgba(20, 184, 166, 0.2)',
-  borderRadius: '8px',
-  color: '#fff',
-  fontSize: '0.9375rem',
-};
-
 const featuresGrid: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, 1fr)',
-  gap: '0.75rem',
-};
-
-const featureCheckbox: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.5rem',
-  color: '#94a3b8',
-  fontSize: '0.875rem',
-  cursor: 'pointer',
-};
-
-const modalFooter: React.CSSProperties = {
-  padding: '1rem 1.5rem',
-  borderTop: '1px solid rgba(20, 184, 166, 0.1)',
-  display: 'flex',
-  justifyContent: 'flex-end',
-  gap: '0.75rem',
-  position: 'sticky' as const,
-  bottom: 0,
-  background: '#1e293b',
-};
-
-const cancelBtn: React.CSSProperties = {
-  padding: '0.75rem 1.25rem',
-  background: 'transparent',
-  border: '1px solid rgba(20, 184, 166, 0.3)',
-  borderRadius: '8px',
-  color: '#94a3b8',
-  cursor: 'pointer',
-  fontSize: '0.875rem',
-};
-
-const saveBtn: React.CSSProperties = {
-  padding: '0.75rem 1.25rem',
-  background: '#14b8a6',
-  border: 'none',
-  borderRadius: '8px',
-  color: '#fff',
-  cursor: 'pointer',
-  fontSize: '0.875rem',
-  fontWeight: 500,
+  gap: '0.75rem 1rem',
 };
