@@ -16,6 +16,20 @@ export interface CheckoutResult {
   redirectUrl: string;
 }
 
+export type AddOnResourceType = 'LOCATIONS' | 'USERS';
+export type AddOnBillingMode = 'recurring' | 'one_off';
+
+export interface CreateAddOnCheckoutParams {
+  organizationId: string;
+  resourceType: AddOnResourceType;
+  quantity: number;
+  billingMode: AddOnBillingMode;
+  unitPrice: number; // resolved from AddOnPricing before calling the provider
+  currency: string;
+  successUrl: string;
+  cancelUrl: string;
+}
+
 export type PaymentWebhookEventType =
   | 'checkout_completed'
   | 'renewal_succeeded'
@@ -30,11 +44,14 @@ export interface PaymentWebhookEvent {
   currentPeriodEnd: Date | null;
   planId: string | null;
   billingCycle: 'monthly' | 'quarterly' | 'yearly' | null;
+  kind: 'plan' | 'addon';
+  addOn?: { resourceType: AddOnResourceType; quantity: number; billingMode: AddOnBillingMode };
 }
 
 export interface PaymentProvider {
   name: ProviderName;
   createCheckoutSession(params: CreateCheckoutParams): Promise<CheckoutResult>;
+  createAddOnCheckoutSession(params: CreateAddOnCheckoutParams): Promise<CheckoutResult>;
   verifyWebhookSignature(rawBody: Buffer, signatureHeader: string): PaymentWebhookEvent | null;
   cancelSubscription(externalSubscriptionId: string): Promise<void>;
 }

@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { PaymentProvider, CreateCheckoutParams, CheckoutResult, PaymentWebhookEvent } from './types';
+import { PaymentProvider, CreateCheckoutParams, CreateAddOnCheckoutParams, CheckoutResult, PaymentWebhookEvent } from './types';
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
@@ -51,6 +51,49 @@ export class PaystackProvider implements PaymentProvider {
     return { redirectUrl: data.authorization_url };
   }
 
+  async createAddOnCheckoutSession(params: CreateAddOnCheckoutParams): Promise<CheckoutResult> {
+    const amountMinorUnits = Math.round(params.unitPrice * 100) * params.quantity;
+    const metadata = {
+      kind: 'addon',
+      organizationId: params.organizationId,
+      resourceType: params.resourceType,
+      quantity: String(params.quantity),
+      billingMode: params.billingMode,
+    };
+
+    // Paystack has no inline "arbitrary recurring amount" primitive like
+    // Stripe's price_data - a Plan resource must exist first, and the
+    // transaction is initialized against it to start the subscription.
+    let planCode: string | undefined;
+    if (params.billingMode === 'recurring') {
+      const resourceLabel = params.resourceType === 'LOCATIONS' ? 'location' : 'user';
+      const plan = await this.request<{ plan_code: string }>('/plan', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: `${params.quantity}x extra ${resourceLabel} add-on`,
+          amount: amountMinorUnits,
+          interval: 'monthly',
+          currency: params.currency.toUpperCase(),
+        }),
+      });
+      planCode = plan.plan_code;
+    }
+
+    const data = await this.request<{ authorization_url: string }>('/transaction/initialize', {
+      method: 'POST',
+      body: JSON.stringify({
+        amount: amountMinorUnits,
+        currency: params.currency.toUpperCase(),
+        email: `org-${params.organizationId}@billing.internal`,
+        callback_url: params.successUrl,
+        ...(planCode ? { plan: planCode } : {}),
+        metadata,
+      }),
+    });
+
+    return { redirectUrl: data.authorization_url };
+  }
+
   verifyWebhookSignature(rawBody: Buffer, signatureHeader: string): PaymentWebhookEvent | null {
     const expectedSignature = crypto
       .createHmac('sha512', this.webhookSecret)
@@ -67,15 +110,43 @@ export class PaystackProvider implements PaymentProvider {
 
     switch (event.event) {
       case 'charge.success': {
-        const billingCycle = event.data?.metadata?.billingCycle;
+        const metadata = event.data?.metadata;
+        // Paystack's plan-based subscriptions carry the subscription code
+        // separately from the reference (which identifies this one charge);
+        // recurring subscriptions carry it once created.
+        const externalSubscriptionId = event.data?.plan?.plan_code
+          ? (event.data?.subscription_code ?? event.data?.reference ?? null)
+          : (event.data?.reference ?? null);
+
+        if (metadata?.kind === 'addon') {
+          const resourceType = metadata?.resourceType;
+          const billingMode = metadata?.billingMode;
+          const quantity = Number(metadata?.quantity ?? '0');
+          return {
+            eventId,
+            type: 'checkout_completed',
+            organizationId: metadata?.organizationId ?? null,
+            externalSubscriptionId,
+            currentPeriodEnd: null,
+            planId: null,
+            billingCycle: null,
+            kind: 'addon',
+            addOn: (resourceType === 'LOCATIONS' || resourceType === 'USERS') && (billingMode === 'recurring' || billingMode === 'one_off')
+              ? { resourceType, quantity, billingMode }
+              : undefined,
+          };
+        }
+
+        const billingCycle = metadata?.billingCycle;
         return {
           eventId,
           type: 'checkout_completed',
-          organizationId: event.data?.metadata?.organizationId ?? null,
+          organizationId: metadata?.organizationId ?? null,
           externalSubscriptionId: event.data?.reference ?? null,
           currentPeriodEnd: null,
-          planId: event.data?.metadata?.planId ?? null,
+          planId: metadata?.planId ?? null,
           billingCycle: billingCycle === 'monthly' || billingCycle === 'quarterly' || billingCycle === 'yearly' ? billingCycle : null,
+          kind: 'plan',
         };
       }
       case 'invoice.payment_failed':
@@ -87,6 +158,7 @@ export class PaystackProvider implements PaymentProvider {
           currentPeriodEnd: null,
           planId: null,
           billingCycle: null,
+          kind: 'plan',
         };
       case 'subscription.not_renew':
       case 'subscription.disable':
@@ -98,6 +170,7 @@ export class PaystackProvider implements PaymentProvider {
           currentPeriodEnd: null,
           planId: null,
           billingCycle: null,
+          kind: 'plan',
         };
       default:
         return null;

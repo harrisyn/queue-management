@@ -1,5 +1,5 @@
 import Stripe from 'stripe';
-import { PaymentProvider, CreateCheckoutParams, CheckoutResult, PaymentWebhookEvent } from './types';
+import { PaymentProvider, CreateCheckoutParams, CreateAddOnCheckoutParams, CheckoutResult, PaymentWebhookEvent } from './types';
 
 // Stripe's `recurring.interval` has no native "quarter" value - quarterly
 // billing is expressed as 3 one-month intervals. Exported for testing.
@@ -51,6 +51,46 @@ export class StripeProvider implements PaymentProvider {
     return { redirectUrl: session.url };
   }
 
+  async createAddOnCheckoutSession(params: CreateAddOnCheckoutParams): Promise<CheckoutResult> {
+    const resourceLabel = params.resourceType === 'LOCATIONS' ? 'location' : 'user';
+    const productName = `${params.quantity}x extra ${resourceLabel}${params.quantity > 1 ? 's' : ''}`;
+    const metadata = {
+      kind: 'addon',
+      organizationId: params.organizationId,
+      resourceType: params.resourceType,
+      quantity: String(params.quantity),
+      billingMode: params.billingMode,
+    };
+
+    const session = await this.client.checkout.sessions.create({
+      mode: params.billingMode === 'recurring' ? 'subscription' : 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: params.currency.toLowerCase(),
+            product_data: { name: productName },
+            unit_amount: Math.round(params.unitPrice * 100),
+            ...(params.billingMode === 'recurring' ? { recurring: { interval: 'month' as const } } : {}),
+          },
+          quantity: params.quantity,
+        },
+      ],
+      success_url: params.successUrl,
+      cancel_url: params.cancelUrl,
+      metadata,
+      // Also copied onto the resulting Subscription so it's available on
+      // future invoice/subscription webhook events for this add-on, even
+      // though the primary dispatch for those events is record-based (see
+      // paymentWebhook.controller.ts).
+      ...(params.billingMode === 'recurring' ? { subscription_data: { metadata } } : {}),
+    });
+
+    if (!session.url) {
+      throw new Error('Stripe did not return a checkout URL');
+    }
+    return { redirectUrl: session.url };
+  }
+
   verifyWebhookSignature(rawBody: Buffer, signatureHeader: string): PaymentWebhookEvent | null {
     let event: Stripe.Event;
     try {
@@ -63,15 +103,37 @@ export class StripeProvider implements PaymentProvider {
     switch (event.type) {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
+        const externalSubscriptionId = typeof session.subscription === 'string' ? session.subscription : null;
+
+        if (session.metadata?.kind === 'addon') {
+          const resourceType = session.metadata?.resourceType;
+          const billingMode = session.metadata?.billingMode;
+          const quantity = Number(session.metadata?.quantity ?? '0');
+          return {
+            eventId: event.id,
+            type: 'checkout_completed',
+            organizationId: session.metadata?.organizationId ?? null,
+            externalSubscriptionId,
+            currentPeriodEnd: null,
+            planId: null,
+            billingCycle: null,
+            kind: 'addon',
+            addOn: (resourceType === 'LOCATIONS' || resourceType === 'USERS') && (billingMode === 'recurring' || billingMode === 'one_off')
+              ? { resourceType, quantity, billingMode }
+              : undefined,
+          };
+        }
+
         const billingCycle = session.metadata?.billingCycle;
         return {
           eventId: event.id,
           type: 'checkout_completed',
           organizationId: session.metadata?.organizationId ?? null,
-          externalSubscriptionId: typeof session.subscription === 'string' ? session.subscription : null,
+          externalSubscriptionId,
           currentPeriodEnd: null,
           planId: session.metadata?.planId ?? null,
           billingCycle: billingCycle === 'monthly' || billingCycle === 'quarterly' || billingCycle === 'yearly' ? billingCycle : null,
+          kind: 'plan',
         };
       }
       case 'invoice.payment_succeeded': {
@@ -87,6 +149,12 @@ export class StripeProvider implements PaymentProvider {
             : null,
           planId: null,
           billingCycle: null,
+          // Renewal/cancellation events are dispatched by looking up which
+          // table externalSubscriptionId matches (see
+          // paymentWebhook.controller.ts) rather than trusting this field -
+          // Stripe doesn't reliably surface the originating checkout's
+          // metadata on every subsequent invoice/subscription event.
+          kind: 'plan',
         };
       }
       case 'invoice.payment_failed': {
@@ -100,6 +168,7 @@ export class StripeProvider implements PaymentProvider {
           currentPeriodEnd: null,
           planId: null,
           billingCycle: null,
+          kind: 'plan',
         };
       }
       case 'customer.subscription.deleted': {
@@ -112,6 +181,7 @@ export class StripeProvider implements PaymentProvider {
           currentPeriodEnd: null,
           planId: null,
           billingCycle: null,
+          kind: 'plan',
         };
       }
       default:
