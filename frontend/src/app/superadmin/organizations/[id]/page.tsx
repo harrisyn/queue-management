@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowLeft, X } from 'lucide-react';
 import api from '@/api/client';
-import { Icon, Card, Badge, Button, UsageBar } from '@/components/ui';
+import { Icon, Card, Badge, Button, UsageBar, Input, Select } from '@/components/ui';
 import type { BadgeTone } from '@/components/ui';
 
 interface OrganizationDetail {
@@ -102,6 +102,12 @@ export default function OrganizationDetailPage({
   const [error, setError] = useState('');
   const [deleting, setDeleting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [granting, setGranting] = useState(false);
+  const [creditForm, setCreditForm] = useState<{ creditType: 'AI' | 'EMAIL' | 'SMS'; amount: string; reason: string }>({
+    creditType: 'AI',
+    amount: '',
+    reason: '',
+  });
 
   useEffect(() => {
     loadOrganization();
@@ -137,6 +143,24 @@ export default function OrganizationDetailPage({
       setError(err.response?.data?.error || 'Failed to cancel subscription');
     } finally {
       setCancelling(false);
+    }
+  };
+
+  const handleGrantCredits = async () => {
+    const amount = parseInt(creditForm.amount, 10);
+    if (!amount || !creditForm.reason.trim()) {
+      setError('Amount and reason are required to grant credits');
+      return;
+    }
+
+    setGranting(true);
+    try {
+      await api.grantCredits(id, { creditType: creditForm.creditType, amount, reason: creditForm.reason.trim() });
+      setCreditForm({ creditType: 'AI', amount: '', reason: '' });
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to grant credits');
+    } finally {
+      setGranting(false);
     }
   };
 
@@ -375,6 +399,38 @@ export default function OrganizationDetailPage({
           </div>
         </Card>
       </div>
+
+      {/* Grant Credits */}
+      <Card style={{ padding: '1.5rem', marginBottom: '2rem' }}>
+        <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--gray-900)', marginBottom: '1rem' }}>Grant Credits</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 2fr auto', gap: '0.75rem', alignItems: 'end' }}>
+          <Select
+            label="Credit type"
+            value={creditForm.creditType}
+            onChange={(e) => setCreditForm({ ...creditForm, creditType: e.target.value as 'AI' | 'EMAIL' | 'SMS' })}
+          >
+            <option value="AI">AI</option>
+            <option value="EMAIL">Email</option>
+            <option value="SMS">SMS</option>
+          </Select>
+          <Input
+            label="Amount (negative to debit)"
+            type="number"
+            value={creditForm.amount}
+            onChange={(e) => setCreditForm({ ...creditForm, amount: e.target.value })}
+            placeholder="e.g. 100"
+          />
+          <Input
+            label="Reason"
+            value={creditForm.reason}
+            onChange={(e) => setCreditForm({ ...creditForm, reason: e.target.value })}
+            placeholder="e.g. Goodwill top-up after support incident"
+          />
+          <Button variant="primary" onClick={handleGrantCredits} disabled={granting}>
+            {granting ? 'Granting...' : 'Grant'}
+          </Button>
+        </div>
+      </Card>
 
       {/* Danger Zone */}
       <div style={dangerCard}>

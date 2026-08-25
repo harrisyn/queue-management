@@ -213,9 +213,17 @@ describe('consumeCredits', () => {
     expect(prisma.creditLedgerEntry.create).not.toHaveBeenCalled();
   });
 
+  function mockLedgerSums(grants: number | null, consumption: number | null) {
+    (prisma.creditLedgerEntry.aggregate as any).mockImplementation(async (args: any) => {
+      if (args.where.amount?.gt !== undefined) return { _sum: { amount: grants } };
+      if (args.where.amount?.lt !== undefined) return { _sum: { amount: consumption } };
+      throw new Error('unexpected aggregate call shape');
+    });
+  }
+
   it('consumes credits and returns the correct remaining balance', async () => {
     mockOrgWithCreditAllowance(100);
-    (prisma.creditLedgerEntry.aggregate as any).mockResolvedValue({ _sum: { amount: -20 } }); // 80 used so far
+    mockLedgerSums(null, -20); // 80 used so far, no extra grants
 
     const result = await consumeCredits('org1', 'AI', 10, 'test consumption');
 
@@ -225,9 +233,28 @@ describe('consumeCredits', () => {
     });
   });
 
+  it('adds extra grants on top of the plan allowance', async () => {
+    mockOrgWithCreditAllowance(100);
+    mockLedgerSums(30, -20); // 100 plan + 30 granted = 130 allowance; 20 already used -> 110 balance before this request
+
+    const result = await consumeCredits('org1', 'AI', 10, 'test consumption');
+
+    expect(result).toEqual({ allowed: true, remaining: 100 });
+  });
+
+  it('regression: a grant with zero consumption never produces a negative balance', async () => {
+    mockOrgWithCreditAllowance(50);
+    mockLedgerSums(20, null); // granted 20 extra, nothing consumed -> balance 70, not -20
+
+    // A no-op probe: request 0 credits just to read the resolved balance via `remaining`.
+    const result = await consumeCredits('org1', 'AI', 0, 'probe');
+
+    expect(result.remaining).toBe(70);
+  });
+
   it('rejects consumption and writes nothing when the balance is insufficient', async () => {
     mockOrgWithCreditAllowance(100);
-    (prisma.creditLedgerEntry.aggregate as any).mockResolvedValue({ _sum: { amount: -95 } }); // 5 remaining
+    mockLedgerSums(null, -95); // 5 remaining
 
     const result = await consumeCredits('org1', 'AI', 10, 'test consumption');
 
@@ -238,13 +265,17 @@ describe('consumeCredits', () => {
   it('only counts ledger entries from the current billing period', async () => {
     const periodStart = new Date('2026-08-10T00:00:00Z');
     mockOrgWithCreditAllowance(100, periodStart);
-    (prisma.creditLedgerEntry.aggregate as any).mockResolvedValue({ _sum: { amount: null } });
+    mockLedgerSums(null, null);
 
     const result = await consumeCredits('org1', 'AI', 10, 'test');
 
     expect(result).toEqual({ allowed: true, remaining: 90 });
     expect(prisma.creditLedgerEntry.aggregate).toHaveBeenCalledWith({
-      where: { organizationId: 'org1', creditType: 'AI', createdAt: { gte: periodStart } },
+      where: { organizationId: 'org1', creditType: 'AI', createdAt: { gte: periodStart }, amount: { gt: 0 } },
+      _sum: { amount: true },
+    });
+    expect(prisma.creditLedgerEntry.aggregate).toHaveBeenCalledWith({
+      where: { organizationId: 'org1', creditType: 'AI', createdAt: { gte: periodStart }, amount: { lt: 0 } },
       _sum: { amount: true },
     });
   });

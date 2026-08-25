@@ -228,13 +228,17 @@ async function addOnBoost(organizationId: string, resourceType: 'LOCATIONS' | 'U
   return result._sum.quantity ?? 0;
 }
 
-// Current-period credit balance for one organization/creditType, and the
-// resolved allowance (null = unlimited). Shared by consumeCredits and the
-// read-only credits section of getMySubscription.
+// Current-period credit balance for one organization/creditType. `allowance`
+// is the plan's base allowance plus any extra grants this period (null =
+// unlimited); `consumed` is how much has been used; `balance` is what's left
+// to spend. Grants and consumption are summed separately - netting them into
+// one running total would make a grant with no consumption look like
+// negative usage. Shared by consumeCredits and the read-only credits section
+// of getMySubscription.
 async function getCreditBalance(
   organizationId: string,
   creditType: 'AI' | 'EMAIL' | 'SMS'
-): Promise<{ balance: number; allowance: number | null }> {
+): Promise<{ balance: number; allowance: number | null; consumed: number }> {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { subscription: { include: { plan: { include: { creditAllowances: true } } } } },
@@ -246,25 +250,34 @@ async function getCreditBalance(
 
   const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
   if (!isUsable) {
-    return { balance: 0, allowance: 0 };
+    return { balance: 0, allowance: 0, consumed: 0 };
   }
 
   const allowanceRow = (subscription!.plan as any).creditAllowances?.find(
     (a: { creditType: string }) => a.creditType === creditType
   );
-  const allowance: number | null = allowanceRow ? allowanceRow.monthlyAllowance : null;
+  const planAllowance: number | null = allowanceRow ? allowanceRow.monthlyAllowance : null;
 
-  if (allowance === null) {
-    return { balance: Infinity, allowance: null };
+  if (planAllowance === null) {
+    return { balance: Infinity, allowance: null, consumed: 0 };
   }
 
   const periodStart = subscription!.currentPeriodStart;
-  const result = await prisma.creditLedgerEntry.aggregate({
-    where: { organizationId, creditType, createdAt: { gte: periodStart } },
-    _sum: { amount: true },
-  });
-  const consumedOrGranted = result._sum.amount ?? 0;
-  return { balance: allowance + consumedOrGranted, allowance };
+  const [grantsResult, consumptionResult] = await Promise.all([
+    prisma.creditLedgerEntry.aggregate({
+      where: { organizationId, creditType, createdAt: { gte: periodStart }, amount: { gt: 0 } },
+      _sum: { amount: true },
+    }),
+    prisma.creditLedgerEntry.aggregate({
+      where: { organizationId, creditType, createdAt: { gte: periodStart }, amount: { lt: 0 } },
+      _sum: { amount: true },
+    }),
+  ]);
+  const extraGrants = grantsResult._sum.amount ?? 0;
+  const consumed = Math.abs(consumptionResult._sum.amount ?? 0);
+  const allowance = planAllowance + extraGrants;
+
+  return { balance: allowance - consumed, allowance, consumed };
 }
 
 /**
@@ -582,12 +595,12 @@ export const getMySubscription = async (req: Request, res: Response) => {
           getCreditBalance(user.organizationId, 'EMAIL'),
           getCreditBalance(user.organizationId, 'SMS'),
         ])
-      : [{ balance: 0, allowance: 0 }, { balance: 0, allowance: 0 }, { balance: 0, allowance: 0 }];
+      : [{ balance: 0, allowance: 0, consumed: 0 }, { balance: 0, allowance: 0, consumed: 0 }, { balance: 0, allowance: 0, consumed: 0 }];
 
-    const toCreditsField = ({ balance, allowance }: { balance: number; allowance: number | null }) =>
+    const toCreditsField = ({ consumed, allowance }: { consumed: number; allowance: number | null }) =>
       allowance === null
         ? { current: 0, limit: null, allowed: true }
-        : { current: allowance - balance, limit: allowance, allowed: balance > 0 };
+        : { current: consumed, limit: allowance, allowed: consumed < allowance };
 
     return res.json({
       subscription: subscription ? {
