@@ -4,6 +4,9 @@ vi.mock('../lib/prisma', () => ({
   default: {
     organization: { findUnique: vi.fn() },
     queueEntry: { count: vi.fn() },
+    location: { count: vi.fn() },
+    user: { count: vi.fn() },
+    organizationAddOn: { aggregate: vi.fn() },
   },
 }));
 
@@ -104,5 +107,62 @@ describe('checkLimit - queueEntriesPeriod', () => {
     const result = await checkLimit('org1', 'queueEntriesPeriod');
 
     expect(result).toEqual({ current: 50, limit: 50, allowed: false });
+  });
+});
+
+describe('checkLimit - add-on boosted limits', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('adds active LOCATIONS add-on quantity on top of the plan limit', async () => {
+    mockActiveOrg({ maxLocations: 3 });
+    (prisma.location.count as any).mockResolvedValue(4);
+    (prisma.organizationAddOn.aggregate as any).mockResolvedValue({ _sum: { quantity: 2 } });
+
+    const result = await checkLimit('org1', 'locations');
+
+    expect(result).toEqual({ current: 4, limit: 5, allowed: true });
+    expect(prisma.organizationAddOn.aggregate).toHaveBeenCalledWith({
+      where: { organizationId: 'org1', resourceType: 'LOCATIONS', status: 'ACTIVE' },
+      _sum: { quantity: true },
+    });
+  });
+
+  it('adds active USERS add-on quantity on top of the plan limit', async () => {
+    mockActiveOrg({ maxUsersPerOrg: 5 });
+    (prisma.user.count as any).mockResolvedValue(6);
+    (prisma.organizationAddOn.aggregate as any).mockResolvedValue({ _sum: { quantity: 3 } });
+
+    const result = await checkLimit('org1', 'users');
+
+    expect(result).toEqual({ current: 6, limit: 8, allowed: true });
+  });
+
+  it('treats no active add-ons (null sum) as a zero boost', async () => {
+    mockActiveOrg({ maxLocations: 3 });
+    (prisma.location.count as any).mockResolvedValue(1);
+    (prisma.organizationAddOn.aggregate as any).mockResolvedValue({ _sum: { quantity: null } });
+
+    const result = await checkLimit('org1', 'locations');
+
+    expect(result).toEqual({ current: 1, limit: 3, allowed: true });
+  });
+
+  it('does not apply an add-on boost when the subscription is not usable', async () => {
+    (prisma.organization.findUnique as any).mockResolvedValue({
+      subscription: {
+        id: 'sub1',
+        status: 'PAST_DUE',
+        trialEndsAt: null,
+        planId: 'plan1',
+        currentPeriodStart: new Date('2026-08-01T00:00:00Z'),
+        plan: { id: 'plan1', expiredFallbackPlanId: null, maxLocations: 3 },
+      },
+    });
+    (prisma.location.count as any).mockResolvedValue(0);
+
+    const result = await checkLimit('org1', 'locations');
+
+    expect(result).toEqual({ current: 0, limit: 0, allowed: false });
+    expect(prisma.organizationAddOn.aggregate).not.toHaveBeenCalled();
   });
 });

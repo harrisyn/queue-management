@@ -217,6 +217,17 @@ export const requireFeature = (feature: FeatureKey) => {
   };
 };
 
+// Sum of quantity across an organization's ACTIVE add-ons for one resource
+// type. Add-ons raise the effective limit on top of the plan's own limit
+// for that resource - see docs/superpowers/specs/2026-08-25-addon-billing-design.md.
+async function addOnBoost(organizationId: string, resourceType: 'LOCATIONS' | 'USERS'): Promise<number> {
+  const result = await prisma.organizationAddOn.aggregate({
+    where: { organizationId, resourceType, status: 'ACTIVE' },
+    _sum: { quantity: true },
+  });
+  return result._sum.quantity ?? 0;
+}
+
 /**
  * Check if organization has reached a limit
  * Returns the current count and limit
@@ -255,20 +266,24 @@ export const checkLimit = async (
   let limit: number | null = 0;
 
   switch (limitType) {
-    case 'locations':
+    case 'locations': {
       current = await prisma.location.count({ where: { organizationId } });
-      limit = planLimits.maxLocations ?? DEFAULT_FEATURES.maxLocations ?? 1;
+      const baseLimit = planLimits.maxLocations ?? DEFAULT_FEATURES.maxLocations ?? 1;
+      limit = isUsable ? baseLimit + (await addOnBoost(organizationId, 'LOCATIONS')) : baseLimit;
       break;
+    }
     case 'services':
       current = await prisma.service.count({
         where: { location: { organizationId } },
       });
       limit = planLimits.maxServicesPerLoc ?? DEFAULT_FEATURES.maxServices ?? 3;
       break;
-    case 'users':
+    case 'users': {
       current = await prisma.user.count({ where: { organizationId } });
-      limit = planLimits.maxUsersPerOrg ?? DEFAULT_FEATURES.maxUsers ?? 5;
+      const baseLimit = planLimits.maxUsersPerOrg ?? DEFAULT_FEATURES.maxUsers ?? 5;
+      limit = isUsable ? baseLimit + (await addOnBoost(organizationId, 'USERS')) : baseLimit;
       break;
+    }
     case 'queueEntriesDaily':
       current = await prisma.queueEntry.count({
         where: {
@@ -431,6 +446,17 @@ export const getMySubscription = async (req: Request, res: Response) => {
           maxServicesPerLoc: planLimits.maxServicesPerLoc ?? DEFAULT_FEATURES.maxServices ?? 0,
           maxUsersPerOrg: planLimits.maxUsersPerOrg ?? DEFAULT_FEATURES.maxUsers ?? 0,
         };
+
+    // Add-ons raise the effective limit on top of the plan's own limit,
+    // only while the subscription is actually usable.
+    if (isUsable) {
+      const [locationBoost, userBoost] = await Promise.all([
+        addOnBoost(user.organizationId, 'LOCATIONS'),
+        addOnBoost(user.organizationId, 'USERS'),
+      ]);
+      mergedLimits.maxLocations += locationBoost;
+      mergedLimits.maxUsersPerOrg += userBoost;
+    }
 
     let upgradePlan: { id: string; name: string } | null = null;
     if (subscription?.plan.upgradePlanId) {
