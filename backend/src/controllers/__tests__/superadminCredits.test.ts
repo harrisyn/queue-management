@@ -6,6 +6,7 @@ vi.mock('../../lib/prisma', () => ({
     creditLedgerEntry: { create: vi.fn() },
     subscriptionPlan: { findUnique: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
     planCreditAllowance: { upsert: vi.fn() },
+    planAddOnPricingOverride: { upsert: vi.fn(), deleteMany: vi.fn() },
   },
 }));
 
@@ -117,5 +118,56 @@ describe('updatePlan - credit allowance upsert', () => {
     await updatePlan(req, res, vi.fn());
 
     expect(prisma.planCreditAllowance.upsert).not.toHaveBeenCalled();
+  });
+});
+
+describe('updatePlan - add-on price override upsert', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('upserts an override when a value is provided', async () => {
+    (prisma.subscriptionPlan.findUnique as any).mockResolvedValue({ id: 'plan1', isDefault: false, isRecommended: false });
+    (prisma.subscriptionPlan.update as any).mockResolvedValue({ id: 'plan1' });
+
+    const req: any = {
+      params: { id: 'plan1' },
+      body: { addOnPricingOverrides: { LOCATIONS: { pricePerUnitMonthly: 10, pricePerUnitOneOff: 40 } } },
+    };
+    const res = makeRes();
+    await updatePlan(req, res, vi.fn());
+
+    expect(prisma.planAddOnPricingOverride.upsert).toHaveBeenCalledWith({
+      where: { planId_resourceType: { planId: 'plan1', resourceType: 'LOCATIONS' } },
+      create: { planId: 'plan1', resourceType: 'LOCATIONS', pricePerUnitMonthly: 10, pricePerUnitOneOff: 40 },
+      update: { pricePerUnitMonthly: 10, pricePerUnitOneOff: 40 },
+    });
+  });
+
+  it('clears an override when its value is null', async () => {
+    (prisma.subscriptionPlan.findUnique as any).mockResolvedValue({ id: 'plan1', isDefault: false, isRecommended: false });
+    (prisma.subscriptionPlan.update as any).mockResolvedValue({ id: 'plan1' });
+
+    const req: any = {
+      params: { id: 'plan1' },
+      body: { addOnPricingOverrides: { USERS: null } },
+    };
+    const res = makeRes();
+    await updatePlan(req, res, vi.fn());
+
+    expect(prisma.planAddOnPricingOverride.deleteMany).toHaveBeenCalledWith({
+      where: { planId: 'plan1', resourceType: 'USERS' },
+    });
+    expect(prisma.planAddOnPricingOverride.upsert).not.toHaveBeenCalled();
+  });
+
+  it('does not touch overrides when none are provided', async () => {
+    (prisma.subscriptionPlan.findUnique as any).mockResolvedValue({ id: 'plan1', isDefault: false, isRecommended: false });
+    (prisma.subscriptionPlan.update as any).mockResolvedValue({ id: 'plan1' });
+
+    const req: any = { params: { id: 'plan1' }, body: { name: 'Renamed' } };
+    const res = makeRes();
+    await updatePlan(req, res, vi.fn());
+
+    expect(prisma.planAddOnPricingOverride.upsert).not.toHaveBeenCalled();
+    expect(prisma.planAddOnPricingOverride.deleteMany).not.toHaveBeenCalled();
   });
 });

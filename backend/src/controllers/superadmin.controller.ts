@@ -314,6 +314,7 @@ export const listPlans = async (req: Request, res: Response, next: NextFunction)
           },
         },
         creditAllowances: true,
+        addOnPricingOverrides: true,
       },
       orderBy: { displayOrder: 'asc' },
     });
@@ -326,6 +327,29 @@ export const listPlans = async (req: Request, res: Response, next: NextFunction)
 
 // Create subscription plan
 const CREDIT_TYPES = ['AI', 'EMAIL', 'SMS'] as const;
+const ADDON_RESOURCE_TYPES = ['LOCATIONS', 'USERS'] as const;
+
+// Upserts (or clears) a plan's add-on price overrides. A null/undefined
+// value for a resourceType clears any existing override for that type,
+// reverting it to the global AddOnPricing default.
+async function upsertAddOnPricingOverrides(
+  planId: string,
+  overrides: Record<string, { pricePerUnitMonthly: number; pricePerUnitOneOff: number } | null | undefined>
+) {
+  for (const resourceType of ADDON_RESOURCE_TYPES) {
+    if (!(resourceType in overrides)) continue;
+    const value = overrides[resourceType];
+    if (!value) {
+      await prisma.planAddOnPricingOverride.deleteMany({ where: { planId, resourceType } });
+      continue;
+    }
+    await prisma.planAddOnPricingOverride.upsert({
+      where: { planId_resourceType: { planId, resourceType } },
+      create: { planId, resourceType, pricePerUnitMonthly: value.pricePerUnitMonthly, pricePerUnitOneOff: value.pricePerUnitOneOff },
+      update: { pricePerUnitMonthly: value.pricePerUnitMonthly, pricePerUnitOneOff: value.pricePerUnitOneOff },
+    });
+  }
+}
 
 // Upserts the given credit types' monthly allowance for one plan. Only
 // touches keys present in `creditAllowances` - omitted types are left as-is.
@@ -364,6 +388,7 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
       expiredFallbackPlanId,
       upgradePlanId,
       creditAllowances,
+      addOnPricingOverrides,
     } = req.body;
 
     if (!name || !code) {
@@ -425,6 +450,9 @@ export const createPlan = async (req: Request, res: Response, next: NextFunction
     if (creditAllowances) {
       await upsertCreditAllowances(plan.id, creditAllowances);
     }
+    if (addOnPricingOverrides) {
+      await upsertAddOnPricingOverrides(plan.id, addOnPricingOverrides);
+    }
 
     res.status(201).json(plan);
   } catch (error) {
@@ -457,6 +485,7 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
       expiredFallbackPlanId,
       upgradePlanId,
       creditAllowances,
+      addOnPricingOverrides,
     } = req.body;
 
     const existing = await prisma.subscriptionPlan.findUnique({
@@ -513,6 +542,9 @@ export const updatePlan = async (req: Request, res: Response, next: NextFunction
 
     if (creditAllowances) {
       await upsertCreditAllowances(plan.id, creditAllowances);
+    }
+    if (addOnPricingOverrides) {
+      await upsertAddOnPricingOverrides(plan.id, addOnPricingOverrides);
     }
 
     res.json(plan);
