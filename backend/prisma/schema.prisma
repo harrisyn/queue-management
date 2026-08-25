@@ -475,6 +475,7 @@ model SubscriptionPlan {
   updatedAt             DateTime                 @updatedAt
   subscriptions         OrganizationSubscription[]
   creditAllowances      PlanCreditAllowance[]
+  addOnPricingOverrides PlanAddOnPricingOverride[]
 
   @@index([code])
   @@index([isActive])
@@ -600,6 +601,22 @@ model CreditLedgerEntry {
   createdAt      DateTime     @default(now())
 
   @@index([organizationId, creditType, createdAt])
+}
+
+// Per-plan override of the global AddOnPricing default. Missing row for a
+// (planId, resourceType) pair = use the global default - see
+// docs/superpowers/specs/2026-08-25-plan-builder-design.md.
+model PlanAddOnPricingOverride {
+  id                  String            @id @default(uuid())
+  planId              String
+  plan                SubscriptionPlan  @relation(fields: [planId], references: [id], onDelete: Cascade)
+  resourceType        AddOnResourceType
+  pricePerUnitMonthly Decimal
+  pricePerUnitOneOff  Decimal
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+
+  @@unique([planId, resourceType])
 }
 
 model OrganizationAddOn {
