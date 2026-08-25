@@ -78,6 +78,18 @@ class ApiClient {
     return data;
   }
 
+  async getOrgBySlug(slug: string): Promise<{ id: string; name: string; slug: string } | null> {
+    try {
+      const { data } = await this.client.get(`/public/orgs/by-slug/${encodeURIComponent(slug)}`);
+      return data;
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
   async getLocation(id: string) {
     const { data } = await this.client.get(`/locations/${id}`);
     return data;
@@ -212,6 +224,32 @@ class ApiClient {
   async switchToFreePlan(planId: string) {
     const { data } = await this.client.post(`/tenant/subscription/switch/${planId}`);
     return data as { success: boolean; planId: string; planName: string };
+  }
+
+  // Add-ons
+  async getMyAddOns() {
+    const { data } = await this.client.get('/tenant/addons');
+    return data;
+  }
+
+  async createAddOnCheckout(payload: { resourceType: 'LOCATIONS' | 'USERS'; quantity: number; billingMode: 'recurring' | 'one_off'; provider: 'stripe' | 'paystack' }) {
+    const { data } = await this.client.post('/tenant/addons/checkout', payload);
+    return data;
+  }
+
+  async cancelAddOn(id: string) {
+    const { data } = await this.client.delete(`/tenant/addons/${id}`);
+    return data;
+  }
+
+  async getAddOnPricing() {
+    const { data } = await this.client.get('/superadmin/addon-pricing');
+    return data;
+  }
+
+  async updateAddOnPricing(resourceType: 'LOCATIONS' | 'USERS', payload: { pricePerUnitMonthly: number; pricePerUnitOneOff: number; currency?: string }) {
+    const { data } = await this.client.put(`/superadmin/addon-pricing/${resourceType}`, payload);
+    return data;
   }
 
   async getUsers(params?: { organizationId?: string; role?: string }) {

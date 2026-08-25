@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
-import { LayoutDashboard, Building2, CreditCard, Home, ChevronLeft, ChevronRight, Zap, Wallet } from 'lucide-react';
+import { LayoutDashboard, Building2, CreditCard, Home, ChevronLeft, ChevronRight, Zap, Wallet, PackagePlus } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { Icon } from '@/components/ui';
 
@@ -26,8 +26,8 @@ export default function SuperadminLayout({
   if (loading) {
     return (
       <div style={loadingContainer}>
-        <div style={spinner} />
-        <p>Loading...</p>
+        <div className="spinner" />
+        <p style={{ color: 'var(--gray-500)' }}>Loading...</p>
       </div>
     );
   }
@@ -41,6 +41,7 @@ export default function SuperadminLayout({
     { href: '/superadmin/organizations', label: 'Organizations', icon: Building2 },
     { href: '/superadmin/plans', label: 'Subscription Plans', icon: CreditCard },
     { href: '/superadmin/payment-providers', label: 'Payment Providers', icon: Wallet },
+    { href: '/superadmin/addon-pricing', label: 'Add-On Pricing', icon: PackagePlus },
   ];
 
   return (
@@ -49,7 +50,7 @@ export default function SuperadminLayout({
       <aside style={{ ...sidebar, width: sidebarOpen ? '260px' : '60px' }}>
         <div style={sidebarHeader}>
           <div style={logoSection}>
-            <span style={logoIcon}><Icon icon={Zap} size={22} color="#2dd4bf" /></span>
+            <span style={logoIcon}><Icon icon={Zap} size={22} color="var(--primary-500)" /></span>
             {sidebarOpen && <span style={logoText}>SuperAdmin</span>}
           </div>
           <button
@@ -101,20 +102,12 @@ const loadingContainer: React.CSSProperties = {
   justifyContent: 'center',
   height: '100vh',
   gap: '1rem',
-};
-
-const spinner: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  border: '4px solid #e2e8f0',
-  borderTop: '4px solid #14b8a6',
-  borderRadius: '50%',
-  animation: 'spin 1s linear infinite',
+  background: 'var(--gray-50)',
 };
 
 const layoutContainer: React.CSSProperties = {
   minHeight: '100vh',
-  background: '#0f172a',
+  background: 'var(--gray-50)',
 };
 
 const sidebar: React.CSSProperties = {
@@ -122,8 +115,8 @@ const sidebar: React.CSSProperties = {
   top: 0,
   left: 0,
   height: '100vh',
-  background: '#0f172a',
-  borderRight: '1px solid rgba(20, 184, 166, 0.2)',
+  background: 'white',
+  borderRight: '1px solid var(--gray-200)',
   display: 'flex',
   flexDirection: 'column',
   transition: 'width 0.3s ease',
@@ -135,7 +128,7 @@ const sidebarHeader: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
-  borderBottom: '1px solid rgba(20, 184, 166, 0.2)',
+  borderBottom: '1px solid var(--gray-100)',
 };
 
 const logoSection: React.CSSProperties = {
@@ -151,16 +144,16 @@ const logoIcon: React.CSSProperties = {
 const logoText: React.CSSProperties = {
   fontSize: '1.25rem',
   fontWeight: 700,
-  color: '#fff',
+  color: 'var(--gray-900)',
   whiteSpace: 'nowrap',
 };
 
 const toggleBtn: React.CSSProperties = {
-  background: 'rgba(20, 184, 166, 0.15)',
+  background: 'var(--gray-100)',
   border: 'none',
-  color: '#2dd4bf',
+  color: 'var(--gray-500)',
   padding: '0.5rem',
-  borderRadius: '6px',
+  borderRadius: 'var(--radius-md)',
   cursor: 'pointer',
   fontSize: '0.875rem',
   display: 'flex',
@@ -173,46 +166,48 @@ const navContainer: React.CSSProperties = {
   padding: '1rem 0.75rem',
   display: 'flex',
   flexDirection: 'column',
-  gap: '0.5rem',
+  gap: '0.25rem',
 };
 
 const navLink: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '0.75rem',
-  padding: '0.875rem 1rem',
-  color: '#94a3b8',
+  padding: '0.75rem 1rem',
+  color: 'var(--gray-500)',
   textDecoration: 'none',
-  borderRadius: '8px',
+  borderRadius: 'var(--radius-lg)',
   fontSize: '0.9375rem',
+  fontWeight: 500,
   transition: 'all 0.2s ease',
   whiteSpace: 'nowrap',
 };
 
 const activeNavLink: React.CSSProperties = {
-  background: 'rgba(20, 184, 166, 0.15)',
-  color: '#2dd4bf',
+  background: 'var(--primary-50)',
+  color: 'var(--primary-700)',
 };
 
 const navIcon: React.CSSProperties = {
   fontSize: '1.25rem',
   minWidth: '1.5rem',
   textAlign: 'center' as const,
+  display: 'inline-flex',
 };
 
 const sidebarFooter: React.CSSProperties = {
   padding: '1rem 0.75rem',
-  borderTop: '1px solid rgba(20, 184, 166, 0.2)',
+  borderTop: '1px solid var(--gray-100)',
 };
 
 const backLink: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '0.75rem',
-  padding: '0.875rem 1rem',
-  color: '#64748b',
+  padding: '0.75rem 1rem',
+  color: 'var(--gray-400)',
   textDecoration: 'none',
-  borderRadius: '8px',
+  borderRadius: 'var(--radius-lg)',
   fontSize: '0.875rem',
   whiteSpace: 'nowrap',
 };
