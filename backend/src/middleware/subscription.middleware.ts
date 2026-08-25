@@ -476,6 +476,11 @@ export const getMySubscription = async (req: Request, res: Response) => {
           queueEntriesDaily: { current: 0, limit: null, allowed: true },
           queueEntriesPeriod: { current: 0, limit: null, allowed: true },
         },
+        credits: {
+          AI: { current: 0, limit: null, allowed: true },
+          EMAIL: { current: 0, limit: null, allowed: true },
+          SMS: { current: 0, limit: null, allowed: true },
+        },
         activeProviders,
       });
     }
@@ -571,6 +576,19 @@ export const getMySubscription = async (req: Request, res: Response) => {
         }
       : { maxQueueEntriesPerDay: 0, maxQueueEntriesPerPeriod: 0 };
 
+    const [aiCredits, emailCredits, smsCredits] = isUsable
+      ? await Promise.all([
+          getCreditBalance(user.organizationId, 'AI'),
+          getCreditBalance(user.organizationId, 'EMAIL'),
+          getCreditBalance(user.organizationId, 'SMS'),
+        ])
+      : [{ balance: 0, allowance: 0 }, { balance: 0, allowance: 0 }, { balance: 0, allowance: 0 }];
+
+    const toCreditsField = ({ balance, allowance }: { balance: number; allowance: number | null }) =>
+      allowance === null
+        ? { current: 0, limit: null, allowed: true }
+        : { current: allowance - balance, limit: allowance, allowed: balance > 0 };
+
     return res.json({
       subscription: subscription ? {
         planId: subscription.planId,
@@ -608,6 +626,14 @@ export const getMySubscription = async (req: Request, res: Response) => {
           limit: queueEntryLimits.maxQueueEntriesPerPeriod,
           allowed: queueEntryLimits.maxQueueEntriesPerPeriod === null ? true : queueEntriesPeriodCount < queueEntryLimits.maxQueueEntriesPerPeriod,
         },
+      },
+      // No feature consumes credits yet - current is always 0 until a real
+      // AI/SMS/email feature calls consumeCredits. See
+      // docs/superpowers/specs/2026-08-25-usage-credits-design.md.
+      credits: {
+        AI: toCreditsField(aiCredits),
+        EMAIL: toCreditsField(emailCredits),
+        SMS: toCreditsField(smsCredits),
       },
       activeProviders,
       upgradePlan,
