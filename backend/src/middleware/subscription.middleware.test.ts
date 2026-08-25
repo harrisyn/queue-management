@@ -7,11 +7,12 @@ vi.mock('../lib/prisma', () => ({
     location: { count: vi.fn() },
     user: { count: vi.fn() },
     organizationAddOn: { aggregate: vi.fn() },
+    creditLedgerEntry: { aggregate: vi.fn(), create: vi.fn() },
   },
 }));
 
 import prisma from '../lib/prisma';
-import { checkLimit } from './subscription.middleware';
+import { checkLimit, consumeCredits } from './subscription.middleware';
 
 function mockActiveOrg(planOverrides: Record<string, any>, periodStart = new Date('2026-08-01T00:00:00Z')) {
   (prisma.organization.findUnique as any).mockResolvedValue({
@@ -164,5 +165,102 @@ describe('checkLimit - add-on boosted limits', () => {
 
     expect(result).toEqual({ current: 0, limit: 0, allowed: false });
     expect(prisma.organizationAddOn.aggregate).not.toHaveBeenCalled();
+  });
+});
+
+function mockOrgWithCreditAllowance(allowance: number | null, periodStart = new Date('2026-08-01T00:00:00Z')) {
+  (prisma.organization.findUnique as any).mockResolvedValue({
+    subscription: {
+      id: 'sub1',
+      status: 'ACTIVE',
+      trialEndsAt: null,
+      planId: 'plan1',
+      currentPeriodStart: periodStart,
+      plan: {
+        id: 'plan1',
+        expiredFallbackPlanId: null,
+        creditAllowances: [{ creditType: 'AI', monthlyAllowance: allowance }],
+      },
+    },
+  });
+}
+
+describe('consumeCredits', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('always allows and writes no ledger entry when the allowance is unlimited (null)', async () => {
+    mockOrgWithCreditAllowance(null);
+
+    const result = await consumeCredits('org1', 'AI', 10, 'test');
+
+    expect(result).toEqual({ allowed: true, remaining: null });
+    expect(prisma.creditLedgerEntry.aggregate).not.toHaveBeenCalled();
+    expect(prisma.creditLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('always allows and writes no ledger entry when no allowance row exists for the type', async () => {
+    (prisma.organization.findUnique as any).mockResolvedValue({
+      subscription: {
+        id: 'sub1', status: 'ACTIVE', trialEndsAt: null, planId: 'plan1',
+        currentPeriodStart: new Date('2026-08-01T00:00:00Z'),
+        plan: { id: 'plan1', expiredFallbackPlanId: null, creditAllowances: [] },
+      },
+    });
+
+    const result = await consumeCredits('org1', 'AI', 10, 'test');
+
+    expect(result).toEqual({ allowed: true, remaining: null });
+    expect(prisma.creditLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('consumes credits and returns the correct remaining balance', async () => {
+    mockOrgWithCreditAllowance(100);
+    (prisma.creditLedgerEntry.aggregate as any).mockResolvedValue({ _sum: { amount: -20 } }); // 80 used so far
+
+    const result = await consumeCredits('org1', 'AI', 10, 'test consumption');
+
+    expect(result).toEqual({ allowed: true, remaining: 70 });
+    expect(prisma.creditLedgerEntry.create).toHaveBeenCalledWith({
+      data: { organizationId: 'org1', creditType: 'AI', amount: -10, reason: 'test consumption' },
+    });
+  });
+
+  it('rejects consumption and writes nothing when the balance is insufficient', async () => {
+    mockOrgWithCreditAllowance(100);
+    (prisma.creditLedgerEntry.aggregate as any).mockResolvedValue({ _sum: { amount: -95 } }); // 5 remaining
+
+    const result = await consumeCredits('org1', 'AI', 10, 'test consumption');
+
+    expect(result).toEqual({ allowed: false, remaining: 5 });
+    expect(prisma.creditLedgerEntry.create).not.toHaveBeenCalled();
+  });
+
+  it('only counts ledger entries from the current billing period', async () => {
+    const periodStart = new Date('2026-08-10T00:00:00Z');
+    mockOrgWithCreditAllowance(100, periodStart);
+    (prisma.creditLedgerEntry.aggregate as any).mockResolvedValue({ _sum: { amount: null } });
+
+    const result = await consumeCredits('org1', 'AI', 10, 'test');
+
+    expect(result).toEqual({ allowed: true, remaining: 90 });
+    expect(prisma.creditLedgerEntry.aggregate).toHaveBeenCalledWith({
+      where: { organizationId: 'org1', creditType: 'AI', createdAt: { gte: periodStart } },
+      _sum: { amount: true },
+    });
+  });
+
+  it('hard-blocks when the subscription is not usable', async () => {
+    (prisma.organization.findUnique as any).mockResolvedValue({
+      subscription: {
+        id: 'sub1', status: 'PAST_DUE', trialEndsAt: null, planId: 'plan1',
+        currentPeriodStart: new Date('2026-08-01T00:00:00Z'),
+        plan: { id: 'plan1', expiredFallbackPlanId: null, creditAllowances: [{ creditType: 'AI', monthlyAllowance: 100 }] },
+      },
+    });
+
+    const result = await consumeCredits('org1', 'AI', 10, 'test');
+
+    expect(result).toEqual({ allowed: false, remaining: 0 });
+    expect(prisma.creditLedgerEntry.create).not.toHaveBeenCalled();
   });
 });

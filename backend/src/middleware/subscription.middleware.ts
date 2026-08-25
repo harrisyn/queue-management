@@ -228,6 +228,74 @@ async function addOnBoost(organizationId: string, resourceType: 'LOCATIONS' | 'U
   return result._sum.quantity ?? 0;
 }
 
+// Current-period credit balance for one organization/creditType, and the
+// resolved allowance (null = unlimited). Shared by consumeCredits and the
+// read-only credits section of getMySubscription.
+async function getCreditBalance(
+  organizationId: string,
+  creditType: 'AI' | 'EMAIL' | 'SMS'
+): Promise<{ balance: number; allowance: number | null }> {
+  const org = await prisma.organization.findUnique({
+    where: { id: organizationId },
+    select: { subscription: { include: { plan: { include: { creditAllowances: true } } } } },
+  });
+  let subscription = org?.subscription ?? null;
+  if (subscription) {
+    subscription = await applyExpiryIfNeeded(subscription);
+  }
+
+  const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
+  if (!isUsable) {
+    return { balance: 0, allowance: 0 };
+  }
+
+  const allowanceRow = (subscription!.plan as any).creditAllowances?.find(
+    (a: { creditType: string }) => a.creditType === creditType
+  );
+  const allowance: number | null = allowanceRow ? allowanceRow.monthlyAllowance : null;
+
+  if (allowance === null) {
+    return { balance: Infinity, allowance: null };
+  }
+
+  const periodStart = subscription!.currentPeriodStart;
+  const result = await prisma.creditLedgerEntry.aggregate({
+    where: { organizationId, creditType, createdAt: { gte: periodStart } },
+    _sum: { amount: true },
+  });
+  const consumedOrGranted = result._sum.amount ?? 0;
+  return { balance: allowance + consumedOrGranted, allowance };
+}
+
+/**
+ * Attempt to consume `amount` credits of one type for an organization.
+ * Unlimited (no allowance configured) always succeeds without writing a
+ * ledger entry - there's nothing to run out of. No feature calls this yet;
+ * see docs/superpowers/specs/2026-08-25-usage-credits-design.md.
+ */
+export const consumeCredits = async (
+  organizationId: string,
+  creditType: 'AI' | 'EMAIL' | 'SMS',
+  amount: number,
+  reason: string
+): Promise<{ allowed: boolean; remaining: number | null }> => {
+  const { balance, allowance } = await getCreditBalance(organizationId, creditType);
+
+  if (allowance === null) {
+    return { allowed: true, remaining: null };
+  }
+
+  if (balance < amount) {
+    return { allowed: false, remaining: balance };
+  }
+
+  await prisma.creditLedgerEntry.create({
+    data: { organizationId, creditType, amount: -amount, reason },
+  });
+
+  return { allowed: true, remaining: balance - amount };
+};
+
 /**
  * Check if organization has reached a limit
  * Returns the current count and limit
