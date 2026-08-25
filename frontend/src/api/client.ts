@@ -242,6 +242,11 @@ class ApiClient {
     return data;
   }
 
+  async getMyAddOnPricing() {
+    const { data } = await this.client.get('/tenant/addon-pricing');
+    return data;
+  }
+
   async getAddOnPricing() {
     const { data } = await this.client.get('/superadmin/addon-pricing');
     return data;
