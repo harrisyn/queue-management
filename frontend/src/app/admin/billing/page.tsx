@@ -50,7 +50,18 @@ interface SubscriptionData {
     queueEntriesDaily: UsageLimit;
     queueEntriesPeriod: UsageLimit;
   };
+  credits?: {
+    AI: UsageLimit;
+    EMAIL: UsageLimit;
+    SMS: UsageLimit;
+  };
 }
+
+const CREDIT_LABELS: Record<'AI' | 'EMAIL' | 'SMS', string> = {
+  AI: 'AI credits',
+  EMAIL: 'Email credits',
+  SMS: 'SMS credits',
+};
 
 interface AddOnPricingRow {
   resourceType: 'LOCATIONS' | 'USERS';
@@ -238,6 +249,11 @@ export default function BillingPage() {
               <UsageBar label="Services" current={data.limits.services.current} limit={data.limits.services.limit} />
               <UsageBar label="Queue entries today" current={data.limits.queueEntriesDaily.current} limit={data.limits.queueEntriesDaily.limit} />
               <UsageBar label="Queue entries this period" current={data.limits.queueEntriesPeriod.current} limit={data.limits.queueEntriesPeriod.limit} />
+              {data.credits && (['AI', 'EMAIL', 'SMS'] as const)
+                .filter(type => data.credits![type].limit !== null)
+                .map(type => (
+                  <UsageBar key={type} label={CREDIT_LABELS[type]} current={data.credits![type].current} limit={data.credits![type].limit} />
+                ))}
             </div>
           </Card>
         )}
