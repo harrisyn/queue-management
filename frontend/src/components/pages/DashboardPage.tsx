@@ -19,7 +19,7 @@ import {
 import { useAuthContext } from '@/contexts/AuthContext';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
-import { Icon, PageHeader } from '@/components/ui';
+import { Icon, PageHeader, UsageBar } from '@/components/ui';
 
 interface Stats {
   locations: number;
@@ -35,10 +35,25 @@ interface Organization {
   email?: string;
 }
 
+interface UsageLimit {
+  current: number;
+  limit: number | null;
+  allowed: boolean;
+}
+
+interface SubscriptionLimits {
+  locations: UsageLimit;
+  services: UsageLimit;
+  users: UsageLimit;
+  queueEntriesDaily: UsageLimit;
+  queueEntriesPeriod: UsageLimit;
+}
+
 const DashboardPage: React.FC = () => {
   const { user, isAdmin, isStaff } = useAuthContext();
   const [stats, setStats] = useState<Stats | null>(null);
   const [organization, setOrganization] = useState<Organization | null>(null);
+  const [limits, setLimits] = useState<SubscriptionLimits | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -59,6 +74,9 @@ const DashboardPage: React.FC = () => {
         // Get real stats
         const statsData = await api.getDashboardStats(user.organizationId);
         setStats(statsData);
+
+        const subData = await api.getMySubscription();
+        if (subData.limits) setLimits(subData.limits);
       } else {
         // No organization on this account (e.g. a superadmin browsing the
         // regular tenant app shell by mistake). Never guess an org - render
@@ -187,6 +205,32 @@ const DashboardPage: React.FC = () => {
             </div>
           ))}
         </div>
+
+        {/* Usage Widget - only near-limit resources, full breakdown lives on the billing page */}
+        {isAdmin && limits && (() => {
+          const nearLimitEntries = (
+            [
+              ['Locations', limits.locations],
+              ['Users', limits.users],
+              ['Services', limits.services],
+              ['Queue entries today', limits.queueEntriesDaily],
+              ['Queue entries this period', limits.queueEntriesPeriod],
+            ] as [string, UsageLimit][]
+          ).filter(([, l]) => l.limit !== null && l.current / l.limit >= 0.8);
+
+          if (nearLimitEntries.length === 0) return null;
+
+          return (
+            <section style={sectionStyle}>
+              <h2 style={sectionTitle}>Usage</h2>
+              <div className="card" style={{ padding: '1.25rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
+                {nearLimitEntries.map(([label, l]) => (
+                  <UsageBar key={label} label={label} current={l.current} limit={l.limit} />
+                ))}
+              </div>
+            </section>
+          );
+        })()}
 
         {/* Quick Actions */}
         <section style={sectionStyle}>
