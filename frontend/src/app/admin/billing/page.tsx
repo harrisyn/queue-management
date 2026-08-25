@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
-import { Button, Card, Badge, PageHeader, Icon } from '@/components/ui';
+import { Button, Card, Badge, PageHeader, Icon, UsageBar } from '@/components/ui';
 
 interface Plan {
   id: string;
@@ -25,6 +25,12 @@ interface Plan {
   isRecommended: boolean;
 }
 
+interface UsageLimit {
+  current: number;
+  limit: number | null;
+  allowed: boolean;
+}
+
 interface SubscriptionData {
   subscription: {
     planId: string;
@@ -37,6 +43,13 @@ interface SubscriptionData {
   activeProviders: ('stripe' | 'paystack')[];
   upgradePlan: { id: string; name: string } | null;
   isExpiredNoFallback: boolean;
+  limits?: {
+    locations: UsageLimit;
+    services: UsageLimit;
+    users: UsageLimit;
+    queueEntriesDaily: UsageLimit;
+    queueEntriesPeriod: UsageLimit;
+  };
 }
 
 type BillingCycle = 'monthly' | 'quarterly' | 'yearly';
@@ -152,6 +165,19 @@ export default function BillingPage() {
               : 'No active subscription'
           }
         />
+
+        {data?.limits && (
+          <Card style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--gray-900)' }}>Usage</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
+              <UsageBar label="Locations" current={data.limits.locations.current} limit={data.limits.locations.limit} />
+              <UsageBar label="Users" current={data.limits.users.current} limit={data.limits.users.limit} />
+              <UsageBar label="Services" current={data.limits.services.current} limit={data.limits.services.limit} />
+              <UsageBar label="Queue entries today" current={data.limits.queueEntriesDaily.current} limit={data.limits.queueEntriesDaily.limit} />
+              <UsageBar label="Queue entries this period" current={data.limits.queueEntriesPeriod.current} limit={data.limits.queueEntriesPeriod.limit} />
+            </div>
+          </Card>
+        )}
 
         {data?.isExpiredNoFallback && (
           <Card style={{ padding: '1.25rem', marginBottom: '1.5rem', background: '#fef2f2', border: '1px solid #fca5a5', color: '#991b1b' }}>
