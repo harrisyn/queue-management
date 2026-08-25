@@ -28,6 +28,7 @@ model Organization {
   dataSources           DataSource[]
   subscription          OrganizationSubscription? @relation(fields: [subscriptionId], references: [id])
   servicePoints         ServicePoint[]
+  addOns                OrganizationAddOn[]
 }
 
 model Location {
@@ -536,4 +537,49 @@ model ProcessedWebhookEvent {
   processedAt DateTime @default(now())
 
   @@unique([provider, eventId])
+}
+
+enum AddOnResourceType {
+  LOCATIONS
+  USERS
+}
+
+enum AddOnBillingMode {
+  RECURRING
+  ONE_OFF
+}
+
+enum AddOnStatus {
+  ACTIVE
+  CANCELLED
+}
+
+model AddOnPricing {
+  id                  String            @id @default(uuid())
+  resourceType        AddOnResourceType @unique
+  pricePerUnitMonthly Decimal           @default(0) // price for 1 unit, recurring, per month
+  pricePerUnitOneOff  Decimal           @default(0) // price for 1 unit, one-time
+  currency            String            @default("USD")
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
+}
+
+model OrganizationAddOn {
+  id                      String            @id @default(uuid())
+  organizationId          String
+  organization            Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  resourceType            AddOnResourceType
+  quantity                Int
+  billingMode             AddOnBillingMode
+  status                  AddOnStatus       @default(ACTIVE)
+  provider                String?           // "stripe" | "paystack"
+  externalSubscriptionId  String?           // RECURRING only - used to cancel and to match renewal/cancellation webhooks
+  currentPeriodEnd        DateTime?         // RECURRING only, informational display
+  purchasedAt             DateTime          @default(now())
+  cancelledAt             DateTime?
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+
+  @@index([organizationId, resourceType, status])
+  @@index([externalSubscriptionId])
 }
