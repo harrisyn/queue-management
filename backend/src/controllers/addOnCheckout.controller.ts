@@ -3,6 +3,35 @@ import prisma from '../lib/prisma';
 import { getProvider, ProviderNotActiveError } from '../services/payments';
 import { ProviderName, AddOnResourceType, AddOnBillingMode } from '../services/payments/types';
 
+// Resolves the per-unit price for one add-on purchase: a plan-specific
+// override takes precedence over the global default. See
+// docs/superpowers/specs/2026-08-25-plan-builder-design.md.
+export async function resolveAddOnUnitPrice(
+  planId: string | null,
+  resourceType: AddOnResourceType,
+  billingMode: AddOnBillingMode
+): Promise<{ unitPrice: number; currency: string } | null> {
+  if (planId) {
+    const override = await prisma.planAddOnPricingOverride.findUnique({
+      where: { planId_resourceType: { planId, resourceType } },
+    });
+    if (override) {
+      const globalForCurrency = await prisma.addOnPricing.findUnique({ where: { resourceType } });
+      return {
+        unitPrice: Number(billingMode === 'recurring' ? override.pricePerUnitMonthly : override.pricePerUnitOneOff),
+        currency: globalForCurrency?.currency ?? 'USD',
+      };
+    }
+  }
+
+  const pricing = await prisma.addOnPricing.findUnique({ where: { resourceType } });
+  if (!pricing) return null;
+  return {
+    unitPrice: Number(billingMode === 'recurring' ? pricing.pricePerUnitMonthly : pricing.pricePerUnitOneOff),
+    currency: pricing.currency,
+  };
+}
+
 export const createAddOnCheckout = async (req: Request, res: Response, next: NextFunction) => {
   try {
     if (!req.user) {
@@ -37,7 +66,13 @@ export const createAddOnCheckout = async (req: Request, res: Response, next: Nex
       return res.status(400).json({ error: 'User has no organization' });
     }
 
-    const pricing = await prisma.addOnPricing.findUnique({ where: { resourceType } });
+    const organization = await prisma.organization.findUnique({
+      where: { id: user.organizationId },
+      select: { subscription: { select: { planId: true } } },
+    });
+    const planId = organization?.subscription?.planId ?? null;
+
+    const pricing = await resolveAddOnUnitPrice(planId, resourceType, billingMode);
     if (!pricing) {
       return res.status(500).json({ error: 'Add-on pricing is not configured' });
     }
@@ -52,7 +87,7 @@ export const createAddOnCheckout = async (req: Request, res: Response, next: Nex
       throw err;
     }
 
-    const unitPrice = billingMode === 'recurring' ? Number(pricing.pricePerUnitMonthly) : Number(pricing.pricePerUnitOneOff);
+    const { unitPrice, currency } = pricing;
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8003';
 
     let redirectUrl: string;
@@ -63,7 +98,7 @@ export const createAddOnCheckout = async (req: Request, res: Response, next: Nex
         quantity,
         billingMode,
         unitPrice,
-        currency: pricing.currency,
+        currency,
         successUrl: `${frontendUrl}/admin/billing?addon=success`,
         cancelUrl: `${frontendUrl}/admin/billing?addon=cancelled`,
       });

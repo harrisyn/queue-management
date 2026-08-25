@@ -3,7 +3,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('../../lib/prisma', () => ({
   default: {
     user: { findUnique: vi.fn() },
+    organization: { findUnique: vi.fn() },
     addOnPricing: { findUnique: vi.fn() },
+    planAddOnPricingOverride: { findUnique: vi.fn() },
     organizationAddOn: { findMany: vi.fn(), findUnique: vi.fn(), update: vi.fn() },
   },
 }));
@@ -15,7 +17,7 @@ vi.mock('../../services/payments', () => ({
 
 import prisma from '../../lib/prisma';
 import { getProvider } from '../../services/payments';
-import { createAddOnCheckout, listMyAddOns, cancelAddOn } from '../addOnCheckout.controller';
+import { createAddOnCheckout, listMyAddOns, cancelAddOn, resolveAddOnUnitPrice } from '../addOnCheckout.controller';
 
 function makeRes() {
   const res: any = {};
@@ -43,6 +45,8 @@ describe('createAddOnCheckout', () => {
 
   it('resolves the recurring unit price and calls createAddOnCheckoutSession', async () => {
     (prisma.user.findUnique as any).mockResolvedValue({ organizationId: 'org1' });
+    (prisma.organization.findUnique as any).mockResolvedValue({ subscription: { planId: 'plan1' } });
+    (prisma.planAddOnPricingOverride.findUnique as any).mockResolvedValue(null);
     (prisma.addOnPricing.findUnique as any).mockResolvedValue({
       resourceType: 'LOCATIONS', pricePerUnitMonthly: '15', pricePerUnitOneOff: '50', currency: 'USD',
     });
@@ -66,6 +70,8 @@ describe('createAddOnCheckout', () => {
 
   it('resolves the one_off unit price', async () => {
     (prisma.user.findUnique as any).mockResolvedValue({ organizationId: 'org1' });
+    (prisma.organization.findUnique as any).mockResolvedValue({ subscription: { planId: 'plan1' } });
+    (prisma.planAddOnPricingOverride.findUnique as any).mockResolvedValue(null);
     (prisma.addOnPricing.findUnique as any).mockResolvedValue({
       resourceType: 'USERS', pricePerUnitMonthly: '5', pricePerUnitOneOff: '20', currency: 'USD',
     });
@@ -81,6 +87,8 @@ describe('createAddOnCheckout', () => {
 
   it('returns a 502 without leaking the raw provider error when checkout session creation fails', async () => {
     (prisma.user.findUnique as any).mockResolvedValue({ organizationId: 'org1' });
+    (prisma.organization.findUnique as any).mockResolvedValue({ subscription: { planId: 'plan1' } });
+    (prisma.planAddOnPricingOverride.findUnique as any).mockResolvedValue(null);
     (prisma.addOnPricing.findUnique as any).mockResolvedValue({
       resourceType: 'LOCATIONS', pricePerUnitMonthly: '15', pricePerUnitOneOff: '50', currency: 'USD',
     });
@@ -93,6 +101,66 @@ describe('createAddOnCheckout', () => {
 
     expect(res.status).toHaveBeenCalledWith(502);
     expect(res.json).toHaveBeenCalledWith({ error: 'Payment provider temporarily unavailable. Please try again shortly.' });
+  });
+});
+
+describe('resolveAddOnUnitPrice', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('uses the plan-specific override when one exists', async () => {
+    (prisma.planAddOnPricingOverride.findUnique as any).mockResolvedValue({
+      pricePerUnitMonthly: '12', pricePerUnitOneOff: '40',
+    });
+    (prisma.addOnPricing.findUnique as any).mockResolvedValue({ currency: 'GHS' });
+
+    const result = await resolveAddOnUnitPrice('plan1', 'LOCATIONS', 'recurring');
+
+    expect(result).toEqual({ unitPrice: 12, currency: 'GHS' });
+    expect(prisma.planAddOnPricingOverride.findUnique).toHaveBeenCalledWith({
+      where: { planId_resourceType: { planId: 'plan1', resourceType: 'LOCATIONS' } },
+    });
+  });
+
+  it('falls back to the global default when no override exists', async () => {
+    (prisma.planAddOnPricingOverride.findUnique as any).mockResolvedValue(null);
+    (prisma.addOnPricing.findUnique as any).mockResolvedValue({
+      pricePerUnitMonthly: '15', pricePerUnitOneOff: '50', currency: 'USD',
+    });
+
+    const result = await resolveAddOnUnitPrice('plan1', 'LOCATIONS', 'recurring');
+
+    expect(result).toEqual({ unitPrice: 15, currency: 'USD' });
+  });
+
+  it('falls back to the global default when planId is null', async () => {
+    (prisma.addOnPricing.findUnique as any).mockResolvedValue({
+      pricePerUnitMonthly: '15', pricePerUnitOneOff: '50', currency: 'USD',
+    });
+
+    const result = await resolveAddOnUnitPrice(null, 'LOCATIONS', 'recurring');
+
+    expect(result).toEqual({ unitPrice: 15, currency: 'USD' });
+    expect(prisma.planAddOnPricingOverride.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('returns null when neither an override nor a global default is configured', async () => {
+    (prisma.planAddOnPricingOverride.findUnique as any).mockResolvedValue(null);
+    (prisma.addOnPricing.findUnique as any).mockResolvedValue(null);
+
+    const result = await resolveAddOnUnitPrice('plan1', 'LOCATIONS', 'recurring');
+
+    expect(result).toBeNull();
+  });
+
+  it('resolves the one_off override price separately from the recurring one', async () => {
+    (prisma.planAddOnPricingOverride.findUnique as any).mockResolvedValue({
+      pricePerUnitMonthly: '12', pricePerUnitOneOff: '40',
+    });
+    (prisma.addOnPricing.findUnique as any).mockResolvedValue({ currency: 'USD' });
+
+    const result = await resolveAddOnUnitPrice('plan1', 'LOCATIONS', 'one_off');
+
+    expect(result).toEqual({ unitPrice: 40, currency: 'USD' });
   });
 });
 
