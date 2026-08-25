@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { resolveExpiry } from '../lib/subscriptionExpiry';
+import { getStartOfDay } from '../utils/date';
 
 // Feature keys that can be checked
 export type FeatureKey = 
@@ -222,8 +223,8 @@ export const requireFeature = (feature: FeatureKey) => {
  */
 export const checkLimit = async (
   organizationId: string,
-  limitType: 'locations' | 'services' | 'users'
-): Promise<{ current: number; limit: number; allowed: boolean }> => {
+  limitType: 'locations' | 'services' | 'users' | 'queueEntriesDaily' | 'queueEntriesPeriod'
+): Promise<{ current: number; limit: number | null; allowed: boolean }> => {
   const org = await prisma.organization.findUnique({
     where: { id: organizationId },
     select: { subscription: { include: { plan: true } } },
@@ -235,20 +236,23 @@ export const checkLimit = async (
 
   const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
   // Limit numbers live on the plan's dedicated columns (maxLocations /
-  // maxServicesPerLoc / maxUsersPerOrg), not in the features JSON blob —
-  // nothing populates those keys in `features`. An unusable subscription
-  // (e.g. EXPIRED with no fallback) still resolves to a hard 0, matching
-  // the previous features-based fallback behavior for that case.
+  // maxServicesPerLoc / maxUsersPerOrg / maxQueueEntriesPerDay /
+  // maxQueueEntriesPerPeriod), not in the features JSON blob — nothing
+  // populates those keys in `features`. An unusable subscription (e.g.
+  // EXPIRED with no fallback) still resolves to a hard 0, matching the
+  // previous features-based fallback behavior for that case.
   const planLimits = isUsable
     ? {
         maxLocations: subscription!.plan.maxLocations,
         maxServicesPerLoc: subscription!.plan.maxServicesPerLoc,
         maxUsersPerOrg: subscription!.plan.maxUsersPerOrg,
+        maxQueueEntriesPerDay: subscription!.plan.maxQueueEntriesPerDay,
+        maxQueueEntriesPerPeriod: subscription!.plan.maxQueueEntriesPerPeriod,
       }
-    : { maxLocations: 0, maxServicesPerLoc: 0, maxUsersPerOrg: 0 };
+    : { maxLocations: 0, maxServicesPerLoc: 0, maxUsersPerOrg: 0, maxQueueEntriesPerDay: 0, maxQueueEntriesPerPeriod: 0 };
 
   let current = 0;
-  let limit = 0;
+  let limit: number | null = 0;
 
   switch (limitType) {
     case 'locations':
@@ -265,12 +269,32 @@ export const checkLimit = async (
       current = await prisma.user.count({ where: { organizationId } });
       limit = planLimits.maxUsersPerOrg ?? DEFAULT_FEATURES.maxUsers ?? 5;
       break;
+    case 'queueEntriesDaily':
+      current = await prisma.queueEntry.count({
+        where: {
+          queue: { service: { location: { organizationId } } },
+          joinedAt: { gte: getStartOfDay() },
+        },
+      });
+      limit = planLimits.maxQueueEntriesPerDay;
+      break;
+    case 'queueEntriesPeriod': {
+      const periodStart = isUsable ? subscription!.currentPeriodStart : new Date(0);
+      current = await prisma.queueEntry.count({
+        where: {
+          queue: { service: { location: { organizationId } } },
+          joinedAt: { gte: periodStart },
+        },
+      });
+      limit = planLimits.maxQueueEntriesPerPeriod;
+      break;
+    }
   }
 
   return {
     current,
     limit,
-    allowed: current < limit,
+    allowed: limit === null ? true : current < limit,
   };
 };
 
