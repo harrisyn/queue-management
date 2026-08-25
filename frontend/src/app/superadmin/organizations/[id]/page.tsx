@@ -3,7 +3,10 @@
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { ArrowLeft, X } from 'lucide-react';
 import api from '@/api/client';
+import { Icon, Card, Badge, Button, UsageBar } from '@/components/ui';
+import type { BadgeTone } from '@/components/ui';
 
 interface OrganizationDetail {
   id: string;
@@ -62,15 +65,37 @@ interface UsageData {
   };
 }
 
-export default function OrganizationDetailPage({ 
-  params 
-}: { 
-  params: Promise<{ id: string }> 
+const getStatusTone = (status?: string): BadgeTone => {
+  switch (status) {
+    case 'ACTIVE':
+      return 'success';
+    case 'TRIAL':
+      return 'primary';
+    case 'PAST_DUE':
+      return 'warning';
+    case 'CANCELLED':
+    case 'EXPIRED':
+      return 'error';
+    default:
+      return 'neutral';
+  }
+};
+
+const ROLE_TONE: Record<string, BadgeTone> = {
+  ORG_ADMIN: 'primary',
+  LOCATION_ADMIN: 'primary',
+  SERVICE_STAFF: 'success',
+};
+
+export default function OrganizationDetailPage({
+  params
+}: {
+  params: Promise<{ id: string }>
 }) {
   const resolvedParams = use(params);
   const { id } = resolvedParams;
   const router = useRouter();
-  
+
   const [org, setOrg] = useState<OrganizationDetail | null>(null);
   const [usage, setUsage] = useState<UsageData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,9 +126,9 @@ export default function OrganizationDetailPage({
 
   const handleCancelSubscription = async () => {
     if (!confirm('Cancel this subscription? The organization will lose access at the end of their billing period.')) return;
-    
+
     const reason = prompt('Reason for cancellation (optional):');
-    
+
     setCancelling(true);
     try {
       await api.cancelOrganizationSubscription(id, reason || undefined);
@@ -118,7 +143,7 @@ export default function OrganizationDetailPage({
   const handleDelete = async () => {
     if (!confirm('DELETE this organization? This action is IRREVERSIBLE and will delete ALL data including locations, services, users, and queue history.')) return;
     if (!confirm('Are you ABSOLUTELY sure? Type DELETE to confirm.')) return;
-    
+
     setDeleting(true);
     try {
       await api.deleteSuperadminOrganization(id);
@@ -129,55 +154,11 @@ export default function OrganizationDetailPage({
     }
   };
 
-  const getStatusBadge = (status?: string): React.CSSProperties => {
-    const base: React.CSSProperties = {
-      padding: '0.375rem 0.875rem',
-      borderRadius: '9999px',
-      fontSize: '0.875rem',
-      fontWeight: 500,
-      textTransform: 'uppercase' as const,
-    };
-    
-    switch (status) {
-      case 'ACTIVE':
-        return { ...base, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' };
-      case 'TRIAL':
-        return { ...base, background: 'rgba(20, 184, 166, 0.2)', color: '#5eead4' };
-      case 'PAST_DUE':
-        return { ...base, background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' };
-      case 'CANCELLED':
-      case 'EXPIRED':
-        return { ...base, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' };
-      default:
-        return { ...base, background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' };
-    }
-  };
-
-  const getRoleBadge = (role: string): React.CSSProperties => {
-    const base: React.CSSProperties = {
-      padding: '0.25rem 0.5rem',
-      borderRadius: '4px',
-      fontSize: '0.75rem',
-      fontWeight: 500,
-    };
-    
-    switch (role) {
-      case 'ORG_ADMIN':
-        return { ...base, background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc' };
-      case 'LOCATION_ADMIN':
-        return { ...base, background: 'rgba(59, 130, 246, 0.2)', color: '#60a5fa' };
-      case 'SERVICE_STAFF':
-        return { ...base, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' };
-      default:
-        return { ...base, background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' };
-    }
-  };
-
   if (loading) {
     return (
       <div style={loadingContainer}>
-        <div style={spinner} />
-        <p style={{ color: '#94a3b8' }}>Loading organization...</p>
+        <div className="spinner" />
+        <p style={{ color: 'var(--gray-500)' }}>Loading organization...</p>
       </div>
     );
   }
@@ -185,8 +166,10 @@ export default function OrganizationDetailPage({
   if (!org) {
     return (
       <div style={errorContainer}>
-        <p style={{ color: '#f87171' }}>{error || 'Organization not found'}</p>
-        <Link href="/superadmin/organizations" style={backBtn}>← Back to Organizations</Link>
+        <p style={{ color: 'var(--error-600)' }}>{error || 'Organization not found'}</p>
+        <Link href="/superadmin/organizations">
+          <Button variant="primary">← Back to Organizations</Button>
+        </Link>
       </div>
     );
   }
@@ -195,29 +178,31 @@ export default function OrganizationDetailPage({
     <div style={pageContainer}>
       <header style={header}>
         <div style={headerLeft}>
-          <Link href="/superadmin/organizations" style={backLink}>← Back</Link>
+          <Link href="/superadmin/organizations" style={backLink}>
+            <Icon icon={ArrowLeft} size={14} /> Back
+          </Link>
           <div>
             <h1 style={pageTitle}>{org.name}</h1>
             <p style={subtitle}>{org.slug || org.email || 'No identifier'}</p>
           </div>
         </div>
         <div style={headerActions}>
-          <span style={getStatusBadge(org.subscription?.status)}>
-            {org.subscription?.status || 'No Plan'}
-          </span>
+          <Badge tone={getStatusTone(org.subscription?.status)}>{org.subscription?.status || 'No Plan'}</Badge>
         </div>
       </header>
 
       {error && (
         <div style={errorBanner}>
           <span>{error}</span>
-          <button onClick={() => setError('')} style={dismissBtn}>✕</button>
+          <button onClick={() => setError('')} style={dismissBtn} aria-label="Dismiss">
+            <Icon icon={X} size={16} />
+          </button>
         </div>
       )}
 
       <div style={contentGrid}>
         {/* Organization Info */}
-        <div style={card}>
+        <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
             <h2 style={cardTitle}>Organization Details</h2>
           </div>
@@ -249,20 +234,16 @@ export default function OrganizationDetailPage({
               </div>
             </div>
           </div>
-        </div>
+        </Card>
 
         {/* Subscription Info */}
-        <div style={card}>
+        <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
             <h2 style={cardTitle}>Subscription</h2>
             {org.subscription && org.subscription.status !== 'CANCELLED' && (
-              <button 
-                onClick={handleCancelSubscription} 
-                disabled={cancelling}
-                style={cancelBtn}
-              >
+              <Button variant="secondary" size="sm" onClick={handleCancelSubscription} disabled={cancelling} style={{ color: 'var(--warning-600)' }}>
                 {cancelling ? 'Cancelling...' : 'Cancel'}
-              </button>
+              </Button>
             )}
           </div>
           <div style={cardBody}>
@@ -279,8 +260,8 @@ export default function OrganizationDetailPage({
                 <div style={infoItem}>
                   <span style={infoLabel}>Price</span>
                   <span style={infoValue}>
-                    ${org.subscription.billingCycle === 'yearly' 
-                      ? org.subscription.plan?.priceYearly 
+                    ${org.subscription.billingCycle === 'yearly'
+                      ? org.subscription.plan?.priceYearly
                       : org.subscription.plan?.priceMonthly}/
                     {org.subscription.billingCycle === 'yearly' ? 'yr' : 'mo'}
                   </span>
@@ -318,54 +299,20 @@ export default function OrganizationDetailPage({
               <p style={noData}>No active subscription</p>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Usage Stats */}
         {usage && (
-          <div style={card}>
+          <Card style={{ overflow: 'hidden' }}>
             <div style={cardHeader}>
               <h2 style={cardTitle}>Usage</h2>
             </div>
             <div style={cardBody}>
               <div style={usageGrid}>
-                <div style={usageItem}>
-                  <div style={usageHeader}>
-                    <span style={usageLabel}>Locations</span>
-                    <span style={usageValue}>
-                      {usage.usage.locations.used}
-                      {usage.usage.locations.limit && ` / ${usage.usage.locations.limit}`}
-                    </span>
-                  </div>
-                  {usage.usage.locations.percentage && (
-                    <div style={progressBar}>
-                      <div style={{ ...progressFill, width: `${usage.usage.locations.percentage}%` }} />
-                    </div>
-                  )}
-                </div>
-                <div style={usageItem}>
-                  <div style={usageHeader}>
-                    <span style={usageLabel}>Users</span>
-                    <span style={usageValue}>
-                      {usage.usage.users.used}
-                      {usage.usage.users.limit && ` / ${usage.usage.users.limit}`}
-                    </span>
-                  </div>
-                  {usage.usage.users.percentage && (
-                    <div style={progressBar}>
-                      <div style={{ ...progressFill, width: `${usage.usage.users.percentage}%` }} />
-                    </div>
-                  )}
-                </div>
-                <div style={usageItem}>
-                  <div style={usageHeader}>
-                    <span style={usageLabel}>Queue Entries Today</span>
-                    <span style={usageValue}>
-                      {usage.usage.queueEntries.today}
-                      {usage.usage.queueEntries.dailyLimit && ` / ${usage.usage.queueEntries.dailyLimit}`}
-                    </span>
-                  </div>
-                </div>
-                <div style={usageItem}>
+                <UsageBar label="Locations" current={usage.usage.locations.used} limit={usage.usage.locations.limit} />
+                <UsageBar label="Users" current={usage.usage.users.used} limit={usage.usage.users.limit} />
+                <UsageBar label="Queue Entries Today" current={usage.usage.queueEntries.today} limit={usage.usage.queueEntries.dailyLimit} />
+                <div>
                   <div style={usageHeader}>
                     <span style={usageLabel}>Entries This Month</span>
                     <span style={usageValue}>{usage.usage.queueEntries.thisMonth}</span>
@@ -373,11 +320,11 @@ export default function OrganizationDetailPage({
                 </div>
               </div>
             </div>
-          </div>
+          </Card>
         )}
 
         {/* Locations */}
-        <div style={card}>
+        <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
             <h2 style={cardTitle}>Locations ({org.locations.length})</h2>
           </div>
@@ -402,10 +349,10 @@ export default function OrganizationDetailPage({
               <p style={noData}>No locations</p>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Users */}
-        <div style={card}>
+        <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
             <h2 style={cardTitle}>Users ({org.users.length})</h2>
           </div>
@@ -418,7 +365,7 @@ export default function OrganizationDetailPage({
                       <span style={listItemName}>{user.firstName} {user.lastName}</span>
                       <span style={listItemMeta}>{user.email}</span>
                     </div>
-                    <span style={getRoleBadge(user.role)}>{user.role.replace('_', ' ')}</span>
+                    <Badge tone={ROLE_TONE[user.role] || 'neutral'}>{user.role.replace('_', ' ')}</Badge>
                   </div>
                 ))}
               </div>
@@ -426,23 +373,19 @@ export default function OrganizationDetailPage({
               <p style={noData}>No users</p>
             )}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Danger Zone */}
       <div style={dangerCard}>
         <h3 style={dangerTitle}>Danger Zone</h3>
         <p style={dangerText}>
-          Deleting this organization will permanently remove all data including locations, services, 
+          Deleting this organization will permanently remove all data including locations, services,
           users, queue history, and settings. This action cannot be undone.
         </p>
-        <button 
-          onClick={handleDelete} 
-          disabled={deleting}
-          style={deleteBtn}
-        >
+        <Button variant="secondary" onClick={handleDelete} disabled={deleting} style={deleteBtn}>
           {deleting ? 'Deleting...' : 'Delete Organization'}
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -458,15 +401,6 @@ const loadingContainer: React.CSSProperties = {
   gap: '1rem',
 };
 
-const spinner: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  border: '4px solid #1e293b',
-  borderTop: '4px solid #14b8a6',
-  borderRadius: '50%',
-  animation: 'spin 1s linear infinite',
-};
-
 const errorContainer: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -474,14 +408,6 @@ const errorContainer: React.CSSProperties = {
   justifyContent: 'center',
   height: '50vh',
   gap: '1rem',
-};
-
-const backBtn: React.CSSProperties = {
-  padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
-  color: '#fff',
-  borderRadius: '8px',
-  textDecoration: 'none',
 };
 
 const pageContainer: React.CSSProperties = {
@@ -494,6 +420,8 @@ const header: React.CSSProperties = {
   justifyContent: 'space-between',
   alignItems: 'flex-start',
   marginBottom: '2rem',
+  gap: '1rem',
+  flexWrap: 'wrap' as const,
 };
 
 const headerLeft: React.CSSProperties = {
@@ -503,19 +431,23 @@ const headerLeft: React.CSSProperties = {
 };
 
 const backLink: React.CSSProperties = {
-  color: '#64748b',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: '0.375rem',
+  color: 'var(--gray-400)',
   textDecoration: 'none',
   fontSize: '0.875rem',
+  fontWeight: 500,
 };
 
 const pageTitle: React.CSSProperties = {
   fontSize: '2rem',
   fontWeight: 700,
-  color: '#fff',
+  color: 'var(--gray-900)',
 };
 
 const subtitle: React.CSSProperties = {
-  color: '#94a3b8',
+  color: 'var(--gray-500)',
   fontSize: '1rem',
 };
 
@@ -525,23 +457,23 @@ const headerActions: React.CSSProperties = {
 };
 
 const errorBanner: React.CSSProperties = {
-  background: 'rgba(239, 68, 68, 0.2)',
-  border: '1px solid rgba(239, 68, 68, 0.3)',
-  borderRadius: '8px',
+  background: 'var(--error-50)',
+  border: '1px solid var(--error-100)',
+  borderRadius: 'var(--radius-lg)',
   padding: '1rem',
   marginBottom: '1.5rem',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  color: '#f87171',
+  color: 'var(--error-600)',
 };
 
 const dismissBtn: React.CSSProperties = {
   background: 'none',
   border: 'none',
-  color: '#f87171',
+  color: 'var(--error-600)',
   cursor: 'pointer',
-  fontSize: '1.25rem',
+  display: 'inline-flex',
 };
 
 const contentGrid: React.CSSProperties = {
@@ -551,16 +483,9 @@ const contentGrid: React.CSSProperties = {
   marginBottom: '2rem',
 };
 
-const card: React.CSSProperties = {
-  background: '#1e293b',
-  borderRadius: '12px',
-  border: '1px solid rgba(20, 184, 166, 0.2)',
-  overflow: 'hidden',
-};
-
 const cardHeader: React.CSSProperties = {
   padding: '1rem 1.5rem',
-  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
+  borderBottom: '1px solid var(--gray-100)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -568,19 +493,8 @@ const cardHeader: React.CSSProperties = {
 
 const cardTitle: React.CSSProperties = {
   fontSize: '1rem',
-  fontWeight: 600,
-  color: '#fff',
-};
-
-const cancelBtn: React.CSSProperties = {
-  padding: '0.375rem 0.75rem',
-  background: 'rgba(245, 158, 11, 0.2)',
-  color: '#f59e0b',
-  border: 'none',
-  borderRadius: '6px',
-  fontSize: '0.75rem',
-  fontWeight: 500,
-  cursor: 'pointer',
+  fontWeight: 700,
+  color: 'var(--gray-900)',
 };
 
 const cardBody: React.CSSProperties = {
@@ -590,7 +504,7 @@ const cardBody: React.CSSProperties = {
 const infoGrid: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(2, 1fr)',
-  gap: '1rem',
+  gap: '1.1rem',
 };
 
 const infoItem: React.CSSProperties = {
@@ -600,18 +514,20 @@ const infoItem: React.CSSProperties = {
 };
 
 const infoLabel: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
+  fontWeight: 600,
   textTransform: 'uppercase' as const,
+  letterSpacing: '0.03em',
 };
 
 const infoValue: React.CSSProperties = {
-  color: '#fff',
+  color: 'var(--gray-900)',
   fontSize: '0.9375rem',
 };
 
 const noData: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontStyle: 'italic' as const,
 };
 
@@ -621,8 +537,6 @@ const usageGrid: React.CSSProperties = {
   gap: '1.25rem',
 };
 
-const usageItem: React.CSSProperties = {};
-
 const usageHeader: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
@@ -630,28 +544,14 @@ const usageHeader: React.CSSProperties = {
 };
 
 const usageLabel: React.CSSProperties = {
-  color: '#94a3b8',
+  color: 'var(--gray-500)',
   fontSize: '0.875rem',
 };
 
 const usageValue: React.CSSProperties = {
-  color: '#fff',
+  color: 'var(--gray-900)',
   fontSize: '0.875rem',
-  fontWeight: 500,
-};
-
-const progressBar: React.CSSProperties = {
-  height: '6px',
-  background: 'rgba(20, 184, 166, 0.2)',
-  borderRadius: '3px',
-  overflow: 'hidden',
-};
-
-const progressFill: React.CSSProperties = {
-  height: '100%',
-  background: '#14b8a6',
-  borderRadius: '3px',
-  transition: 'width 0.3s ease',
+  fontWeight: 600,
 };
 
 const listContainer: React.CSSProperties = {
@@ -664,9 +564,11 @@ const listItem: React.CSSProperties = {
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
-  padding: '0.75rem',
-  background: 'rgba(15, 23, 42, 0.5)',
-  borderRadius: '8px',
+  padding: '0.75rem 0.9rem',
+  background: 'var(--gray-50)',
+  borderRadius: 'var(--radius-lg)',
+  flexWrap: 'wrap' as const,
+  gap: '0.5rem',
 };
 
 const listItemMain: React.CSSProperties = {
@@ -676,59 +578,55 @@ const listItemMain: React.CSSProperties = {
 };
 
 const listItemName: React.CSSProperties = {
-  color: '#fff',
-  fontWeight: 500,
+  color: 'var(--gray-900)',
+  fontWeight: 600,
 };
 
 const listItemMeta: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
 };
 
 const listItemStats: React.CSSProperties = {
   display: 'flex',
   gap: '0.75rem',
-  color: '#64748b',
+  alignItems: 'center',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
 };
 
 const publicCodeBadge: React.CSSProperties = {
-  background: 'rgba(20, 184, 166, 0.2)',
-  color: '#5eead4',
+  background: 'var(--primary-50)',
+  color: 'var(--primary-700)',
   padding: '0.125rem 0.5rem',
-  borderRadius: '4px',
-  fontFamily: 'monospace',
+  borderRadius: 'var(--radius-sm)',
+  fontFamily: 'var(--font-mono)',
 };
 
 const dangerCard: React.CSSProperties = {
-  background: 'rgba(239, 68, 68, 0.1)',
-  border: '1px solid rgba(239, 68, 68, 0.3)',
-  borderRadius: '12px',
+  background: 'var(--error-50)',
+  border: '1px solid var(--error-100)',
+  borderRadius: 'var(--radius-xl)',
   padding: '1.5rem',
-  marginTop: '2rem',
+  marginTop: '0.5rem',
 };
 
 const dangerTitle: React.CSSProperties = {
-  color: '#f87171',
+  color: 'var(--error-600)',
   fontSize: '1.125rem',
-  fontWeight: 600,
+  fontWeight: 700,
   marginBottom: '0.75rem',
 };
 
 const dangerText: React.CSSProperties = {
-  color: '#fca5a5',
+  color: 'var(--error-600)',
   fontSize: '0.875rem',
   marginBottom: '1rem',
   lineHeight: 1.6,
 };
 
 const deleteBtn: React.CSSProperties = {
-  padding: '0.75rem 1.25rem',
-  background: '#dc2626',
+  background: 'var(--error-600)',
   color: '#fff',
   border: 'none',
-  borderRadius: '8px',
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  cursor: 'pointer',
 };
