@@ -4,6 +4,7 @@ import { emitToQueue, emitToService, emitToLocation, emitToQueueAndLocation, SOC
 import { generateTicketNumber, getNextSequence, generateQRData } from '../utils/ticket';
 import { getStartOfDay, generateTimeSlots } from '../utils/date';
 import { v4 as uuidv4 } from 'uuid';
+import { checkLimit } from '../middleware/subscription.middleware';
 
 // Helper to get locationId from a queue
 const getLocationIdFromQueue = async (queueId: string): Promise<string | null> => {
@@ -160,6 +161,32 @@ export const joinQueue = async (req: Request, res: Response, next: NextFunction)
 
     if (queue.status !== 'ACTIVE') {
       return res.status(400).json({ error: 'Queue is not active' });
+    }
+
+    const organizationId = queue.service.location.organizationId;
+    const [dailyCheck, periodCheck] = await Promise.all([
+      checkLimit(organizationId, 'queueEntriesDaily'),
+      checkLimit(organizationId, 'queueEntriesPeriod'),
+    ]);
+
+    if (!dailyCheck.allowed) {
+      return res.status(403).json({
+        error: 'Limit reached',
+        message: `This location has reached its daily queue entry limit (${dailyCheck.limit}). Please try again tomorrow.`,
+        limitType: 'queueEntriesDaily',
+        current: dailyCheck.current,
+        limit: dailyCheck.limit,
+      });
+    }
+
+    if (!periodCheck.allowed) {
+      return res.status(403).json({
+        error: 'Limit reached',
+        message: `This organization has reached its queue entry limit for the current billing period (${periodCheck.limit}).`,
+        limitType: 'queueEntriesPeriod',
+        current: periodCheck.current,
+        limit: periodCheck.limit,
+      });
     }
 
     // Check if user is already in this queue
