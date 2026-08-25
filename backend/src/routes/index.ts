@@ -90,10 +90,14 @@ router.post('/public/verify-otp', (req, res, next) => {
 import { authenticate } from '../middleware/auth.middleware';
 import { getMySubscription } from '../middleware/subscription.middleware';
 import { createCheckoutSession, switchToFreePlan } from '../controllers/subscriptionCheckout.controller';
+import { createAddOnCheckout, listMyAddOns, cancelAddOn } from '../controllers/addOnCheckout.controller';
 import { listPlans } from '../controllers/superadmin.controller';
 router.get('/subscription', authenticate, getMySubscription);
 router.post('/tenant/subscription/checkout', authenticate, createCheckoutSession);
 router.post('/tenant/subscription/switch/:planId', authenticate, switchToFreePlan);
+router.post('/tenant/addons/checkout', authenticate, createAddOnCheckout);
+router.get('/tenant/addons', authenticate, listMyAddOns);
+router.delete('/tenant/addons/:id', authenticate, cancelAddOn);
 // Read-only plan listing for any authenticated user (not superadmin-only —
 // tenants need this to render the pricing page). Reuses the superadmin
 // controller's listPlans, which only reads SubscriptionPlan rows.
