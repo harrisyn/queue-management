@@ -29,6 +29,7 @@ model Organization {
   subscription          OrganizationSubscription? @relation(fields: [subscriptionId], references: [id])
   servicePoints         ServicePoint[]
   addOns                OrganizationAddOn[]
+  creditLedgerEntries   CreditLedgerEntry[]
 }
 
 model Location {
@@ -473,6 +474,7 @@ model SubscriptionPlan {
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   subscriptions         OrganizationSubscription[]
+  creditAllowances      PlanCreditAllowance[]
 
   @@index([code])
   @@index([isActive])
@@ -562,6 +564,42 @@ model AddOnPricing {
   currency            String            @default("USD")
   createdAt           DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
+}
+
+enum CreditType {
+  AI
+  EMAIL
+  SMS
+}
+
+// Per-plan monthly credit allowance for a credit type. Missing row or null
+// monthlyAllowance = unlimited for that plan/type. No consumer wired yet -
+// see docs/superpowers/specs/2026-08-25-usage-credits-design.md.
+model PlanCreditAllowance {
+  id               String     @id @default(uuid())
+  planId           String
+  plan             SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  creditType       CreditType
+  monthlyAllowance Int?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@unique([planId, creditType])
+}
+
+// Append-only ledger. Positive amount = grant (plan allowance, superadmin
+// top-up); negative = consumption by a feature. Balance for the current
+// billing period = sum of entries since currentPeriodStart.
+model CreditLedgerEntry {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creditType     CreditType
+  amount         Int
+  reason         String
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, creditType, createdAt])
 }
 
 model OrganizationAddOn {
