@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import prisma from '../lib/prisma';
 import { getProvider } from '../services/payments';
 import { wasAlreadyProcessed, markProcessed } from '../services/payments/idempotency';
-import { ProviderName } from '../services/payments/types';
+import { ProviderName, PaymentWebhookEvent } from '../services/payments/types';
 
 async function handleWebhook(providerName: ProviderName, req: Request, res: Response) {
   let provider;
@@ -40,10 +40,20 @@ async function handleWebhook(providerName: ProviderName, req: Request, res: Resp
   }
 }
 
-async function applyWebhookEvent(
-  providerName: ProviderName,
-  event: { type: string; organizationId: string | null; externalSubscriptionId: string | null; currentPeriodEnd: Date | null; planId: string | null; billingCycle: string | null }
-) {
+async function applyWebhookEvent(providerName: ProviderName, event: PaymentWebhookEvent) {
+  if (event.type === 'checkout_completed' && event.kind === 'addon') {
+    await applyAddOnCheckoutCompleted(providerName, event);
+    return;
+  }
+
+  // Renewal/cancellation events don't reliably know their own kind at the
+  // provider layer (see stripe.provider.ts) - dispatched here by checking
+  // which table externalSubscriptionId actually belongs to.
+  if (event.type !== 'checkout_completed' && event.externalSubscriptionId) {
+    const handledAsAddOn = await applyAddOnLifecycleEvent(event);
+    if (handledAsAddOn) return;
+  }
+
   let organizationId = event.organizationId;
 
   // Renewal/cancellation events identify the org by externalProviderSubscriptionId instead
@@ -119,6 +129,85 @@ async function applyWebhookEvent(
       break;
     }
   }
+}
+
+function nextMonth(): Date {
+  const d = new Date();
+  d.setMonth(d.getMonth() + 1);
+  return d;
+}
+
+async function applyAddOnCheckoutCompleted(providerName: ProviderName, event: PaymentWebhookEvent) {
+  if (!event.organizationId || !event.addOn) {
+    console.warn('Add-on checkout_completed event missing organizationId or addOn details — ignoring');
+    return;
+  }
+
+  if (event.addOn.billingMode === 'recurring' && event.externalSubscriptionId) {
+    // Paystack fires charge.success for every renewal charge too, not just
+    // the first one - if a row already exists for this subscription, this
+    // is a renewal, not a new purchase.
+    const existing = await prisma.organizationAddOn.findFirst({
+      where: { externalSubscriptionId: event.externalSubscriptionId, status: 'ACTIVE' },
+    });
+    if (existing) {
+      await prisma.organizationAddOn.update({
+        where: { id: existing.id },
+        data: { currentPeriodEnd: nextMonth() },
+      });
+      return;
+    }
+  }
+
+  await prisma.organizationAddOn.create({
+    data: {
+      organizationId: event.organizationId,
+      resourceType: event.addOn.resourceType,
+      quantity: event.addOn.quantity,
+      billingMode: event.addOn.billingMode === 'recurring' ? 'RECURRING' : 'ONE_OFF',
+      status: 'ACTIVE',
+      provider: providerName,
+      externalSubscriptionId: event.addOn.billingMode === 'recurring' ? event.externalSubscriptionId : null,
+      currentPeriodEnd: event.addOn.billingMode === 'recurring' ? nextMonth() : null,
+    },
+  });
+}
+
+// Handles renewal_succeeded / renewal_failed / subscription_cancelled for an
+// add-on's own recurring subscription, matched by externalSubscriptionId.
+// Returns true if this event belonged to an add-on (caller should stop),
+// false if no matching add-on was found (caller falls back to plan handling).
+async function applyAddOnLifecycleEvent(event: PaymentWebhookEvent): Promise<boolean> {
+  if (!event.externalSubscriptionId) return false;
+
+  const addOn = await prisma.organizationAddOn.findFirst({
+    where: { externalSubscriptionId: event.externalSubscriptionId },
+  });
+  if (!addOn) return false;
+
+  switch (event.type) {
+    case 'renewal_succeeded':
+      await prisma.organizationAddOn.update({
+        where: { id: addOn.id },
+        data: { currentPeriodEnd: event.currentPeriodEnd ?? nextMonth() },
+      });
+      break;
+    case 'renewal_failed':
+      // No PAST_DUE concept for add-ons in v1 - a failed renewal charge on a
+      // small add-on is lower-stakes than a failed plan renewal; the
+      // provider's own dunning/retry handles most cases. Revisit if this
+      // proves insufficient in practice.
+      console.warn(`Add-on ${addOn.id} renewal charge failed - left ACTIVE`);
+      break;
+    case 'subscription_cancelled':
+      await prisma.organizationAddOn.update({
+        where: { id: addOn.id },
+        data: { status: 'CANCELLED', cancelledAt: new Date() },
+      });
+      break;
+  }
+
+  return true;
 }
 
 export const handleStripeWebhook = (req: Request, res: Response) => handleWebhook('stripe', req, res);
