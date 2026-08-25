@@ -78,6 +78,22 @@ describe('createAddOnCheckout', () => {
 
     expect(createAddOnCheckoutSession).toHaveBeenCalledWith(expect.objectContaining({ unitPrice: 20 }));
   });
+
+  it('returns a 502 without leaking the raw provider error when checkout session creation fails', async () => {
+    (prisma.user.findUnique as any).mockResolvedValue({ organizationId: 'org1' });
+    (prisma.addOnPricing.findUnique as any).mockResolvedValue({
+      resourceType: 'LOCATIONS', pricePerUnitMonthly: '15', pricePerUnitOneOff: '50', currency: 'USD',
+    });
+    const createAddOnCheckoutSession = vi.fn().mockRejectedValue(new Error('Invalid API Key'));
+    (getProvider as any).mockResolvedValue({ createAddOnCheckoutSession });
+
+    const req: any = { user: { userId: 'u1' }, body: { resourceType: 'LOCATIONS', quantity: 1, billingMode: 'recurring', provider: 'stripe' } };
+    const res = makeRes();
+    await createAddOnCheckout(req, res, vi.fn());
+
+    expect(res.status).toHaveBeenCalledWith(502);
+    expect(res.json).toHaveBeenCalledWith({ error: 'Payment provider temporarily unavailable. Please try again shortly.' });
+  });
 });
 
 describe('listMyAddOns', () => {

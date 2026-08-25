@@ -55,18 +55,27 @@ export const createAddOnCheckout = async (req: Request, res: Response, next: Nex
     const unitPrice = billingMode === 'recurring' ? Number(pricing.pricePerUnitMonthly) : Number(pricing.pricePerUnitOneOff);
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8003';
 
-    const result = await paymentProvider.createAddOnCheckoutSession({
-      organizationId: user.organizationId,
-      resourceType,
-      quantity,
-      billingMode,
-      unitPrice,
-      currency: pricing.currency,
-      successUrl: `${frontendUrl}/admin/billing?addon=success`,
-      cancelUrl: `${frontendUrl}/admin/billing?addon=cancelled`,
-    });
+    let redirectUrl: string;
+    try {
+      const result = await paymentProvider.createAddOnCheckoutSession({
+        organizationId: user.organizationId,
+        resourceType,
+        quantity,
+        billingMode,
+        unitPrice,
+        currency: pricing.currency,
+        successUrl: `${frontendUrl}/admin/billing?addon=success`,
+        cancelUrl: `${frontendUrl}/admin/billing?addon=cancelled`,
+      });
+      redirectUrl = result.redirectUrl;
+    } catch (err) {
+      // Don't leak raw provider errors (e.g. a revoked key) to the tenant.
+      // Full detail is logged server-side for the operator to diagnose.
+      console.error(`Add-on checkout session creation failed for provider "${provider}":`, err);
+      return res.status(502).json({ error: 'Payment provider temporarily unavailable. Please try again shortly.' });
+    }
 
-    res.json({ redirectUrl: result.redirectUrl });
+    res.json({ redirectUrl });
   } catch (error) {
     next(error);
   }

@@ -1,10 +1,10 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, CreditCard } from 'lucide-react';
+import { CheckCircle2, CreditCard, XCircle } from 'lucide-react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
-import { Button, Card, Badge, PageHeader, Icon, UsageBar } from '@/components/ui';
+import { Button, Card, Badge, PageHeader, Icon, UsageBar, Input, Select } from '@/components/ui';
 
 interface Plan {
   id: string;
@@ -52,6 +52,27 @@ interface SubscriptionData {
   };
 }
 
+interface AddOnPricingRow {
+  resourceType: 'LOCATIONS' | 'USERS';
+  pricePerUnitMonthly: string;
+  pricePerUnitOneOff: string;
+  currency: string;
+}
+
+interface OrganizationAddOn {
+  id: string;
+  resourceType: 'LOCATIONS' | 'USERS';
+  quantity: number;
+  billingMode: 'RECURRING' | 'ONE_OFF';
+  status: 'ACTIVE' | 'CANCELLED';
+  currentPeriodEnd: string | null;
+}
+
+const ADDON_LABELS: Record<'LOCATIONS' | 'USERS', string> = {
+  LOCATIONS: 'Extra Locations',
+  USERS: 'Extra Users',
+};
+
 type BillingCycle = 'monthly' | 'quarterly' | 'yearly';
 
 const CYCLE_MONTHS: Record<BillingCycle, number> = { monthly: 1, quarterly: 3, yearly: 12 };
@@ -88,6 +109,13 @@ export default function BillingPage() {
   const [loading, setLoading] = useState(true);
   const [checkoutPlanId, setCheckoutPlanId] = useState<string | null>(null);
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
+  const [addOnPricing, setAddOnPricing] = useState<AddOnPricingRow[]>([]);
+  const [myAddOns, setMyAddOns] = useState<OrganizationAddOn[]>([]);
+  const [addOnForms, setAddOnForms] = useState<Record<'LOCATIONS' | 'USERS', { quantity: number; billingMode: 'recurring' | 'one_off' }>>({
+    LOCATIONS: { quantity: 1, billingMode: 'recurring' },
+    USERS: { quantity: 1, billingMode: 'recurring' },
+  });
+  const [addOnCheckoutPending, setAddOnCheckoutPending] = useState<'LOCATIONS' | 'USERS' | null>(null);
 
   useEffect(() => {
     load();
@@ -96,16 +124,51 @@ export default function BillingPage() {
   const load = async () => {
     setLoading(true);
     try {
-      const [subData, plansData] = await Promise.all([
+      const [subData, plansData, pricingData, addOnsData] = await Promise.all([
         api.getMySubscription(),
         api.getPlans(),
+        api.getMyAddOnPricing(),
+        api.getMyAddOns(),
       ]);
       setData(subData);
       setPlans(plansData);
+      setAddOnPricing(pricingData);
+      setMyAddOns(addOnsData);
     } catch (err) {
       console.error('Failed to load billing info', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handlePurchaseAddOn = (resourceType: 'LOCATIONS' | 'USERS') => {
+    setAddOnCheckoutPending(resourceType);
+  };
+
+  const handleAddOnCheckout = async (resourceType: 'LOCATIONS' | 'USERS', provider: 'stripe' | 'paystack') => {
+    const form = addOnForms[resourceType];
+    try {
+      const { redirectUrl } = await api.createAddOnCheckout({
+        resourceType,
+        quantity: form.quantity,
+        billingMode: form.billingMode,
+        provider,
+      });
+      window.location.href = redirectUrl;
+    } catch (err) {
+      console.error('Add-on checkout failed', err);
+      alert('Could not start checkout. Please try again.');
+    }
+  };
+
+  const handleCancelAddOn = async (id: string) => {
+    if (!confirm('Cancel this add-on? Its extra capacity will be removed immediately.')) return;
+    try {
+      await api.cancelAddOn(id);
+      await load();
+    } catch (err) {
+      console.error('Failed to cancel add-on', err);
+      alert('Could not cancel add-on. Please try again.');
     }
   };
 
@@ -176,6 +239,79 @@ export default function BillingPage() {
               <UsageBar label="Queue entries today" current={data.limits.queueEntriesDaily.current} limit={data.limits.queueEntriesDaily.limit} />
               <UsageBar label="Queue entries this period" current={data.limits.queueEntriesPeriod.current} limit={data.limits.queueEntriesPeriod.limit} />
             </div>
+          </Card>
+        )}
+
+        {addOnPricing.length > 0 && (
+          <Card style={{ padding: '1.25rem', marginBottom: '1.5rem' }}>
+            <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--gray-900)' }}>Add-Ons</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: myAddOns.length > 0 ? '1.25rem' : 0 }}>
+              {addOnPricing.map(pricing => {
+                const form = addOnForms[pricing.resourceType];
+                const unitPrice = form.billingMode === 'recurring' ? Number(pricing.pricePerUnitMonthly) : Number(pricing.pricePerUnitOneOff);
+                const total = unitPrice * form.quantity;
+                return (
+                  <div key={pricing.resourceType} style={{ border: '1px solid var(--gray-200)', borderRadius: 'var(--radius-lg)', padding: '1rem' }}>
+                    <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--gray-900)' }}>
+                      {ADDON_LABELS[pricing.resourceType]}
+                    </h4>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                      <Input
+                        label="Quantity"
+                        type="number"
+                        min="1"
+                        value={form.quantity}
+                        onChange={e => setAddOnForms(prev => ({ ...prev, [pricing.resourceType]: { ...form, quantity: Math.max(1, parseInt(e.target.value) || 1) } }))}
+                      />
+                      <Select
+                        label="Billing"
+                        value={form.billingMode}
+                        onChange={e => setAddOnForms(prev => ({ ...prev, [pricing.resourceType]: { ...form, billingMode: e.target.value as 'recurring' | 'one_off' } }))}
+                      >
+                        <option value="recurring">Recurring (monthly)</option>
+                        <option value="one_off">One-off (permanent)</option>
+                      </Select>
+                    </div>
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
+                      {pricing.currency} {total.toFixed(2)}{form.billingMode === 'recurring' ? '/mo' : ' one-time'}
+                    </p>
+
+                    {addOnCheckoutPending === pricing.resourceType ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                        {(data?.activeProviders || []).includes('stripe') && (
+                          <Button variant="primary" size="sm" onClick={() => handleAddOnCheckout(pricing.resourceType, 'stripe')}>Pay with Stripe</Button>
+                        )}
+                        {(data?.activeProviders || []).includes('paystack') && (
+                          <Button variant="primary" size="sm" onClick={() => handleAddOnCheckout(pricing.resourceType, 'paystack')}>Pay with Paystack</Button>
+                        )}
+                        <Button variant="ghost" size="sm" onClick={() => setAddOnCheckoutPending(null)}>Cancel</Button>
+                      </div>
+                    ) : (
+                      <Button variant="secondary" size="sm" disabled={(data?.activeProviders || []).length === 0} onClick={() => handlePurchaseAddOn(pricing.resourceType)}>
+                        Purchase
+                      </Button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {myAddOns.length > 0 && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                {myAddOns.map(addOn => (
+                  <div key={addOn.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.625rem 0.875rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)' }}>
+                    <span style={{ fontSize: '0.8125rem', color: 'var(--gray-700)' }}>
+                      {addOn.quantity}x {ADDON_LABELS[addOn.resourceType]} <Badge tone={addOn.billingMode === 'RECURRING' ? 'primary' : 'neutral'}>{addOn.billingMode === 'RECURRING' ? 'Recurring' : 'One-off'}</Badge>
+                    </span>
+                    {addOn.billingMode === 'RECURRING' && (
+                      <Button variant="ghost" size="sm" onClick={() => handleCancelAddOn(addOn.id)} style={{ color: 'var(--error-600)' }}>
+                        <Icon icon={XCircle} size={14} /> Cancel
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </Card>
         )}
 
