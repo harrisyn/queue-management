@@ -14,6 +14,7 @@ import {
   getOrganizationUsage,
 } from '../controllers/superadmin.controller';
 import { listPaymentProviders, upsertPaymentProvider, testPaymentProvider } from '../controllers/paymentProvider.controller';
+import { listAddOnPricing, updateAddOnPricing } from '../controllers/addOnPricing.controller';
 
 const router = Router();
 
@@ -42,5 +43,9 @@ router.delete('/plans/:id', deletePlan);
 router.get('/payment-providers', listPaymentProviders);
 router.put('/payment-providers/:provider', upsertPaymentProvider);
 router.post('/payment-providers/:provider/test', testPaymentProvider);
+
+// Add-on pricing configuration
+router.get('/addon-pricing', listAddOnPricing);
+router.put('/addon-pricing/:resourceType', updateAddOnPricing);
 
 export default router;
