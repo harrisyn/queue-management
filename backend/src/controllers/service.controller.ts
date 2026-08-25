@@ -57,7 +57,10 @@ export const createService = async (req: Request, res: Response, next: NextFunct
     }
 
     const { current, limit } = await checkLimit(organizationId, 'services');
-    if (current + locationIds.length > limit) {
+    // 'services' never resolves to a null limit (only queueEntriesDaily/
+    // queueEntriesPeriod can be unlimited) - checkLimit's return type is
+    // shared across all limit types, hence the assertion.
+    if (current + locationIds.length > (limit as number)) {
       return res.status(403).json({
         error: 'Limit reached',
         message: `Creating ${locationIds.length} service(s) would exceed your plan's limit of ${limit} services (currently at ${current}).`,

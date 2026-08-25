@@ -390,6 +390,8 @@ export const getMySubscription = async (req: Request, res: Response) => {
           locations: { current: 0, limit: DEFAULT_FEATURES.maxLocations, allowed: true },
           services: { current: 0, limit: DEFAULT_FEATURES.maxServices, allowed: true },
           users: { current: 0, limit: DEFAULT_FEATURES.maxUsers, allowed: true },
+          queueEntriesDaily: { current: 0, limit: null, allowed: true },
+          queueEntriesPeriod: { current: 0, limit: null, allowed: true },
         },
         activeProviders,
       });
@@ -446,11 +448,34 @@ export const getMySubscription = async (req: Request, res: Response) => {
     }
 
     // Get current counts
-    const [locationCount, serviceCount, userCount] = await Promise.all([
+    const periodStart = isUsable ? subscription!.currentPeriodStart : new Date(0);
+    const [locationCount, serviceCount, userCount, queueEntriesTodayCount, queueEntriesPeriodCount] = await Promise.all([
       prisma.location.count({ where: { organizationId: user.organizationId } }),
       prisma.service.count({ where: { location: { organizationId: user.organizationId } } }),
       prisma.user.count({ where: { organizationId: user.organizationId } }),
+      prisma.queueEntry.count({
+        where: {
+          queue: { service: { location: { organizationId: user.organizationId } } },
+          joinedAt: { gte: getStartOfDay() },
+        },
+      }),
+      prisma.queueEntry.count({
+        where: {
+          queue: { service: { location: { organizationId: user.organizationId } } },
+          joinedAt: { gte: periodStart },
+        },
+      }),
     ]);
+
+    // Queue-entry limits: null means unlimited (real plan value flows through
+    // when usable); any non-usable subscription hard-blocks to 0, same as
+    // checkLimit's convention for these two limit types.
+    const queueEntryLimits = isUsable
+      ? {
+          maxQueueEntriesPerDay: subscription!.plan.maxQueueEntriesPerDay,
+          maxQueueEntriesPerPeriod: subscription!.plan.maxQueueEntriesPerPeriod,
+        }
+      : { maxQueueEntriesPerDay: 0, maxQueueEntriesPerPeriod: 0 };
 
     return res.json({
       subscription: subscription ? {
@@ -478,6 +503,16 @@ export const getMySubscription = async (req: Request, res: Response) => {
           current: userCount,
           limit: mergedLimits.maxUsersPerOrg,
           allowed: userCount < mergedLimits.maxUsersPerOrg,
+        },
+        queueEntriesDaily: {
+          current: queueEntriesTodayCount,
+          limit: queueEntryLimits.maxQueueEntriesPerDay,
+          allowed: queueEntryLimits.maxQueueEntriesPerDay === null ? true : queueEntriesTodayCount < queueEntryLimits.maxQueueEntriesPerDay,
+        },
+        queueEntriesPeriod: {
+          current: queueEntriesPeriodCount,
+          limit: queueEntryLimits.maxQueueEntriesPerPeriod,
+          allowed: queueEntryLimits.maxQueueEntriesPerPeriod === null ? true : queueEntriesPeriodCount < queueEntryLimits.maxQueueEntriesPerPeriod,
         },
       },
       activeProviders,
