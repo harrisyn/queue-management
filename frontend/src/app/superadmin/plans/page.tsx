@@ -28,6 +28,7 @@ interface SubscriptionPlan {
   expiredFallbackPlanId: string | null;
   upgradePlanId: string | null;
   creditAllowances?: { creditType: 'AI' | 'EMAIL' | 'SMS'; monthlyAllowance: number | null }[];
+  addOnPricingOverrides?: { resourceType: 'LOCATIONS' | 'USERS'; pricePerUnitMonthly: string; pricePerUnitOneOff: string }[];
   _count: {
     subscriptions: number;
   };
@@ -41,6 +42,40 @@ function creditAllowancesToForm(rows: SubscriptionPlan['creditAllowances']): Cre
     form[row.creditType] = row.monthlyAllowance;
   }
   return form;
+}
+
+type AddOnOverrideField = { monthly: string; oneOff: string };
+type AddOnOverrideForm = { LOCATIONS: AddOnOverrideField; USERS: AddOnOverrideField };
+
+const EMPTY_ADDON_OVERRIDES: AddOnOverrideForm = {
+  LOCATIONS: { monthly: '', oneOff: '' },
+  USERS: { monthly: '', oneOff: '' },
+};
+
+function addOnOverridesToForm(rows: SubscriptionPlan['addOnPricingOverrides']): AddOnOverrideForm {
+  const form: AddOnOverrideForm = { LOCATIONS: { monthly: '', oneOff: '' }, USERS: { monthly: '', oneOff: '' } };
+  for (const row of rows || []) {
+    form[row.resourceType] = { monthly: row.pricePerUnitMonthly, oneOff: row.pricePerUnitOneOff };
+  }
+  return form;
+}
+
+interface AddOnPricingRow {
+  resourceType: 'LOCATIONS' | 'USERS';
+  pricePerUnitMonthly: string;
+  pricePerUnitOneOff: string;
+}
+
+function formToAddOnOverridesPayload(form: AddOnOverrideForm) {
+  const toValue = (field: AddOnOverrideField) =>
+    field.monthly.trim() === '' && field.oneOff.trim() === ''
+      ? null
+      : { pricePerUnitMonthly: parseFloat(field.monthly) || 0, pricePerUnitOneOff: parseFloat(field.oneOff) || 0 };
+
+  return {
+    LOCATIONS: toValue(form.LOCATIONS),
+    USERS: toValue(form.USERS),
+  };
 }
 
 const defaultFeatures = [
@@ -58,6 +93,7 @@ const defaultFeatures = [
 
 export default function PlansPage() {
   const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
+  const [globalAddOnPricing, setGlobalAddOnPricing] = useState<AddOnPricingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
@@ -86,11 +122,22 @@ export default function PlansPage() {
     expiredFallbackPlanId: null as string | null,
     upgradePlanId: null as string | null,
     creditAllowances: { AI: null, EMAIL: null, SMS: null } as CreditAllowances,
+    addOnPricingOverrides: EMPTY_ADDON_OVERRIDES as AddOnOverrideForm,
   });
 
   useEffect(() => {
     loadPlans();
+    loadGlobalAddOnPricing();
   }, []);
+
+  const loadGlobalAddOnPricing = async () => {
+    try {
+      const result = await api.getAddOnPricing();
+      setGlobalAddOnPricing(result);
+    } catch (err) {
+      console.error('Failed to load global add-on pricing', err);
+    }
+  };
 
   const loadPlans = async () => {
     try {
@@ -129,6 +176,7 @@ export default function PlansPage() {
       expiredFallbackPlanId: null,
       upgradePlanId: null,
       creditAllowances: { AI: null, EMAIL: null, SMS: null },
+      addOnPricingOverrides: EMPTY_ADDON_OVERRIDES,
     });
     setShowModal(true);
   };
@@ -157,6 +205,7 @@ export default function PlansPage() {
       expiredFallbackPlanId: plan.expiredFallbackPlanId,
       upgradePlanId: plan.upgradePlanId,
       creditAllowances: creditAllowancesToForm(plan.creditAllowances),
+      addOnPricingOverrides: addOnOverridesToForm(plan.addOnPricingOverrides),
     });
     setShowModal(true);
   };
@@ -191,6 +240,7 @@ export default function PlansPage() {
           expiredFallbackPlanId: form.expiredFallbackPlanId,
           upgradePlanId: form.upgradePlanId,
           creditAllowances: form.creditAllowances,
+          addOnPricingOverrides: formToAddOnOverridesPayload(form.addOnPricingOverrides),
         });
       } else {
         await api.createSubscriptionPlan({
@@ -214,6 +264,7 @@ export default function PlansPage() {
           expiredFallbackPlanId: form.expiredFallbackPlanId,
           upgradePlanId: form.upgradePlanId,
           creditAllowances: form.creditAllowances,
+          addOnPricingOverrides: formToAddOnOverridesPayload(form.addOnPricingOverrides),
         });
       }
       setShowModal(false);
@@ -504,6 +555,63 @@ export default function PlansPage() {
               placeholder="Unlimited"
             />
           </div>
+
+          <h4 style={{ ...sectionTitle, marginTop: '0.5rem' }}>Add-On Price Overrides (blank = use global default)</h4>
+          <div style={formRow}>
+            <Input
+              label="Extra Location - Monthly"
+              type="number"
+              value={form.addOnPricingOverrides.LOCATIONS.monthly}
+              onChange={(e) => setForm({ ...form, addOnPricingOverrides: { ...form.addOnPricingOverrides, LOCATIONS: { ...form.addOnPricingOverrides.LOCATIONS, monthly: e.target.value } } })}
+              min="0"
+              step="0.01"
+              placeholder={`Default: ${globalAddOnPricing.find(p => p.resourceType === 'LOCATIONS')?.pricePerUnitMonthly ?? '0'}`}
+            />
+            <Input
+              label="Extra Location - One-off"
+              type="number"
+              value={form.addOnPricingOverrides.LOCATIONS.oneOff}
+              onChange={(e) => setForm({ ...form, addOnPricingOverrides: { ...form.addOnPricingOverrides, LOCATIONS: { ...form.addOnPricingOverrides.LOCATIONS, oneOff: e.target.value } } })}
+              min="0"
+              step="0.01"
+              placeholder={`Default: ${globalAddOnPricing.find(p => p.resourceType === 'LOCATIONS')?.pricePerUnitOneOff ?? '0'}`}
+            />
+          </div>
+          <div style={formRow}>
+            <Input
+              label="Extra User - Monthly"
+              type="number"
+              value={form.addOnPricingOverrides.USERS.monthly}
+              onChange={(e) => setForm({ ...form, addOnPricingOverrides: { ...form.addOnPricingOverrides, USERS: { ...form.addOnPricingOverrides.USERS, monthly: e.target.value } } })}
+              min="0"
+              step="0.01"
+              placeholder={`Default: ${globalAddOnPricing.find(p => p.resourceType === 'USERS')?.pricePerUnitMonthly ?? '0'}`}
+            />
+            <Input
+              label="Extra User - One-off"
+              type="number"
+              value={form.addOnPricingOverrides.USERS.oneOff}
+              onChange={(e) => setForm({ ...form, addOnPricingOverrides: { ...form.addOnPricingOverrides, USERS: { ...form.addOnPricingOverrides.USERS, oneOff: e.target.value } } })}
+              min="0"
+              step="0.01"
+              placeholder={`Default: ${globalAddOnPricing.find(p => p.resourceType === 'USERS')?.pricePerUnitOneOff ?? '0'}`}
+            />
+          </div>
+
+          {(() => {
+            const locationPrice = form.addOnPricingOverrides.LOCATIONS.monthly.trim() !== ''
+              ? parseFloat(form.addOnPricingOverrides.LOCATIONS.monthly) || 0
+              : parseFloat(globalAddOnPricing.find(p => p.resourceType === 'LOCATIONS')?.pricePerUnitMonthly ?? '0') || 0;
+            const userPrice = form.addOnPricingOverrides.USERS.monthly.trim() !== ''
+              ? parseFloat(form.addOnPricingOverrides.USERS.monthly) || 0
+              : parseFloat(globalAddOnPricing.find(p => p.resourceType === 'USERS')?.pricePerUnitMonthly ?? '0') || 0;
+            const illustrativeTotal = form.priceMonthly + locationPrice + userPrice;
+            return (
+              <p style={{ ...sectionTitle, textTransform: 'none' as const, letterSpacing: 'normal', color: 'var(--gray-500)', marginTop: '0.25rem' }}>
+                Illustrative price with 1 extra location + 1 extra user: {form.currency} {illustrativeTotal.toFixed(2)}/mo
+              </p>
+            );
+          })()}
 
           <h4 style={{ ...sectionTitle, marginTop: '0.5rem' }}>Features</h4>
           <div style={featuresGrid}>

@@ -815,6 +815,7 @@ class ApiClient {
     expiredFallbackPlanId?: string | null;
     upgradePlanId?: string | null;
     creditAllowances?: Partial<Record<'AI' | 'EMAIL' | 'SMS', number | null>>;
+    addOnPricingOverrides?: Partial<Record<'LOCATIONS' | 'USERS', { pricePerUnitMonthly: number; pricePerUnitOneOff: number } | null>>;
   }) {
     const { data } = await this.client.post('/superadmin/plans', payload);
     return data;
@@ -841,6 +842,7 @@ class ApiClient {
     expiredFallbackPlanId?: string | null;
     upgradePlanId?: string | null;
     creditAllowances?: Partial<Record<'AI' | 'EMAIL' | 'SMS', number | null>>;
+    addOnPricingOverrides?: Partial<Record<'LOCATIONS' | 'USERS', { pricePerUnitMonthly: number; pricePerUnitOneOff: number } | null>>;
   }) {
     const { data } = await this.client.patch(`/superadmin/plans/${id}`, payload);
     return data;
