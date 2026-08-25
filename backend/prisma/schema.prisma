@@ -449,6 +449,7 @@ model SubscriptionPlan {
   maxServicesPerLoc     Int?                     // Max services per location
   maxUsersPerOrg        Int?                     // Max staff users
   maxQueueEntriesPerDay Int?                     // Max daily queue entries across all queues
+  maxQueueEntriesPerPeriod Int?                  // Max queue entries across the current billing period (null = unlimited)
   
   // Feature flags
   features              Json                     @default("{}") // {"analytics": true, "customBranding": false, "apiAccess": true, etc}
