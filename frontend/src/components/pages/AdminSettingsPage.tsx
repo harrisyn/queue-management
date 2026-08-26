@@ -588,6 +588,7 @@ export default function AdminSettingsPage() {
                         type="checkbox"
                         checked={formData.hidePoweredBy}
                         onChange={(e) => setFormData({ ...formData, hidePoweredBy: e.target.checked })}
+                        style={{ width: 'auto' }}
                       />
                       <span style={{ color: '#374151' }}>Hide &quot;Powered by QueueFlow&quot;</span>
                     </label>
