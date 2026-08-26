@@ -3,6 +3,8 @@ import { authenticate, authorize } from '../middleware/auth.middleware';
 import {
   listOrganizations,
   getOrganization,
+  setOrganizationStatus,
+  impersonateOrganization,
   updateOrganizationSubscription,
   cancelOrganizationSubscription,
   grantCredits,
@@ -31,6 +33,8 @@ router.get('/dashboard', getDashboardStats);
 router.get('/organizations', listOrganizations);
 router.get('/organizations/:id', getOrganization);
 router.get('/organizations/:id/usage', getOrganizationUsage);
+router.patch('/organizations/:id/status', setOrganizationStatus);
+router.post('/organizations/:id/impersonate', impersonateOrganization);
 router.patch('/organizations/:id/subscription', updateOrganizationSubscription);
 router.post('/organizations/:id/cancel', cancelOrganizationSubscription);
 router.post('/organizations/:id/credits/grant', grantCredits);

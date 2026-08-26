@@ -41,6 +41,7 @@ export default function QueueStatusPage({
   const [status, setStatus] = useState<QueueStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
   const [notificationsEnabled, setNotificationsEnabled] = useState(false);
   const [audioEnabled, setAudioEnabled] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -112,6 +113,14 @@ export default function QueueStatusPage({
         if (response.status === 404) {
           setError('Ticket not found. It may have been cancelled or completed.');
           return;
+        }
+        if (response.status === 403) {
+          const errData = await response.json().catch(() => ({}));
+          if (errData.error === 'ORGANIZATION_PAUSED') {
+            setUnavailable(true);
+            setError(errData.message || 'This queue system is temporarily unavailable.');
+            return;
+          }
         }
         throw new Error('Failed to load status');
       }
@@ -319,11 +328,20 @@ export default function QueueStatusPage({
       <div style={pageStyle}>
         <div style={bgPattern} />
         <div style={errorContainer}>
-          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="1.5" style={{ marginBottom: '1rem' }}>
-            <circle cx="12" cy="12" r="10" />
-            <path d="M15 9l-6 6M9 9l6 6" />
+          <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke={unavailable ? '#f59e0b' : '#ef4444'} strokeWidth="1.5" style={{ marginBottom: '1rem' }}>
+            {unavailable ? (
+              <>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 8v4M12 16h.01" />
+              </>
+            ) : (
+              <>
+                <circle cx="12" cy="12" r="10" />
+                <path d="M15 9l-6 6M9 9l6 6" />
+              </>
+            )}
           </svg>
-          <h1 style={errorTitle}>Ticket Not Found</h1>
+          <h1 style={errorTitle}>{unavailable ? 'Temporarily Unavailable' : 'Ticket Not Found'}</h1>
           <p style={errorSubtitle}>{error || 'This ticket may have been cancelled or completed.'}</p>
           <Link href="/locations" style={homeButton}>Find a Location</Link>
         </div>
@@ -423,7 +441,7 @@ export default function QueueStatusPage({
                     cy="80"
                     r="70"
                     fill="none"
-                    stroke="#14b8a6"
+                    stroke={brandColor}
                     strokeWidth="8"
                     strokeLinecap="round"
                     strokeDasharray={`${((status.totalInQueue - status.position) / status.totalInQueue) * 439.82} 439.82`}
@@ -467,7 +485,7 @@ export default function QueueStatusPage({
           {status.status === 'WAITING' && (
             <div style={infoGrid}>
               <div style={infoItem}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#14b8a6" strokeWidth="2">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke={brandColor} strokeWidth="2">
                   <circle cx="12" cy="12" r="10" />
                   <path d="M12 6v6l4 2" />
                 </svg>
@@ -611,6 +629,7 @@ export default function QueueStatusPage({
                     disabled={identityLoading}
                     style={{
                       ...identitySaveButton,
+                      background: brandColor,
                       opacity: identityLoading ? 0.7 : 1,
                       cursor: identityLoading ? 'not-allowed' : 'pointer',
                     }}
@@ -712,7 +731,7 @@ export default function QueueStatusPage({
                 />
               </div>
               <div style={qrTicketInfo}>
-                <span style={qrTicketLabel}>Ticket #{status.ticketNumber}</span>
+                <span style={{ ...qrTicketLabel, color: brandColor }}>Ticket #{status.ticketNumber}</span>
               </div>
               <button
                 onClick={() => {
@@ -727,7 +746,7 @@ export default function QueueStatusPage({
                     alert('Link copied to clipboard!');
                   }
                 }}
-                style={shareUrlButton}
+                style={{ ...shareUrlButton, background: brandColor }}
               >
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                   <path d="M15 8a3 3 0 10-2.977-2.63l-4.94 2.47a3 3 0 100 4.319l4.94 2.47a3 3 0 10.895-1.789l-4.94-2.47a3.027 3.027 0 000-.74l4.94-2.47C13.456 7.68 14.19 8 15 8z" />

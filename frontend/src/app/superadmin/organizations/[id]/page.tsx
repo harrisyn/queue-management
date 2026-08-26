@@ -3,10 +3,11 @@
 import React, { useEffect, useState, use } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft, X } from 'lucide-react';
+import { ArrowLeft, X, UserCog, PauseCircle, PlayCircle } from 'lucide-react';
 import api from '@/api/client';
 import { Icon, Card, Badge, Button, UsageBar, Input, Select } from '@/components/ui';
 import type { BadgeTone } from '@/components/ui';
+import { buildTenantUrl } from '@/lib/subdomain';
 
 interface OrganizationDetail {
   id: string;
@@ -14,6 +15,13 @@ interface OrganizationDetail {
   slug: string | null;
   email: string | null;
   phone: string | null;
+  status: 'ACTIVE' | 'PAUSED';
+  defaultDisplayMode?: string;
+  identityFieldsConfig?: Record<string, { required: boolean; label: string }> | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  hidePoweredBy?: boolean;
+  customDomain?: { domain: string; status: 'PENDING' | 'VERIFIED' } | null;
   createdAt: string;
   updatedAt: string;
   subscription?: {
@@ -103,6 +111,8 @@ export default function OrganizationDetailPage({
   const [deleting, setDeleting] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [granting, setGranting] = useState(false);
+  const [statusUpdating, setStatusUpdating] = useState(false);
+  const [impersonating, setImpersonating] = useState(false);
   const [creditForm, setCreditForm] = useState<{ creditType: 'AI' | 'EMAIL' | 'SMS'; amount: string; reason: string }>({
     creditType: 'AI',
     amount: '',
@@ -164,6 +174,41 @@ export default function OrganizationDetailPage({
     }
   };
 
+  const handleToggleStatus = async () => {
+    if (!org) return;
+    const nextStatus = org.status === 'PAUSED' ? 'ACTIVE' : 'PAUSED';
+    if (nextStatus === 'PAUSED' && !confirm('Pause this organization? Their staff can still sign in, but customers won\'t be able to join queues or check ticket status until you reactivate it.')) return;
+
+    setStatusUpdating(true);
+    try {
+      await api.setOrganizationStatus(id, nextStatus);
+      loadOrganization();
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to update organization status');
+    } finally {
+      setStatusUpdating(false);
+    }
+  };
+
+  const handleImpersonate = async () => {
+    if (!confirm(`Sign in as an admin of ${org?.name}? This will be logged.`)) return;
+    setImpersonating(true);
+    try {
+      const result = await api.impersonateOrganization(id);
+      const superAdminToken = localStorage.getItem('token') || '';
+      const hash = [
+        `impersonate=${encodeURIComponent(result.token)}`,
+        `superToken=${encodeURIComponent(superAdminToken)}`,
+        `orgId=${encodeURIComponent(id)}`,
+        `orgName=${encodeURIComponent(result.organizationName)}`,
+      ].join('&');
+      window.location.href = `${buildTenantUrl(result.tenantSlug, '/')}#${hash}`;
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Failed to impersonate organization');
+      setImpersonating(false);
+    }
+  };
+
   const handleDelete = async () => {
     if (!confirm('DELETE this organization? This action is IRREVERSIBLE and will delete ALL data including locations, services, users, and queue history.')) return;
     if (!confirm('Are you ABSOLUTELY sure? Type DELETE to confirm.')) return;
@@ -211,7 +256,21 @@ export default function OrganizationDetailPage({
           </div>
         </div>
         <div style={headerActions}>
+          <Badge tone={org.status === 'PAUSED' ? 'warning' : 'success'}>{org.status === 'PAUSED' ? 'Paused' : 'Active'}</Badge>
           <Badge tone={getStatusTone(org.subscription?.status)}>{org.subscription?.status || 'No Plan'}</Badge>
+          <Button variant="secondary" size="sm" onClick={handleImpersonate} disabled={impersonating}>
+            <Icon icon={UserCog} size={14} /> {impersonating ? 'Signing in...' : 'Impersonate'}
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleToggleStatus}
+            disabled={statusUpdating}
+            style={org.status === 'PAUSED' ? { color: 'var(--success-600)' } : { color: 'var(--warning-600)' }}
+          >
+            <Icon icon={org.status === 'PAUSED' ? PlayCircle : PauseCircle} size={14} />
+            {statusUpdating ? 'Updating...' : org.status === 'PAUSED' ? 'Reactivate' : 'Pause'}
+          </Button>
         </div>
       </header>
 
@@ -255,6 +314,64 @@ export default function OrganizationDetailPage({
               <div style={infoItem}>
                 <span style={infoLabel}>Updated</span>
                 <span style={infoValue}>{new Date(org.updatedAt).toLocaleDateString()}</span>
+              </div>
+            </div>
+          </div>
+        </Card>
+
+        {/* Configuration */}
+        <Card style={{ overflow: 'hidden' }}>
+          <div style={cardHeader}>
+            <h2 style={cardTitle}>Configuration</h2>
+          </div>
+          <div style={cardBody}>
+            <div style={infoGrid}>
+              <div style={infoItem}>
+                <span style={infoLabel}>Display Mode</span>
+                <span style={infoValue}>{org.defaultDisplayMode || 'TICKET_ONLY'}</span>
+              </div>
+              <div style={infoItem}>
+                <span style={infoLabel}>Identity Fields</span>
+                <span style={infoValue}>
+                  {org.identityFieldsConfig ? Object.keys(org.identityFieldsConfig).length : 0} configured
+                </span>
+              </div>
+              <div style={infoItem}>
+                <span style={infoLabel}>Logo</span>
+                {org.logoUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={org.logoUrl} alt="Logo" style={{ height: '28px', maxWidth: '100px', objectFit: 'contain' }} />
+                ) : (
+                  <span style={infoValue}>Not set</span>
+                )}
+              </div>
+              <div style={infoItem}>
+                <span style={infoLabel}>Primary Color</span>
+                <span style={{ ...infoValue, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  {org.primaryColor ? (
+                    <>
+                      <span style={{ width: '16px', height: '16px', borderRadius: '4px', background: org.primaryColor, border: '1px solid var(--gray-200)' }} />
+                      {org.primaryColor}
+                    </>
+                  ) : 'Default'}
+                </span>
+              </div>
+              <div style={infoItem}>
+                <span style={infoLabel}>Powered-By Badge</span>
+                <span style={infoValue}>{org.hidePoweredBy ? 'Hidden' : 'Shown'}</span>
+              </div>
+              <div style={infoItem}>
+                <span style={infoLabel}>Custom Domain</span>
+                <span style={infoValue}>
+                  {org.customDomain ? (
+                    <>
+                      {org.customDomain.domain}{' '}
+                      <Badge tone={org.customDomain.status === 'VERIFIED' ? 'success' : 'warning'}>
+                        {org.customDomain.status === 'VERIFIED' ? 'Verified' : 'Pending'}
+                      </Badge>
+                    </>
+                  ) : 'Not configured'}
+                </span>
               </div>
             </div>
           </div>

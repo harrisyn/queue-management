@@ -44,6 +44,7 @@ interface SubscriptionContextType {
     users: LimitInfo;
   };
   activeProviders: string[];
+  organizationStatus: 'ACTIVE' | 'PAUSED';
   loading: boolean;
   error: string | null;
   refresh: () => Promise<void>;
@@ -81,6 +82,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [features, setFeatures] = useState<SubscriptionFeatures>(DEFAULT_FEATURES);
   const [limits, setLimits] = useState(DEFAULT_LIMITS);
   const [activeProviders, setActiveProviders] = useState<string[]>([]);
+  const [organizationStatus, setOrganizationStatus] = useState<'ACTIVE' | 'PAUSED'>('ACTIVE');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -90,6 +92,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setFeatures(DEFAULT_FEATURES);
       setLimits(DEFAULT_LIMITS);
       setActiveProviders([]);
+      setOrganizationStatus('ACTIVE');
       setLoading(false);
       return;
     }
@@ -107,6 +110,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setFeatures(data.subscription === null ? { ...DEFAULT_FEATURES, ...data.features } : { ...data.features } as typeof DEFAULT_FEATURES);
       setLimits(data.limits);
       setActiveProviders(data.activeProviders || []);
+      setOrganizationStatus(data.organizationStatus || 'ACTIVE');
     } catch (err) {
       console.error('Failed to fetch subscription:', err);
       setError('Failed to load subscription info');
@@ -115,6 +119,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
       setFeatures(DEFAULT_FEATURES);
       setLimits(DEFAULT_LIMITS);
       setActiveProviders([]);
+      setOrganizationStatus('ACTIVE');
     } finally {
       setLoading(false);
     }
@@ -144,6 +149,7 @@ export const SubscriptionProvider: React.FC<{ children: ReactNode }> = ({ childr
         features,
         limits,
         activeProviders,
+        organizationStatus,
         loading,
         error,
         refresh: fetchSubscription,

@@ -640,11 +640,18 @@ export const publicJoinQueue = async (req: Request, res: Response, next: NextFun
     // Get service and verify it's active
     const service = await prisma.service.findUnique({
       where: { id: serviceId },
-      include: { location: true },
+      include: { location: { include: { organization: { select: { status: true } } } } },
     });
 
     if (!service || !service.isActive) {
       return res.status(404).json({ error: 'Service not found or inactive' });
+    }
+
+    if (service.location.organization.status === 'PAUSED') {
+      return res.status(403).json({
+        error: 'ORGANIZATION_PAUSED',
+        message: 'This queue system is temporarily unavailable. Please check back later.',
+      });
     }
 
     // Get or create today's queue for this service
@@ -819,7 +826,7 @@ export const getPublicStatus = async (req: Request, res: Response, next: NextFun
                 location: {
                   include: {
                     organization: {
-                      select: { logoUrl: true, primaryColor: true, hidePoweredBy: true },
+                      select: { logoUrl: true, primaryColor: true, hidePoweredBy: true, status: true },
                     },
                   },
                 },
@@ -846,6 +853,13 @@ export const getPublicStatus = async (req: Request, res: Response, next: NextFun
 
     if (!entry || entry.queueId !== queueId) {
       return res.status(404).json({ error: 'Entry not found' });
+    }
+
+    if (entry.queue.service.location.organization.status === 'PAUSED') {
+      return res.status(403).json({
+        error: 'ORGANIZATION_PAUSED',
+        message: 'This queue system is temporarily unavailable. Please check back later.',
+      });
     }
 
     const queue = entry.queue;
@@ -1137,11 +1151,18 @@ export const publicJoinQueueWithSession = async (req: Request, res: Response, ne
     // Get service and verify it's active
     const service = await prisma.service.findUnique({
       where: { id: serviceId },
-      include: { location: true },
+      include: { location: { include: { organization: { select: { status: true } } } } },
     });
 
     if (!service || !service.isActive) {
       return res.status(404).json({ error: 'Service not found or inactive' });
+    }
+
+    if (service.location.organization.status === 'PAUSED') {
+      return res.status(403).json({
+        error: 'ORGANIZATION_PAUSED',
+        message: 'This queue system is temporarily unavailable. Please check back later.',
+      });
     }
 
     // Get or create today's queue for this service

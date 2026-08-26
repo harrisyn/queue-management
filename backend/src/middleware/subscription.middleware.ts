@@ -498,12 +498,13 @@ export const getMySubscription = async (req: Request, res: Response) => {
           SMS: { current: 0, limit: null, allowed: true },
         },
         activeProviders,
+        organizationStatus: 'ACTIVE',
       });
     }
 
     const org = await prisma.organization.findUnique({
       where: { id: user.organizationId },
-      select: { subscription: { include: { plan: true } } },
+      select: { status: true, subscription: { include: { plan: true } } },
     });
     let subscription = org?.subscription ?? null;
     if (subscription) {
@@ -654,6 +655,7 @@ export const getMySubscription = async (req: Request, res: Response) => {
       activeProviders,
       upgradePlan,
       isExpiredNoFallback,
+      organizationStatus: org?.status ?? 'ACTIVE',
     });
   } catch (error) {
     console.error('Error getting subscription:', error);

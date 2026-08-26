@@ -1,6 +1,9 @@
 import { Request, Response, NextFunction } from 'express';
+import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+
+const IMPERSONATION_TOKEN_TTL = '2h';
 
 // =====================================================
 // ORGANIZATION MANAGEMENT
@@ -101,6 +104,7 @@ export const getOrganization = async (req: Request, res: Response, next: NextFun
             createdAt: true,
           },
         },
+        customDomain: true,
         _count: {
           select: {
             locations: true,
@@ -116,6 +120,90 @@ export const getOrganization = async (req: Request, res: Response, next: NextFun
     }
 
     res.json(organization);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Pause or reactivate an organization. PAUSED shows a banner in the tenant
+// admin app and blocks public join/status pages, without blocking staff
+// login - see docs/superpowers/specs/... (org-status design discussion).
+export const setOrganizationStatus = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+
+    if (status !== 'ACTIVE' && status !== 'PAUSED') {
+      return res.status(400).json({ error: 'status must be ACTIVE or PAUSED' });
+    }
+
+    const organization = await prisma.organization.update({
+      where: { id },
+      data: { status },
+    });
+
+    res.json(organization);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Mint a short-lived session token for one of the org's admins so a
+// superadmin can act as them for support purposes, logged for audit.
+// Picks the org's ORG_ADMIN (falling back to any user) since that's the
+// role tenant Settings pages are gated on.
+export const impersonateOrganization = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+
+    const organization = await prisma.organization.findUnique({
+      where: { id },
+      select: { id: true, name: true, slug: true },
+    });
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+    if (!organization.slug) {
+      return res.status(400).json({ error: 'Organization has no workspace slug configured' });
+    }
+
+    const targetUser = await prisma.user.findFirst({
+      where: { organizationId: id, role: 'ORG_ADMIN' },
+      orderBy: { createdAt: 'asc' },
+    }) || await prisma.user.findFirst({
+      where: { organizationId: id },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({ error: 'This organization has no users to impersonate' });
+    }
+
+    const token = jwt.sign(
+      { userId: targetUser.id, role: targetUser.role },
+      process.env.JWT_SECRET || 'your-secret-key',
+      { expiresIn: IMPERSONATION_TOKEN_TTL }
+    );
+
+    await prisma.impersonationLog.create({
+      data: {
+        organizationId: id,
+        superAdminId: req.user!.userId,
+        impersonatedUserId: targetUser.id,
+      },
+    });
+
+    res.json({
+      token,
+      tenantSlug: organization.slug,
+      organizationName: organization.name,
+      impersonatedUser: {
+        email: targetUser.email,
+        firstName: targetUser.firstName,
+        lastName: targetUser.lastName,
+        role: targetUser.role,
+      },
+    });
   } catch (error) {
     next(error);
   }

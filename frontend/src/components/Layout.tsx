@@ -1,9 +1,17 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { buildAdminUrl } from '@/lib/subdomain';
+
+interface ImpersonationInfo {
+  returnToken: string;
+  returnPath: string;
+  orgName: string;
+}
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -11,14 +19,31 @@ interface LayoutProps {
 
 const Layout: React.FC<LayoutProps> = ({ children }) => {
   const { user, logout, isAdmin, isStaff, isSuperAdmin } = useAuthContext();
+  const { organizationStatus } = useSubscription();
   const router = useRouter();
   const pathname = usePathname();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [impersonation, setImpersonation] = useState<ImpersonationInfo | null>(null);
+
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('impersonation');
+      if (raw) setImpersonation(JSON.parse(raw));
+    } catch {
+      // Malformed/unavailable sessionStorage - just skip the banner.
+    }
+  }, []);
 
   const handleLogout = () => {
     logout();
     router.push('/login');
+  };
+
+  const handleExitImpersonation = () => {
+    if (!impersonation) return;
+    sessionStorage.removeItem('impersonation');
+    window.location.href = `${buildAdminUrl(impersonation.returnPath)}#restore=${encodeURIComponent(impersonation.returnToken)}`;
   };
 
   const navItems = [
@@ -157,6 +182,24 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 
       {/* Main content */}
       <main style={mainStyle}>
+        {impersonation && (
+          <div style={impersonationBanner}>
+            <span>
+              Impersonating <strong>{impersonation.orgName || 'organization'}</strong>
+            </span>
+            <button onClick={handleExitImpersonation} style={impersonationExitBtn}>
+              Exit impersonation
+            </button>
+          </div>
+        )}
+        {isAdmin && organizationStatus === 'PAUSED' && (
+          <div style={pausedBanner}>
+            <span>
+              This workspace is currently <strong>paused</strong> by an administrator. Staff can still sign in,
+              but customers cannot join queues or view ticket status until it&apos;s reactivated.
+            </span>
+          </div>
+        )}
         <div style={contentWrapper}>
           {children}
         </div>
@@ -388,6 +431,41 @@ const mainStyle: React.CSSProperties = {
   flex: 1,
   marginLeft: '260px',
   minHeight: '100vh',
+};
+
+const impersonationBanner: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '1rem',
+  padding: '0.625rem 1.5rem',
+  background: '#7c3aed',
+  color: 'white',
+  fontSize: '0.875rem',
+  textAlign: 'center',
+};
+
+const impersonationExitBtn: React.CSSProperties = {
+  padding: '0.25rem 0.75rem',
+  borderRadius: '0.5rem',
+  border: '1px solid rgba(255, 255, 255, 0.4)',
+  background: 'rgba(255, 255, 255, 0.15)',
+  color: 'white',
+  fontSize: '0.8125rem',
+  fontWeight: 600,
+  cursor: 'pointer',
+};
+
+const pausedBanner: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: '0.75rem 1.5rem',
+  background: '#fef3c7',
+  color: '#92400e',
+  borderBottom: '1px solid #fcd34d',
+  fontSize: '0.875rem',
+  textAlign: 'center',
 };
 
 const contentWrapper: React.CSSProperties = {

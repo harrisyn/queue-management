@@ -26,6 +26,10 @@ model Organization {
   logoFileId            String?                  // storage provider's file id, used to delete the old logo on replace
   primaryColor          String?                  // hex, e.g. "#14b8a6"
   hidePoweredBy         Boolean                  @default(false)
+  // Superadmin-controlled lifecycle switch - PAUSED shows a banner in the
+  // tenant admin app and blocks public customer-facing entry points
+  // (join/status pages) without blocking staff login.
+  status                OrganizationStatus       @default(ACTIVE)
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   locations             Location[]
@@ -36,6 +40,24 @@ model Organization {
   addOns                OrganizationAddOn[]
   creditLedgerEntries   CreditLedgerEntry[]
   customDomain          CustomDomain?
+  impersonationLogs     ImpersonationLog[]
+}
+
+enum OrganizationStatus {
+  ACTIVE
+  PAUSED
+}
+
+// Audit trail for superadmin "log in as this org's admin" support tool.
+// impersonatedUserId/superAdminId are plain ids (not relations) so a later
+// user deletion doesn't cascade-delete history of who accessed what.
+model ImpersonationLog {
+  id                 String       @id @default(uuid())
+  organizationId     String
+  superAdminId       String
+  impersonatedUserId String
+  startedAt          DateTime     @default(now())
+  organization       Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 }
 
 // A single custom domain an org can point at their workspace instead of

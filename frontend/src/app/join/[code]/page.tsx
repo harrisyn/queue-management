@@ -77,6 +77,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
   const [sessionEntries, setSessionEntries] = useState<SessionEntry[]>([]);
   const [sessionId, setSessionId] = useState<string>('');
   const [error, setError] = useState('');
+  const [unavailable, setUnavailable] = useState(false);
   const [formData, setFormData] = useState<Record<string, string>>({
     name: '',
     phone: '',
@@ -168,7 +169,10 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       const res = await fetch(`${API_BASE}/public/locations/${code}`);
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Location not found');
+        if (errData.error === 'ORGANIZATION_PAUSED') {
+          setUnavailable(true);
+        }
+        throw new Error(errData.message || errData.error || 'Location not found');
       }
       const data: LocationInfo = await res.json();
       setLocation(data);
@@ -267,7 +271,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || 'Failed to join queue');
+        throw new Error(errData.message || errData.error || 'Failed to join queue');
       }
 
       const data: JoinResult = await res.json();
@@ -427,12 +431,12 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
   const brandColor = location?.organization?.primaryColor || '#14b8a6';
 
   // Org logo if the org has uploaded one, otherwise the default QueueFlow mark
-  const renderLogo = () => (
+  const renderLogo = (size: number = 48) => (
     location?.organization?.logoUrl ? (
       // eslint-disable-next-line @next/next/no-img-element
-      <img src={location.organization.logoUrl} alt={location.organization.name} style={{ height: '48px', maxWidth: '160px', objectFit: 'contain' }} />
+      <img src={location.organization.logoUrl} alt={location.organization.name} style={{ height: `${size}px`, maxWidth: `${size * 3.3}px`, objectFit: 'contain' }} />
     ) : (
-      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+      <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
         <rect width="48" height="48" rx="12" fill={brandColor} />
         <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
         <circle cx="24" cy="22" r="4" fill="#0d9488"/>
@@ -485,12 +489,14 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
     <div style={centerContainer}>
       <div style={errorIcon}>
         <svg width="64" height="64" viewBox="0 0 64 64" fill="none">
-          <circle cx="32" cy="32" r="28" fill="#fef2f2" stroke="#fecaca" strokeWidth="2"/>
-          <path d="M32 20v16M32 44h.01" stroke="#ef4444" strokeWidth="4" strokeLinecap="round"/>
+          <circle cx="32" cy="32" r="28" fill={unavailable ? '#fffbeb' : '#fef2f2'} stroke={unavailable ? '#fde68a' : '#fecaca'} strokeWidth="2"/>
+          <path d="M32 20v16M32 44h.01" stroke={unavailable ? '#f59e0b' : '#ef4444'} strokeWidth="4" strokeLinecap="round"/>
         </svg>
       </div>
-      <h1 style={errorTitle}>{error}</h1>
-      <p style={errorSubtitle}>The queue code may be invalid or the queue may have closed.</p>
+      <h1 style={errorTitle}>{unavailable ? 'Temporarily Unavailable' : error}</h1>
+      <p style={errorSubtitle}>
+        {unavailable ? error : 'The queue code may be invalid or the queue may have closed.'}
+      </p>
       <Link href="/locations" style={homeButton}>Browse Locations</Link>
     </div>
   );
@@ -521,7 +527,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
               href={`/status/${entry.queueId}/${entry.id}`}
               style={sessionTicketCard}
             >
-              <div style={sessionTicketNumber}>{entry.ticketNumber}</div>
+              <div style={{ ...sessionTicketNumber, color: brandColor }}>{entry.ticketNumber}</div>
               <div style={sessionTicketInfo}>
                 <span style={sessionTicketService}>{entry.serviceName}</span>
                 <span style={sessionTicketStatus(entry.status)}>
@@ -537,7 +543,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
         <button
           onClick={() => setStep('select-service')}
-          style={addAnotherButton}
+          style={{ ...addAnotherButton, background: brandColor }}
         >
           <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
             <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd"/>
@@ -603,7 +609,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
                 {service.description && <span style={serviceDesc}>{service.description}</span>}
                 <span style={serviceTime}>{service.startTime} - {service.endTime}</span>
               </div>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="#14b8a6">
+              <svg width="20" height="20" viewBox="0 0 20 20" fill={brandColor}>
                 <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
               </svg>
             </button>
@@ -787,7 +793,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       {/* Kiosk countdown */}
       {mode === 'kiosk' && kioskCountdown !== null && (
         <div style={kioskCountdownBanner}>
-          <div style={countdownProgress} className="countdown-progress" />
+          <div style={{ ...countdownProgress, background: brandColor }} className="countdown-progress" />
           <span>Next customer in {kioskCountdown}s - Touch to cancel</span>
           <button 
             onClick={() => {
@@ -820,11 +826,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
         {/* Ticket Header */}
         <div style={ticketHeader}>
           <div style={logoSmall}>
-            <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-              <rect width="48" height="48" rx="12" fill="#14b8a6" />
-              <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-              <circle cx="24" cy="22" r="4" fill="#0d9488"/>
-            </svg>
+            {renderLogo(32)}
           </div>
           <div>
             <p style={ticketServiceName}>{joinResult?.serviceName}</p>

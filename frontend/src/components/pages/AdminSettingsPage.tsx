@@ -44,6 +44,14 @@ const DEFAULT_IDENTITY_FIELDS: IdentityField[] = [
   { key: 'insuranceId', label: 'Insurance ID', type: 'text', required: false },
 ];
 
+const COLOR_PRESETS = [
+  { name: 'Teal', value: '#14b8a6' },
+  { name: 'Blue', value: '#2563eb' },
+  { name: 'Purple', value: '#7c3aed' },
+  { name: 'Orange', value: '#f97316' },
+  { name: 'Green', value: '#16a34a' },
+];
+
 const DISPLAY_MODES = [
   { value: 'TICKET_ONLY', label: 'Ticket Number Only', description: 'Display only the ticket number on queue boards' },
   { value: 'NAME_AND_TICKET', label: 'Name & Ticket', description: 'Show patient name with ticket number' },
@@ -656,6 +664,28 @@ export default function AdminSettingsPage() {
                           placeholder="#14b8a6"
                           style={{ ...inputStyle, maxWidth: '160px' }}
                         />
+                      </div>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                        {COLOR_PRESETS.map(preset => (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            onClick={() => setFormData({ ...formData, primaryColor: preset.value })}
+                            title={preset.name}
+                            style={{
+                              width: '28px',
+                              height: '28px',
+                              borderRadius: '9999px',
+                              background: preset.value,
+                              cursor: 'pointer',
+                              border: formData.primaryColor?.toLowerCase() === preset.value
+                                ? '2px solid #111827'
+                                : '2px solid transparent',
+                              boxShadow: '0 0 0 1px rgba(0,0,0,0.08)',
+                              padding: 0,
+                            }}
+                          />
+                        ))}
                       </div>
                     </div>
 

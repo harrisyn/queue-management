@@ -345,7 +345,7 @@ const LoginPage: React.FC = () => {
                 variant="primary"
                 size="lg"
                 disabled={loading}
-                style={{ width: '100%' }}
+                style={branding?.primaryColor ? { width: '100%', background: branding.primaryColor } : { width: '100%' }}
               >
                 {loading ? (
                   <>

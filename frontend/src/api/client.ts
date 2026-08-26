@@ -855,6 +855,21 @@ class ApiClient {
     return data;
   }
 
+  async setOrganizationStatus(id: string, status: 'ACTIVE' | 'PAUSED') {
+    const { data } = await this.client.patch(`/superadmin/organizations/${id}/status`, { status });
+    return data;
+  }
+
+  async impersonateOrganization(id: string) {
+    const { data } = await this.client.post(`/superadmin/organizations/${id}/impersonate`);
+    return data as {
+      token: string;
+      tenantSlug: string;
+      organizationName: string;
+      impersonatedUser: { email: string; firstName: string; lastName: string; role: string };
+    };
+  }
+
   // Subscription Plans
   async getSubscriptionPlans(includeInactive?: boolean) {
     const { data } = await this.client.get('/superadmin/plans', { params: { includeInactive } });

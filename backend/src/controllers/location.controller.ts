@@ -128,6 +128,7 @@ export const getLocationByCode = async (req: Request, res: Response, next: NextF
             logoUrl: true,
             primaryColor: true,
             hidePoweredBy: true,
+            status: true,
           }
         },
         services: {
@@ -148,6 +149,13 @@ export const getLocationByCode = async (req: Request, res: Response, next: NextF
 
     if (!location) {
       return res.status(404).json({ error: 'Location not found or join code is invalid' });
+    }
+
+    if (location.organization.status === 'PAUSED') {
+      return res.status(403).json({
+        error: 'ORGANIZATION_PAUSED',
+        message: 'This queue system is temporarily unavailable. Please check back later.',
+      });
     }
 
     res.json(location);
