@@ -16,6 +16,7 @@ import {
 } from '../controllers/superadmin.controller';
 import { listPaymentProviders, upsertPaymentProvider, testPaymentProvider } from '../controllers/paymentProvider.controller';
 import { listAddOnPricing, updateAddOnPricing } from '../controllers/addOnPricing.controller';
+import { listFileStorageProviders, upsertFileStorageProvider, testFileStorageProvider } from '../controllers/fileStorageProvider.controller';
 
 const router = Router();
 
@@ -49,5 +50,10 @@ router.post('/payment-providers/:provider/test', testPaymentProvider);
 // Add-on pricing configuration
 router.get('/addon-pricing', listAddOnPricing);
 router.put('/addon-pricing/:resourceType', updateAddOnPricing);
+
+// File storage provider configuration
+router.get('/file-storage', listFileStorageProviders);
+router.put('/file-storage/:provider', upsertFileStorageProvider);
+router.post('/file-storage/:provider/test', testFileStorageProvider);
 
 export default router;
