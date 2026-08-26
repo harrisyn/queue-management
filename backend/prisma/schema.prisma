@@ -21,6 +21,11 @@ model Organization {
   defaultDisplayMode    String                   @default("TICKET_ONLY") // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
   // Subscription
   subscriptionId        String?                  @unique
+  // White-labeling (gated behind the plan's customBranding feature)
+  logoUrl               String?
+  logoFileId            String?                  // storage provider's file id, used to delete the old logo on replace
+  primaryColor          String?                  // hex, e.g. "#14b8a6"
+  hidePoweredBy         Boolean                  @default(false)
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   locations             Location[]
@@ -527,6 +532,18 @@ model PaymentProviderConfig {
   publicKey     String?
   secretKey     String   // encrypted at rest
   webhookSecret String   // encrypted at rest
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([provider])
+}
+
+model FileStorageProviderConfig {
+  id            String   @id @default(uuid())
+  provider      String   // "uploadcare"
+  isActive      Boolean  @default(false)
+  publicKey     String?
+  secretKey     String   // encrypted at rest, same as PaymentProviderConfig
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
