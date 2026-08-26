@@ -1,11 +1,12 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Info, Settings } from 'lucide-react';
+import { Info, Settings, Upload, Lock } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
-import { Icon, PageHeader } from '@/components/ui';
+import { Icon, PageHeader, Button } from '@/components/ui';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
 
@@ -24,6 +25,9 @@ interface Organization {
   phone?: string;
   identityFieldsConfig?: Record<string, { required: boolean; label: string; type?: string }>;
   defaultDisplayMode?: string;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  hidePoweredBy?: boolean;
 }
 
 const DEFAULT_IDENTITY_FIELDS: IdentityField[] = [
@@ -47,18 +51,23 @@ const DISPLAY_MODES = [
 
 export default function AdminSettingsPage() {
   const { user, isAdmin } = useAuthContext();
+  const { hasFeature } = useSubscription();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'identity' | 'display'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'identity' | 'display' | 'branding'>('general');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
     email: '',
     phone: '',
+    primaryColor: '',
+    hidePoweredBy: false,
   });
-  
+  const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [uploadingLogo, setUploadingLogo] = useState(false);
+
   // Identity fields configuration
   const [identityFields, setIdentityFields] = useState<IdentityField[]>([]);
   const [customField, setCustomField] = useState({ key: '', label: '', type: 'text' });
@@ -81,6 +90,8 @@ export default function AdminSettingsPage() {
         slug: org.slug || '',
         email: org.email || '',
         phone: org.phone || '',
+        primaryColor: org.primaryColor || '',
+        hidePoweredBy: org.hidePoweredBy || false,
       });
       
       // Load identity fields config
@@ -138,6 +149,8 @@ export default function AdminSettingsPage() {
         phone: formData.phone || undefined,
         identityFieldsConfig,
         defaultDisplayMode: displayMode,
+        primaryColor: formData.primaryColor || null,
+        hidePoweredBy: formData.hidePoweredBy,
       });
       setOrganization(updated);
       setMessage({ type: 'success', text: 'Organization settings saved successfully!' });
@@ -145,6 +158,23 @@ export default function AdminSettingsPage() {
       setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to save settings' });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleLogoUpload = async () => {
+    if (!organization || !logoFile) return;
+
+    setUploadingLogo(true);
+    setMessage(null);
+    try {
+      const result = await api.uploadOrganizationLogo(organization.id, logoFile);
+      setOrganization({ ...organization, logoUrl: result.logoUrl });
+      setLogoFile(null);
+      setMessage({ type: 'success', text: 'Logo uploaded successfully!' });
+    } catch (err: any) {
+      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to upload logo' });
+    } finally {
+      setUploadingLogo(false);
     }
   };
 
@@ -265,6 +295,13 @@ export default function AdminSettingsPage() {
             style={activeTab === 'display' ? activeTabStyle : tabStyle}
           >
             Display Settings
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('branding')}
+            style={activeTab === 'branding' ? activeTabStyle : tabStyle}
+          >
+            Branding
           </button>
         </div>
 
@@ -489,6 +526,73 @@ export default function AdminSettingsPage() {
                     </label>
                   ))}
                 </div>
+              </>
+            )}
+
+            {/* Branding Tab */}
+            {activeTab === 'branding' && (
+              <>
+                <div style={sectionHeader}>
+                  <h2 style={sectionTitle}>White-Labeling</h2>
+                  <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                    Show your own logo and colors on your login screen, public join page, and status display.
+                  </p>
+                </div>
+
+                {!hasFeature('customBranding') ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1.25rem', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '0.75rem', color: '#92400e' }}>
+                    <Icon icon={Lock} size={20} />
+                    <span>White-labeling isn&apos;t included in your current plan. Upgrade to customize your branding.</span>
+                  </div>
+                ) : (
+                  <>
+                    <div style={formField}>
+                      <label style={labelStyle}>Logo</label>
+                      {organization?.logoUrl && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={organization.logoUrl} alt="Current logo" style={{ height: '48px', marginBottom: '0.75rem', display: 'block' }} />
+                      )}
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <input
+                          type="file"
+                          accept="image/png,image/jpeg,image/svg+xml,image/webp"
+                          onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
+                        />
+                        <Button type="button" variant="secondary" disabled={!logoFile || uploadingLogo} onClick={handleLogoUpload}>
+                          <Icon icon={Upload} size={16} /> {uploadingLogo ? 'Uploading...' : 'Upload'}
+                        </Button>
+                      </div>
+                    </div>
+
+                    <div style={formField}>
+                      <label style={labelStyle}>Primary Color</label>
+                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                        <input
+                          type="color"
+                          value={formData.primaryColor || '#14b8a6'}
+                          onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
+                          style={{ width: '48px', height: '40px', padding: '0.25rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}
+                        />
+                        <input
+                          type="text"
+                          value={formData.primaryColor}
+                          onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
+                          placeholder="#14b8a6"
+                          style={{ ...inputStyle, maxWidth: '160px' }}
+                        />
+                      </div>
+                    </div>
+
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
+                      <input
+                        type="checkbox"
+                        checked={formData.hidePoweredBy}
+                        onChange={(e) => setFormData({ ...formData, hidePoweredBy: e.target.checked })}
+                      />
+                      <span style={{ color: '#374151' }}>Hide &quot;Powered by QueueFlow&quot;</span>
+                    </label>
+                  </>
+                )}
               </>
             )}
 

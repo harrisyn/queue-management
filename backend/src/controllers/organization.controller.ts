@@ -6,6 +6,7 @@ import multer from 'multer';
 import { slugify, generateUniqueSlug } from '../utils/slug';
 import { isReservedSlug } from '../constants/reservedSlugs';
 import { getActiveFileStorageProvider } from '../services/fileStorage';
+import { getOrganizationFeatures } from '../middleware/subscription.middleware';
 
 const ALLOWED_LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
 const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -313,6 +314,18 @@ export const updateOrganization = async (req: Request, res: Response, next: Next
   try {
     const { id } = req.params;
     const { name, email, phone, slug, identityFieldsConfig, defaultDisplayMode, primaryColor, hidePoweredBy } = req.body;
+
+    if (primaryColor !== undefined || hidePoweredBy !== undefined) {
+      const features = await getOrganizationFeatures(id);
+      if (!features.customBranding) {
+        return res.status(403).json({
+          error: 'Feature not available',
+          message: 'Your subscription plan does not include the "customBranding" feature. Please upgrade your plan.',
+          feature: 'customBranding',
+          upgradeRequired: true,
+        });
+      }
+    }
 
     // If slug is provided, validate it
     if (slug) {
