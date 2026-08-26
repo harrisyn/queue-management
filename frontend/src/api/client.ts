@@ -257,6 +257,32 @@ class ApiClient {
     return data;
   }
 
+  // File Storage Providers (superadmin)
+  async getFileStorageProviders() {
+    const { data } = await this.client.get('/superadmin/file-storage');
+    return data;
+  }
+
+  async saveFileStorageProvider(provider: string, payload: { publicKey?: string; secretKey: string; isActive: boolean }) {
+    const { data } = await this.client.put(`/superadmin/file-storage/${provider}`, payload);
+    return data;
+  }
+
+  async testFileStorageProvider(provider: string) {
+    const { data } = await this.client.post(`/superadmin/file-storage/${provider}/test`);
+    return data;
+  }
+
+  // Organization branding (tenant)
+  async uploadOrganizationLogo(organizationId: string, file: File) {
+    const form = new FormData();
+    form.append('logo', file);
+    const { data } = await this.client.post(`/orgs/${organizationId}/logo`, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return data as { id: string; logoUrl: string };
+  }
+
   async getUsers(params?: { organizationId?: string; role?: string }) {
     const { data } = await this.client.get('/users', { params });
     return data;
@@ -613,6 +639,8 @@ class ApiClient {
     slug?: string;
     identityFieldsConfig?: Record<string, { required: boolean; label: string; type?: string }>;
     defaultDisplayMode?: string;
+    primaryColor?: string | null;
+    hidePoweredBy?: boolean;
   }) {
     const { data } = await this.client.put(`/orgs/${id}`, payload);
     return data;
