@@ -67,6 +67,10 @@ router.get('/public/orgs/by-slug/:slug', (req, res, next) => {
 	const { getPublicOrganizationBySlug } = require('../controllers/organization.controller');
 	return getPublicOrganizationBySlug(req, res, next as any);
 });
+router.get('/public/orgs/by-domain/:domain', (req, res, next) => {
+	const { getOrganizationByDomain } = require('../controllers/customDomain.controller');
+	return getOrganizationByDomain(req, res, next as any);
+});
 router.get('/public/orgs/:orgId', (req, res, next) => {
 	const { getPublicOrganization } = require('../controllers/organization.controller');
 	return getPublicOrganization(req, res, next as any);

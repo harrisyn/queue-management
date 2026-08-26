@@ -35,6 +35,31 @@ model Organization {
   servicePoints         ServicePoint[]
   addOns                OrganizationAddOn[]
   creditLedgerEntries   CreditLedgerEntry[]
+  customDomain          CustomDomain?
+}
+
+// A single custom domain an org can point at their workspace instead of
+// using the shared <slug>.<appdomain> subdomain (gated behind the plan's
+// customDomain feature). Verified by CNAME: the org points `domain` at the
+// app's root domain, and we confirm that CNAME resolves before treating the
+// mapping as live. No certificate provisioning here - TLS termination for
+// arbitrary customer domains is a reverse-proxy/hosting concern outside this
+// app's scope.
+model CustomDomain {
+  id                 String             @id @default(uuid())
+  organizationId     String             @unique
+  domain             String             @unique
+  status             CustomDomainStatus @default(PENDING)
+  verificationToken  String
+  verifiedAt         DateTime?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+}
+
+enum CustomDomainStatus {
+  PENDING
+  VERIFIED
 }
 
 model Location {

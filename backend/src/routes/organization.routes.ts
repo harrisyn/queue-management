@@ -8,6 +8,12 @@ import {
   uploadOrganizationLogo,
   logoUploadMiddleware,
 } from '../controllers/organization.controller';
+import {
+  getCustomDomain,
+  setCustomDomain,
+  verifyCustomDomain,
+  deleteCustomDomain,
+} from '../controllers/customDomain.controller';
 import { authenticate, authorize, requireOwnOrganization } from '../middleware/auth.middleware';
 import { loadSubscription, requireFeature } from '../middleware/subscription.middleware';
 
@@ -28,6 +34,18 @@ router.post(
   logoUploadMiddleware,
   uploadOrganizationLogo
 );
+router.get('/:id/custom-domain', authorize('SUPER_ADMIN', 'ORG_ADMIN'), requireOwnOrganization, getCustomDomain);
+router.put(
+  '/:id/custom-domain',
+  authorize('SUPER_ADMIN', 'ORG_ADMIN'),
+  requireOwnOrganization,
+  loadSubscription,
+  requireFeature('customDomain'),
+  setCustomDomain
+);
+router.post('/:id/custom-domain/verify', authorize('SUPER_ADMIN', 'ORG_ADMIN'), requireOwnOrganization, verifyCustomDomain);
+router.delete('/:id/custom-domain', authorize('SUPER_ADMIN', 'ORG_ADMIN'), requireOwnOrganization, deleteCustomDomain);
+
 router.delete('/:id', authorize('SUPER_ADMIN'), deleteOrganization);
 
 export default router;

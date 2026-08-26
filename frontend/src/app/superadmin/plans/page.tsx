@@ -81,6 +81,7 @@ function formToAddOnOverridesPayload(form: AddOnOverrideForm) {
 const defaultFeatures = [
   { key: 'analytics', label: 'Analytics Dashboard' },
   { key: 'customBranding', label: 'Custom Branding' },
+  { key: 'customDomain', label: 'Custom Domain' },
   { key: 'apiAccess', label: 'API Access' },
   { key: 'smsNotifications', label: 'SMS Notifications' },
   { key: 'emailNotifications', label: 'Email Notifications' },

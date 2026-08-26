@@ -13,6 +13,7 @@ export type FeatureKey =
   | 'analytics'
   | 'apiAccess'
   | 'customBranding'
+  | 'customDomain'
   | 'serviceFlows'
   | 'servicePoints';
 
@@ -25,6 +26,7 @@ interface SubscriptionFeatures {
   analytics?: boolean;
   apiAccess?: boolean;
   customBranding?: boolean;
+  customDomain?: boolean;
   serviceFlows?: boolean;
   servicePoints?: boolean;
 }
@@ -39,6 +41,7 @@ const DEFAULT_FEATURES: SubscriptionFeatures = {
   analytics: false,
   apiAccess: false,
   customBranding: false,
+  customDomain: false,
   serviceFlows: false,
   servicePoints: true,
 };

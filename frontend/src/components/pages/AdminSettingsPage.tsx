@@ -1,8 +1,9 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { Info, Settings, Upload, Lock } from 'lucide-react';
+import { Info, Settings, Upload, Lock, Globe, CheckCircle2, RefreshCw } from 'lucide-react';
 import api from '@/api/client';
+import type { CustomDomainInfo } from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
@@ -55,7 +56,7 @@ export default function AdminSettingsPage() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'identity' | 'display' | 'branding'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'identity' | 'display' | 'branding' | 'domain'>('general');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -68,6 +69,14 @@ export default function AdminSettingsPage() {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
 
+  // Custom domain configuration
+  const [customDomain, setCustomDomainState] = useState<CustomDomainInfo | null>(null);
+  const [domainInput, setDomainInput] = useState('');
+  const [domainLoading, setDomainLoading] = useState(true);
+  const [domainSaving, setDomainSaving] = useState(false);
+  const [domainVerifying, setDomainVerifying] = useState(false);
+  const [domainMessage, setDomainMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
   // Identity fields configuration
   const [identityFields, setIdentityFields] = useState<IdentityField[]>([]);
   const [customField, setCustomField] = useState({ key: '', label: '', type: 'text' });
@@ -76,10 +85,24 @@ export default function AdminSettingsPage() {
   useEffect(() => {
     if (isAdmin && user?.organizationId) {
       loadOrganization();
+      loadCustomDomain(user.organizationId);
     } else {
       setLoading(false);
+      setDomainLoading(false);
     }
   }, [isAdmin, user]);
+
+  const loadCustomDomain = async (organizationId: string) => {
+    setDomainLoading(true);
+    try {
+      const domain = await api.getCustomDomain(organizationId);
+      setCustomDomainState(domain);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setDomainLoading(false);
+    }
+  };
 
   const loadOrganization = async () => {
     try {
@@ -175,6 +198,52 @@ export default function AdminSettingsPage() {
       setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to upload logo' });
     } finally {
       setUploadingLogo(false);
+    }
+  };
+
+  const handleSetCustomDomain = async () => {
+    if (!organization || !domainInput.trim()) return;
+    setDomainSaving(true);
+    setDomainMessage(null);
+    try {
+      const result = await api.setCustomDomain(organization.id, domainInput.trim());
+      setCustomDomainState(result);
+      setDomainInput('');
+      setDomainMessage({ type: 'success', text: 'Domain saved. Add the CNAME record below, then verify.' });
+    } catch (err: any) {
+      setDomainMessage({ type: 'error', text: err.response?.data?.error || 'Failed to save domain' });
+    } finally {
+      setDomainSaving(false);
+    }
+  };
+
+  const handleVerifyCustomDomain = async () => {
+    if (!organization) return;
+    setDomainVerifying(true);
+    setDomainMessage(null);
+    try {
+      const result = await api.verifyCustomDomain(organization.id);
+      setCustomDomainState(result);
+      setDomainMessage({ type: 'success', text: 'Domain verified! It now serves your branded login page.' });
+    } catch (err: any) {
+      setDomainMessage({ type: 'error', text: err.response?.data?.message || err.response?.data?.error || 'Verification failed' });
+    } finally {
+      setDomainVerifying(false);
+    }
+  };
+
+  const handleRemoveCustomDomain = async () => {
+    if (!organization) return;
+    setDomainSaving(true);
+    setDomainMessage(null);
+    try {
+      await api.deleteCustomDomain(organization.id);
+      setCustomDomainState(null);
+      setDomainMessage({ type: 'success', text: 'Custom domain removed.' });
+    } catch (err: any) {
+      setDomainMessage({ type: 'error', text: err.response?.data?.error || 'Failed to remove domain' });
+    } finally {
+      setDomainSaving(false);
     }
   };
 
@@ -302,6 +371,13 @@ export default function AdminSettingsPage() {
             style={activeTab === 'branding' ? activeTabStyle : tabStyle}
           >
             Branding
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('domain')}
+            style={activeTab === 'domain' ? activeTabStyle : tabStyle}
+          >
+            Domain
           </button>
         </div>
 
@@ -597,12 +673,119 @@ export default function AdminSettingsPage() {
               </>
             )}
 
+            {/* Domain Tab */}
+            {activeTab === 'domain' && (
+              <>
+                <div style={sectionHeader}>
+                  <h2 style={sectionTitle}>Custom Domain</h2>
+                  <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                    Point your own domain at your workspace so staff sign in at your address instead of a QueueFlow subdomain.
+                  </p>
+                </div>
+
+                {!hasFeature('customDomain') ? (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1.25rem', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '0.75rem', color: '#92400e' }}>
+                    <Icon icon={Lock} size={20} />
+                    <span>Custom domains aren&apos;t included in your current plan. Upgrade to connect your own domain.</span>
+                  </div>
+                ) : domainLoading ? (
+                  <div style={{ padding: '1rem', color: '#6b7280' }}>Loading...</div>
+                ) : (
+                  <>
+                    {domainMessage && (
+                      <div style={{
+                        padding: '0.875rem 1rem',
+                        borderRadius: '0.625rem',
+                        marginBottom: '1.25rem',
+                        background: domainMessage.type === 'success' ? '#dcfce7' : '#fef2f2',
+                        color: domainMessage.type === 'success' ? '#166534' : '#dc2626',
+                        border: `1px solid ${domainMessage.type === 'success' ? '#86efac' : '#fecaca'}`,
+                        fontSize: '0.875rem',
+                      }}>
+                        {domainMessage.text}
+                      </div>
+                    )}
+
+                    {!customDomain ? (
+                      <div style={formField}>
+                        <label style={labelStyle}>Domain</label>
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                          <input
+                            type="text"
+                            value={domainInput}
+                            onChange={(e) => setDomainInput(e.target.value)}
+                            placeholder="queue.yourcompany.com"
+                            style={{ ...inputStyle, flex: 1 }}
+                          />
+                          <Button type="button" variant="primary" disabled={!domainInput.trim() || domainSaving} onClick={handleSetCustomDomain}>
+                            <Icon icon={Globe} size={16} /> {domainSaving ? 'Saving...' : 'Add Domain'}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                          <span style={{ fontWeight: 600, fontSize: '1rem', color: '#111827' }}>{customDomain.domain}</span>
+                          <span style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.25rem',
+                            padding: '0.2rem 0.6rem',
+                            borderRadius: '9999px',
+                            fontSize: '0.75rem',
+                            fontWeight: 600,
+                            background: customDomain.status === 'VERIFIED' ? '#dcfce7' : '#fef3c7',
+                            color: customDomain.status === 'VERIFIED' ? '#166534' : '#854d0e',
+                          }}>
+                            {customDomain.status === 'VERIFIED' && <Icon icon={CheckCircle2} size={12} />}
+                            {customDomain.status === 'VERIFIED' ? 'Verified' : 'Pending verification'}
+                          </span>
+                        </div>
+
+                        {customDomain.status !== 'VERIFIED' && (
+                          <div style={{ padding: '1rem', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.75rem', marginBottom: '1.25rem' }}>
+                            <p style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.75rem' }}>
+                              Add this CNAME record at your DNS provider, then verify:
+                            </p>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.5rem 1rem', fontSize: '0.8125rem', fontFamily: 'monospace' }}>
+                              <span style={{ color: '#6b7280' }}>Type</span>
+                              <span>CNAME</span>
+                              <span style={{ color: '#6b7280' }}>Name</span>
+                              <span>{customDomain.domain}</span>
+                              <span style={{ color: '#6b7280' }}>Value</span>
+                              <span>{customDomain.cnameTarget}</span>
+                            </div>
+                            <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.75rem' }}>
+                              DNS changes can take a few minutes to a few hours to propagate.
+                            </p>
+                          </div>
+                        )}
+
+                        <div style={{ display: 'flex', gap: '0.75rem' }}>
+                          {customDomain.status !== 'VERIFIED' && (
+                            <Button type="button" variant="primary" disabled={domainVerifying} onClick={handleVerifyCustomDomain}>
+                              <Icon icon={RefreshCw} size={16} /> {domainVerifying ? 'Checking...' : 'Verify'}
+                            </Button>
+                          )}
+                          <Button type="button" variant="secondary" disabled={domainSaving} onClick={handleRemoveCustomDomain}>
+                            Remove Domain
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )}
+
             {/* Save Button */}
-            <div style={formActions}>
-              <button type="submit" disabled={saving} style={saveButton}>
-                {saving ? 'Saving...' : 'Save Changes'}
-              </button>
-            </div>
+            {activeTab !== 'domain' && (
+              <div style={formActions}>
+                <button type="submit" disabled={saving} style={saveButton}>
+                  {saving ? 'Saving...' : 'Save Changes'}
+                </button>
+              </div>
+            )}
           </form>
         </div>
 

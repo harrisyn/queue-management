@@ -3,6 +3,14 @@ import type { Service } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
 
+export interface CustomDomainInfo {
+  domain: string;
+  status: 'PENDING' | 'VERIFIED';
+  verifiedAt: string | null;
+  createdAt: string;
+  cnameTarget: string;
+}
+
 class ApiClient {
   private client: AxiosInstance;
 
@@ -81,6 +89,18 @@ class ApiClient {
   async getOrgBySlug(slug: string): Promise<{ id: string; name: string; slug: string; logoUrl: string | null; primaryColor: string | null; hidePoweredBy: boolean } | null> {
     try {
       const { data } = await this.client.get(`/public/orgs/by-slug/${encodeURIComponent(slug)}`);
+      return data;
+    } catch (err) {
+      if (axios.isAxiosError(err) && err.response?.status === 404) {
+        return null;
+      }
+      throw err;
+    }
+  }
+
+  async getOrgByDomain(domain: string): Promise<{ id: string; name: string; slug: string; logoUrl: string | null; primaryColor: string | null; hidePoweredBy: boolean } | null> {
+    try {
+      const { data } = await this.client.get(`/public/orgs/by-domain/${encodeURIComponent(domain)}`);
       return data;
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 404) {
@@ -281,6 +301,25 @@ class ApiClient {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
     return data as { id: string; logoUrl: string };
+  }
+
+  async getCustomDomain(organizationId: string) {
+    const { data } = await this.client.get(`/orgs/${organizationId}/custom-domain`);
+    return data as CustomDomainInfo | null;
+  }
+
+  async setCustomDomain(organizationId: string, domain: string) {
+    const { data } = await this.client.put(`/orgs/${organizationId}/custom-domain`, { domain });
+    return data as CustomDomainInfo;
+  }
+
+  async verifyCustomDomain(organizationId: string) {
+    const { data } = await this.client.post(`/orgs/${organizationId}/custom-domain/verify`);
+    return data as CustomDomainInfo;
+  }
+
+  async deleteCustomDomain(organizationId: string) {
+    await this.client.delete(`/orgs/${organizationId}/custom-domain`);
   }
 
   async getUsers(params?: { organizationId?: string; role?: string }) {

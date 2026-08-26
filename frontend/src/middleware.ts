@@ -1,15 +1,45 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { extractSubdomain, buildAdminUrl } from '@/lib/subdomain';
+import { extractSubdomain, extractCustomDomainCandidate, buildAdminUrl } from '@/lib/subdomain';
 
 const API_INTERNAL_URL = process.env.API_INTERNAL_URL || 'http://backend:9000/api/v1';
+
+async function resolveCustomDomainSlug(hostname: string): Promise<string | null> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 3000);
+  try {
+    const lookupRes = await fetch(`${API_INTERNAL_URL}/public/orgs/by-domain/${hostname}`, {
+      signal: controller.signal,
+    });
+    if (!lookupRes.ok) return null;
+    const org = await lookupRes.json();
+    return org.slug ?? null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
 
 export async function middleware(req: NextRequest) {
   const host = req.headers.get('host') || '';
   const subdomain = extractSubdomain(host);
   const { pathname } = req.nextUrl;
 
-  // Root domain / www: block direct /superadmin access from here.
+  // Root domain / www: block direct /superadmin access from here. Before
+  // falling back to that, check whether this host is a verified custom
+  // domain - if so, treat it exactly like a tenant subdomain.
   if (!subdomain) {
+    const candidate = extractCustomDomainCandidate(host);
+    if (candidate) {
+      const slug = await resolveCustomDomainSlug(candidate);
+      if (slug) {
+        const response = NextResponse.next();
+        response.headers.set('x-tenant-slug', slug);
+        response.headers.set('x-tenant-custom-domain', candidate);
+        return response;
+      }
+    }
+
     if (pathname.startsWith('/superadmin')) {
       return NextResponse.redirect(new URL(buildAdminUrl(pathname), req.url));
     }

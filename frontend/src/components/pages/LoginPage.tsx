@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { QrCode, Zap, Bell, Check, X, Loader2, ArrowRight } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { extractSubdomain, buildTenantUrl, buildRootUrl } from '@/lib/subdomain';
+import { extractSubdomain, extractCustomDomainCandidate, buildTenantUrl, buildRootUrl } from '@/lib/subdomain';
 import { api } from '@/api/client';
 import { Button, Icon } from '@/components/ui';
 
@@ -30,10 +30,33 @@ const LoginPage: React.FC = () => {
   const requestIdRef = useRef(0);
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setSubdomain(extractSubdomain(window.location.host));
+    if (typeof window === 'undefined') return;
+    const host = window.location.host;
+    const sub = extractSubdomain(host);
+    if (sub) {
+      setSubdomain(sub);
       setHostChecked(true);
+      return;
     }
+
+    // Not a <slug>.APP_DOMAIN host - it might still be a verified custom
+    // domain an org has pointed at this app. Resolve it the same way, then
+    // treat its slug exactly like a subdomain for the rest of this page.
+    const candidate = extractCustomDomainCandidate(host);
+    if (!candidate) {
+      setSubdomain(null);
+      setHostChecked(true);
+      return;
+    }
+    api.getOrgByDomain(candidate)
+      .then((org) => {
+        setSubdomain(org?.slug ?? null);
+        setHostChecked(true);
+      })
+      .catch(() => {
+        setSubdomain(null);
+        setHostChecked(true);
+      });
   }, []);
 
   useEffect(() => {

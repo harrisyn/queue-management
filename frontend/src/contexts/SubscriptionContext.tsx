@@ -14,6 +14,7 @@ export interface SubscriptionFeatures {
   analytics: boolean;
   apiAccess: boolean;
   customBranding: boolean;
+  customDomain: boolean;
   serviceFlows: boolean;
   servicePoints: boolean;
 }
@@ -61,6 +62,7 @@ const DEFAULT_FEATURES: SubscriptionFeatures = {
   analytics: false,
   apiAccess: false,
   customBranding: false,
+  customDomain: false,
   serviceFlows: false,
   servicePoints: true,
 };
@@ -209,6 +211,7 @@ export const UpgradePrompt: React.FC<{
       analytics: 'Analytics Dashboard',
       apiAccess: 'API Access',
       customBranding: 'Custom Branding',
+      customDomain: 'Custom Domain',
       serviceFlows: 'Service Flows',
       servicePoints: 'Service Points',
     };
