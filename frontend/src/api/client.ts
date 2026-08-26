@@ -78,7 +78,7 @@ class ApiClient {
     return data;
   }
 
-  async getOrgBySlug(slug: string): Promise<{ id: string; name: string; slug: string } | null> {
+  async getOrgBySlug(slug: string): Promise<{ id: string; name: string; slug: string; logoUrl: string | null; primaryColor: string | null; hidePoweredBy: boolean } | null> {
     try {
       const { data } = await this.client.get(`/public/orgs/by-slug/${encodeURIComponent(slug)}`);
       return data;

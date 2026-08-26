@@ -2,8 +2,35 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
+import multer from 'multer';
 import { slugify, generateUniqueSlug } from '../utils/slug';
 import { isReservedSlug } from '../constants/reservedSlugs';
+import { getActiveFileStorageProvider } from '../services/fileStorage';
+
+const ALLOWED_LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
+const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
+
+// Parses the incoming multipart request into memory - nothing touches local
+// disk, the buffer goes straight to the configured file storage provider.
+// Wraps multer directly (rather than exporting its middleware as-is) so a
+// too-large or malformed upload gets a clean 400 instead of falling through
+// to the generic error handler.
+const logoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: MAX_LOGO_SIZE_BYTES },
+}).single('logo');
+
+export const logoUploadMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  logoUpload(req, res, (err: unknown) => {
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({ error: `File too large - max ${MAX_LOGO_SIZE_BYTES / (1024 * 1024)}MB` });
+    }
+    if (err) {
+      return res.status(400).json({ error: err instanceof Error ? err.message : 'File upload failed' });
+    }
+    next();
+  });
+};
 
 // Public endpoint: Register a new organization with first admin user
 export const registerOrganization = async (req: Request, res: Response, next: NextFunction) => {
@@ -150,6 +177,9 @@ export const getPublicOrganization = async (req: Request, res: Response, next: N
       select: {
         id: true,
         name: true,
+        logoUrl: true,
+        primaryColor: true,
+        hidePoweredBy: true,
         locations: {
           select: {
             id: true,
@@ -186,7 +216,7 @@ export const getPublicOrganizationBySlug = async (req: Request, res: Response, n
 
     const organization = await prisma.organization.findUnique({
       where: { slug },
-      select: { id: true, name: true, slug: true },
+      select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, hidePoweredBy: true },
     });
 
     if (!organization) {
@@ -282,7 +312,7 @@ export const getOrganization = async (req: Request, res: Response, next: NextFun
 export const updateOrganization = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, slug, identityFieldsConfig, defaultDisplayMode } = req.body;
+    const { name, email, phone, slug, identityFieldsConfig, defaultDisplayMode, primaryColor, hidePoweredBy } = req.body;
 
     // If slug is provided, validate it
     if (slug) {
@@ -310,6 +340,8 @@ export const updateOrganization = async (req: Request, res: Response, next: Next
     if (slug !== undefined) updateData.slug = slug || null;
     if (identityFieldsConfig !== undefined) updateData.identityFieldsConfig = identityFieldsConfig;
     if (defaultDisplayMode !== undefined) updateData.defaultDisplayMode = defaultDisplayMode;
+    if (primaryColor !== undefined) updateData.primaryColor = primaryColor || null;
+    if (hidePoweredBy !== undefined) updateData.hidePoweredBy = Boolean(hidePoweredBy);
 
     const organization = await prisma.organization.update({
       where: { id },
@@ -317,6 +349,61 @@ export const updateOrganization = async (req: Request, res: Response, next: Next
     });
 
     res.json(organization);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const uploadOrganizationLogo = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id } = req.params;
+    const file = req.file;
+
+    if (!file) {
+      return res.status(400).json({ error: 'No file uploaded (expected multipart field "logo")' });
+    }
+    if (!ALLOWED_LOGO_MIME_TYPES.includes(file.mimetype)) {
+      return res.status(400).json({ error: `File type must be one of: ${ALLOWED_LOGO_MIME_TYPES.join(', ')}` });
+    }
+
+    const provider = await getActiveFileStorageProvider();
+    if (!provider) {
+      return res.status(400).json({ error: 'No file storage provider is configured' });
+    }
+
+    const organization = await prisma.organization.findUnique({
+      where: { id },
+      select: { logoFileId: true },
+    });
+    if (!organization) {
+      return res.status(404).json({ error: 'Organization not found' });
+    }
+
+    let uploaded;
+    try {
+      uploaded = await provider.uploadFile(file.buffer, file.originalname, file.mimetype);
+    } catch (err) {
+      console.error('Logo upload to file storage provider failed:', err);
+      return res.status(502).json({ error: 'File storage provider temporarily unavailable. Please try again shortly.' });
+    }
+
+    if (organization.logoFileId) {
+      try {
+        await provider.deleteFile(organization.logoFileId);
+      } catch (err) {
+        // Non-fatal - the new logo is already uploaded and about to be saved;
+        // an orphaned old file just wastes a bit of storage quota.
+        console.error(`Failed to delete previous logo file ${organization.logoFileId}:`, err);
+      }
+    }
+
+    const updated = await prisma.organization.update({
+      where: { id },
+      data: { logoUrl: uploaded.url, logoFileId: uploaded.fileId },
+      select: { id: true, logoUrl: true },
+    });
+
+    res.json(updated);
   } catch (error) {
     next(error);
   }
