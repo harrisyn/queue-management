@@ -6,6 +6,30 @@ import api from '@/api/client';
 import { useSocket } from '@/hooks/useSocket';
 import type { Location } from '@/types';
 
+interface BrandedLocation extends Location {
+  organization?: {
+    id: string;
+    name: string;
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    hidePoweredBy?: boolean;
+  };
+}
+
+// Expands a hex color (e.g. "#7c3aed") to an rgba() string for glow/tint
+// overlays - the display board's CSS uses rgba accents throughout, and an
+// org's primaryColor is stored as plain hex.
+function hexToRgba(hex: string, alpha: number): string {
+  const clean = hex.replace('#', '');
+  const full = clean.length === 3 ? clean.split('').map(c => c + c).join('') : clean;
+  const num = parseInt(full, 16);
+  if (Number.isNaN(num) || full.length !== 6) return `rgba(59, 130, 246, ${alpha})`;
+  const r = (num >> 16) & 255;
+  const g = (num >> 8) & 255;
+  const b = num & 255;
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+}
+
 interface DisplayEntry {
   ticketNumber: string;
   serviceName: string;
@@ -62,7 +86,7 @@ const TVDisplayPage: React.FC = () => {
   const params = useParams();
   const locationId = params.locationId as string;
   
-  const [location, setLocation] = useState<Location | null>(null);
+  const [location, setLocation] = useState<BrandedLocation | null>(null);
   const [servicePoints, setServicePoints] = useState<DisplayServicePoint[]>([]);
   const [swimlanes, setSwimlanes] = useState<QueueSwimlane[]>([]);
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -279,6 +303,9 @@ const TVDisplayPage: React.FC = () => {
     return displayMode === 'NAME_AND_TICKET' || displayMode === 'FULL_INFO';
   };
 
+  const brandColor = location?.organization?.primaryColor || '#3b82f6';
+  const brandGlow = hexToRgba(brandColor, 0.35);
+
   if (loading) {
     return (
       <div className="display-container loading">
@@ -320,18 +347,29 @@ const TVDisplayPage: React.FC = () => {
   };
 
   return (
-    <div className="display-container" data-theme={theme} ref={containerRef}>
+    <div
+      className="display-container"
+      data-theme={theme}
+      ref={containerRef}
+      style={{ '--brand-color': brandColor, '--brand-glow': brandGlow } as React.CSSProperties}
+    >
       {/* Header */}
       <header className="display-header">
         <div className="header-left">
-          <h1 className="location-name">{location?.name || 'Queue Display'}</h1>
-          <p className="subtitle">
-            {viewMode === 'single-queue' && selectedSwimlane 
-              ? selectedSwimlane.serviceName 
-              : 'Now Serving'}
-          </p>
+          {location?.organization?.logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={location.organization.logoUrl} alt={location.organization.name} className="org-logo" />
+          )}
+          <div>
+            <h1 className="location-name">{location?.name || 'Queue Display'}</h1>
+            <p className="subtitle">
+              {viewMode === 'single-queue' && selectedSwimlane
+                ? selectedSwimlane.serviceName
+                : 'Now Serving'}
+            </p>
+          </div>
         </div>
-        
+
         {/* View Mode Selector */}
         <div className="view-selector">
           <button 
@@ -640,6 +678,15 @@ const TVDisplayPage: React.FC = () => {
         )}
       </main>
 
+      {!location?.organization?.hidePoweredBy && (
+        <div
+          className="powered-by-badge"
+          style={viewMode === 'service-points' && activePoints.length > 0 ? { bottom: '6rem' } : undefined}
+        >
+          Powered by <strong>QueueFlow</strong>
+        </div>
+      )}
+
       {/* Announcement Ticker */}
       {(viewMode === 'service-points' && activePoints.length > 0) && (
         <div className="announcement-ticker">
@@ -727,6 +774,15 @@ const TVDisplayPage: React.FC = () => {
 
         .header-left {
           flex: 1;
+          display: flex;
+          align-items: center;
+          gap: 1.25rem;
+        }
+
+        .org-logo {
+          height: 56px;
+          max-width: 200px;
+          object-fit: contain;
         }
 
         .location-name {
@@ -782,9 +838,9 @@ const TVDisplayPage: React.FC = () => {
         }
 
         .view-btn.active {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(37, 99, 235, 0.3) 100%);
+          background: linear-gradient(135deg, var(--brand-glow) 0%, var(--brand-glow) 100%);
           color: var(--text-primary);
-          box-shadow: 0 0 20px rgba(59, 130, 246, 0.3);
+          box-shadow: 0 0 20px var(--brand-glow);
         }
 
         .fullscreen-btn {
@@ -804,7 +860,7 @@ const TVDisplayPage: React.FC = () => {
           font-weight: 800;
           letter-spacing: 0.02em;
           line-height: 1;
-          text-shadow: 0 2px 20px rgba(255, 255, 255, 0.2);
+          text-shadow: 0 2px 20px var(--brand-glow);
         }
 
         .date {
@@ -1377,6 +1433,26 @@ const TVDisplayPage: React.FC = () => {
           letter-spacing: 0.15em;
           font-weight: 600;
           color: var(--text-muted);
+        }
+
+        .powered-by-badge {
+          position: fixed;
+          bottom: 1rem;
+          right: 1.25rem;
+          font-size: 0.8rem;
+          font-weight: 500;
+          color: var(--text-dimmed);
+          background: var(--bg-secondary);
+          padding: 0.4rem 0.85rem;
+          border-radius: 999px;
+          border: 1px solid var(--border-color);
+          z-index: 5;
+          pointer-events: none;
+        }
+
+        .powered-by-badge strong {
+          color: var(--text-muted);
+          font-weight: 700;
         }
 
         .announcement-ticker {

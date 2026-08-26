@@ -177,7 +177,9 @@ export const getPublicLocationInfo = async (req: Request, res: Response, next: N
         address: true,
         timezone: true,
         publicCode: true,
-        organization: { select: { id: true, name: true } },
+        organization: {
+          select: { id: true, name: true, logoUrl: true, primaryColor: true, hidePoweredBy: true },
+        },
         _count: { select: { services: true } },
       },
     });
