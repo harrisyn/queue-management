@@ -120,12 +120,15 @@ export const getLocationByCode = async (req: Request, res: Response, next: NextF
     const location = await prisma.location.findUnique({
       where: { publicCode: code },
       include: {
-        organization: { 
-          select: { 
-            id: true, 
+        organization: {
+          select: {
+            id: true,
             name: true,
             identityFieldsConfig: true,  // Include identity fields config for public join form
-          } 
+            logoUrl: true,
+            primaryColor: true,
+            hidePoweredBy: true,
+          }
         },
         services: {
           where: { isActive: true },

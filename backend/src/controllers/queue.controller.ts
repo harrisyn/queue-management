@@ -815,7 +815,15 @@ export const getPublicStatus = async (req: Request, res: Response, next: NextFun
         queue: {
           include: {
             service: {
-              include: { location: true },
+              include: {
+                location: {
+                  include: {
+                    organization: {
+                      select: { logoUrl: true, primaryColor: true, hidePoweredBy: true },
+                    },
+                  },
+                },
+              },
             },
             entries: {
               where: { status: { in: ['WAITING', 'SERVING'] } },
@@ -876,6 +884,7 @@ export const getPublicStatus = async (req: Request, res: Response, next: NextFun
       serviceName: queue.service.name,
       locationName: queue.service.location.name,
       locationAddress: queue.service.location.address,
+      organization: queue.service.location.organization,
       currentlyServing: currentlyServing?.ticketNumber || null,
       totalInQueue: waitingCount + servingCount,
       waitingCount,

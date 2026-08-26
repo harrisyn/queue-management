@@ -21,6 +21,11 @@ interface QueueStatus {
   joinedAt: string;
   calledAt: string | null;
   userName: string;
+  organization?: {
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    hidePoweredBy?: boolean;
+  } | null;
 }
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
@@ -329,6 +334,21 @@ export default function QueueStatusPage({
   const isCalled = status.status === 'SERVING';
   const isCompleted = status.status === 'SERVED' || status.status === 'CANCELLED' || status.status === 'NO_SHOW';
 
+  const brandColor = status.organization?.primaryColor || '#14b8a6';
+
+  const renderLogo = () => (
+    status.organization?.logoUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={status.organization.logoUrl} alt="" style={{ height: '40px', maxWidth: '120px', objectFit: 'contain' }} />
+    ) : (
+      <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
+        <rect width="48" height="48" rx="12" fill="white" fillOpacity="0.2" />
+        <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
+        <circle cx="24" cy="22" r="4" fill={isCalled ? '#f59e0b' : brandColor}/>
+      </svg>
+    )
+  );
+
   return (
     <div style={{ 
       ...pageStyle, 
@@ -353,11 +373,7 @@ export default function QueueStatusPage({
         {/* Header */}
         <div style={headerStyle}>
           <div style={logoBox}>
-            <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
-              <rect width="48" height="48" rx="12" fill="white" fillOpacity="0.2" />
-              <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-              <circle cx="24" cy="22" r="4" fill={isCalled ? '#f59e0b' : '#14b8a6'}/>
-            </svg>
+            {renderLogo()}
           </div>
           <div style={headerInfo}>
             <p style={serviceName}>{status.serviceName}</p>
@@ -732,9 +748,11 @@ export default function QueueStatusPage({
           This page updates automatically via real-time connection. Please stay nearby when your number approaches.
         </p>
 
-        <p style={footerText}>
-          Powered by <strong>QueueFlow</strong>
-        </p>
+        {!status.organization?.hidePoweredBy && (
+          <p style={footerText}>
+            Powered by <strong>QueueFlow</strong>
+          </p>
+        )}
       </div>
     </div>
   );

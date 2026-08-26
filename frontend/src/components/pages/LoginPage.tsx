@@ -1,12 +1,15 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { QrCode, Zap, Bell } from 'lucide-react';
+import { QrCode, Zap, Bell, Check, X, Loader2, ArrowRight } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
-import { extractSubdomain, buildTenantUrl } from '@/lib/subdomain';
+import { extractSubdomain, buildTenantUrl, buildRootUrl } from '@/lib/subdomain';
+import { api } from '@/api/client';
 import { Button, Icon } from '@/components/ui';
+
+type SlugStatus = 'idle' | 'checking' | 'found' | 'not-found';
 
 const LoginPage: React.FC = () => {
   const [email, setEmail] = useState('');
@@ -17,8 +20,14 @@ const LoginPage: React.FC = () => {
   const [subdomain, setSubdomain] = useState<string | null>(null);
   const [hostChecked, setHostChecked] = useState(false);
   const [workspaceSlug, setWorkspaceSlug] = useState('');
+  const [slugStatus, setSlugStatus] = useState<SlugStatus>('idle');
+  const [orgName, setOrgName] = useState('');
+  const [redirecting, setRedirecting] = useState(false);
+  const [branding, setBranding] = useState<{ logoUrl?: string | null; primaryColor?: string | null } | null>(null);
   const { login } = useAuthContext();
   const router = useRouter();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const requestIdRef = useRef(0);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -27,11 +36,65 @@ const LoginPage: React.FC = () => {
     }
   }, []);
 
+  useEffect(() => {
+    if (!subdomain || subdomain === 'admin') return;
+    api.getOrgBySlug(subdomain)
+      .then((org) => {
+        if (org) setBranding({ logoUrl: org.logoUrl, primaryColor: org.primaryColor });
+      })
+      .catch(() => {
+        // No branding available - fall back to defaults.
+      });
+  }, [subdomain]);
+
+  // Live-validate the workspace slug as the user types, so a typo surfaces
+  // before the full-page redirect (and the resulting workspace-not-found bounce).
+  useEffect(() => {
+    const slug = workspaceSlug.trim().toLowerCase();
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!slug) {
+      setSlugStatus('idle');
+      setOrgName('');
+      return;
+    }
+
+    setSlugStatus('checking');
+    const requestId = ++requestIdRef.current;
+
+    debounceRef.current = setTimeout(async () => {
+      try {
+        const org = await api.getOrgBySlug(slug);
+        if (requestId !== requestIdRef.current) return;
+        if (org) {
+          setSlugStatus('found');
+          setOrgName(org.name);
+        } else {
+          setSlugStatus('not-found');
+          setOrgName('');
+        }
+      } catch {
+        if (requestId !== requestIdRef.current) return;
+        // Network hiccup — don't block the user, let submit attempt the redirect.
+        setSlugStatus('idle');
+        setOrgName('');
+      }
+    }, 400);
+
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, [workspaceSlug]);
+
   const handleFindWorkspace = (e: React.FormEvent) => {
     e.preventDefault();
-    if (workspaceSlug.trim()) {
-      window.location.href = buildTenantUrl(workspaceSlug.trim().toLowerCase(), '/login');
-    }
+    const slug = workspaceSlug.trim().toLowerCase();
+    if (!slug || slugStatus === 'not-found') return;
+
+    setRedirecting(true);
+    window.setTimeout(() => {
+      window.location.href = buildTenantUrl(slug, '/login');
+    }, 550);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -59,37 +122,44 @@ const LoginPage: React.FC = () => {
     }
   };
 
+  const isLookupStep = hostChecked && !subdomain;
+
   return (
     <div style={pageStyle}>
       {/* Background decoration */}
       <div style={bgPattern} />
       <div style={bgGradient} />
-      
+
       {/* Main Container */}
       <div style={containerStyle}>
         {/* Left Side - Branding */}
         <div style={brandingSection}>
           <div style={logoContainer}>
             <div style={logoIcon}>
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                <rect width="48" height="48" rx="12" fill="#14b8a6" />
-                <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-                <circle cx="24" cy="22" r="4" fill="#0d9488"/>
-              </svg>
+              {branding?.logoUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={branding.logoUrl} alt="Organization logo" style={{ height: '48px', maxWidth: '160px', objectFit: 'contain' }} />
+              ) : (
+                <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+                  <rect width="48" height="48" rx="12" fill={branding?.primaryColor || '#14b8a6'} />
+                  <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
+                  <circle cx="24" cy="22" r="4" fill="#0d9488"/>
+                </svg>
+              )}
             </div>
             <span style={logoText}>QueueFlow</span>
           </div>
-          
+
           <h1 style={heroTitle}>
             Smart Queue<br />
             Management
           </h1>
-          
+
           <p style={heroSubtitle}>
-            Streamline your waiting experience. Join queues remotely, 
+            Streamline your waiting experience. Join queues remotely,
             get real-time updates, and never wait in line again.
           </p>
-          
+
           <div style={featureList}>
             <div style={featureItem}>
               <Icon icon={QrCode} size={20} color="#2dd4bf" />
@@ -111,12 +181,12 @@ const LoginPage: React.FC = () => {
           <div style={formCard}>
             <div style={formHeader}>
               <h2 style={formTitle}>
-                {subdomain === 'admin' ? 'Superadmin sign in' : hostChecked && !subdomain ? 'Find your workspace' : 'Operator sign in'}
+                {subdomain === 'admin' ? 'Superadmin sign in' : isLookupStep ? 'Find your workspace' : 'Operator sign in'}
               </h2>
               <p style={formSubtitle}>
                 {subdomain === 'admin'
                   ? 'Sign in with your superadmin account to manage organizations and plans.'
-                  : hostChecked && !subdomain
+                  : isLookupStep
                     ? 'Sign-in is scoped to your organization\'s workspace. Enter your workspace URL to continue.'
                     : 'Sign in to your staff/admin account to manage queues and services.'}
               </p>
@@ -131,28 +201,63 @@ const LoginPage: React.FC = () => {
               </div>
             )}
 
-            {hostChecked && !subdomain ? (
-              <form onSubmit={handleFindWorkspace} style={formStyle}>
-                <div style={fieldGroup}>
-                  <label style={labelStyle}>Workspace URL</label>
-                  <div style={inputWrapper}>
-                    <input
-                      type="text"
-                      value={workspaceSlug}
-                      onChange={(e) => setWorkspaceSlug(e.target.value)}
-                      placeholder="your-org"
-                      style={inputStyle}
-                      required
-                    />
+            {isLookupStep ? (
+              redirecting ? (
+                <div style={redirectingBox}>
+                  <Loader2 className="qf-spin" size={22} color="#2dd4bf" />
+                  <div>
+                    <div style={redirectingTitle}>Taking you to {orgName || 'your workspace'}</div>
+                    <div style={redirectingSubtitle}>{buildTenantUrl(workspaceSlug.trim().toLowerCase(), '')}</div>
                   </div>
                 </div>
-                <Button type="submit" variant="primary" size="lg" style={{ width: '100%' }}>
-                  <span>Continue</span>
-                  <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clipRule="evenodd" />
-                  </svg>
-                </Button>
-              </form>
+              ) : (
+                <form onSubmit={handleFindWorkspace} style={formStyle}>
+                  <div style={fieldGroup}>
+                    <label style={labelStyle}>Workspace URL</label>
+                    <div style={inputWrapper}>
+                      <input
+                        type="text"
+                        value={workspaceSlug}
+                        onChange={(e) => setWorkspaceSlug(e.target.value)}
+                        placeholder="your-org"
+                        className="qf-input"
+                        style={{
+                          ...inputStyle,
+                          paddingLeft: '1rem',
+                          paddingRight: '2.75rem',
+                        }}
+                        autoFocus
+                        autoComplete="off"
+                        autoCapitalize="off"
+                        spellCheck={false}
+                        required
+                      />
+                      <span style={slugSuffix}>.queueflow.app</span>
+                      <span style={slugStatusIcon}>
+                        {slugStatus === 'checking' && <Loader2 className="qf-spin" size={18} color="#9ca3af" />}
+                        {slugStatus === 'found' && <Icon icon={Check} size={18} color="#059669" />}
+                        {slugStatus === 'not-found' && <Icon icon={X} size={18} color="#dc2626" />}
+                      </span>
+                    </div>
+                    {slugStatus === 'found' && (
+                      <p style={slugHintSuccess}>That&apos;s {orgName} &mdash; continue to sign in.</p>
+                    )}
+                    {slugStatus === 'not-found' && (
+                      <p style={slugHintError}>No workspace found at this address. Check the spelling and try again.</p>
+                    )}
+                  </div>
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    size="lg"
+                    disabled={!workspaceSlug.trim() || slugStatus === 'not-found' || slugStatus === 'checking'}
+                    style={{ width: '100%' }}
+                  >
+                    <span>Continue</span>
+                    <Icon icon={ArrowRight} size={18} />
+                  </Button>
+                </form>
+              )
             ) : (
             <form onSubmit={handleSubmit} style={formStyle}>
               <div style={fieldGroup}>
@@ -167,6 +272,7 @@ const LoginPage: React.FC = () => {
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     placeholder="you@example.com"
+                    className="qf-input"
                     style={inputStyle}
                     required
                   />
@@ -187,6 +293,7 @@ const LoginPage: React.FC = () => {
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="••••••••"
+                    className="qf-input"
                     style={inputStyle}
                     required
                   />
@@ -231,6 +338,12 @@ const LoginPage: React.FC = () => {
                   </>
                 )}
               </Button>
+
+              {subdomain && subdomain !== 'admin' && (
+                <a href={buildRootUrl('/login')} style={switchWorkspaceLink}>
+                  Not your workspace?
+                </a>
+              )}
             </form>
             )}
 
@@ -255,6 +368,8 @@ const LoginPage: React.FC = () => {
           </p>
         </div>
       </div>
+
+      <style>{loginStyles}</style>
     </div>
   );
 };
@@ -426,6 +541,13 @@ const forgotLink: React.CSSProperties = {
   fontWeight: 500,
 };
 
+const switchWorkspaceLink: React.CSSProperties = {
+  fontSize: '0.8125rem',
+  color: '#9ca3af',
+  textAlign: 'center',
+  marginTop: '-0.25rem',
+};
+
 const inputWrapper: React.CSSProperties = {
   position: 'relative',
   display: 'flex',
@@ -443,11 +565,58 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '0.875rem 1rem 0.875rem 2.75rem',
   fontSize: '1rem',
-  border: '1px solid #e5e7eb',
   borderRadius: '0.75rem',
   background: '#f9fafb',
-  transition: 'all 0.2s',
   outline: 'none',
+};
+
+const slugSuffix: React.CSSProperties = {
+  position: 'absolute',
+  right: '2.75rem',
+  fontSize: '0.875rem',
+  color: '#9ca3af',
+  pointerEvents: 'none',
+};
+
+const slugStatusIcon: React.CSSProperties = {
+  position: 'absolute',
+  right: '1rem',
+  display: 'flex',
+  alignItems: 'center',
+};
+
+const slugHintSuccess: React.CSSProperties = {
+  fontSize: '0.8125rem',
+  color: '#059669',
+  margin: 0,
+};
+
+const slugHintError: React.CSSProperties = {
+  fontSize: '0.8125rem',
+  color: '#dc2626',
+  margin: 0,
+};
+
+const redirectingBox: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  gap: '1rem',
+  padding: '1.25rem',
+  background: '#f9fafb',
+  borderRadius: '0.75rem',
+  border: '1px solid #e5e7eb',
+};
+
+const redirectingTitle: React.CSSProperties = {
+  fontSize: '0.95rem',
+  fontWeight: 600,
+  color: '#111827',
+};
+
+const redirectingSubtitle: React.CSSProperties = {
+  fontSize: '0.8125rem',
+  color: '#9ca3af',
+  marginTop: '0.125rem',
 };
 
 const togglePasswordBtn: React.CSSProperties = {
@@ -502,5 +671,27 @@ const termsLink: React.CSSProperties = {
   color: '#9ca3af',
   textDecoration: 'underline',
 };
+
+const loginStyles = `
+  .qf-input {
+    border: 1px solid #e5e7eb;
+    transition: border-color 150ms ease, box-shadow 150ms ease, background 150ms ease;
+  }
+  .qf-input:focus {
+    border-color: #14b8a6;
+    background: #ffffff;
+    box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+  }
+  .qf-spin {
+    animation: qf-spin-anim 0.8s linear infinite;
+  }
+  @keyframes qf-spin-anim {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .qf-spin { animation-duration: 1.6s; }
+  }
+`;
 
 export default LoginPage;

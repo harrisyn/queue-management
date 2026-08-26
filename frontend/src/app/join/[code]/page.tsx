@@ -16,10 +16,13 @@ interface LocationInfo {
   id: string;
   name: string;
   publicCode: string;
-  organization: { 
-    id: string; 
-    name: string; 
+  organization: {
+    id: string;
+    name: string;
     identityFieldsConfig?: Record<string, IdentityFieldConfig>;
+    logoUrl?: string | null;
+    primaryColor?: string | null;
+    hidePoweredBy?: boolean;
   };
   services: {
     id: string;
@@ -421,6 +424,21 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
   }, [isPrinting, joinResult, location, selectedServiceId]);
 
   const selectedService = location?.services.find(s => s.id === selectedServiceId);
+  const brandColor = location?.organization?.primaryColor || '#14b8a6';
+
+  // Org logo if the org has uploaded one, otherwise the default QueueFlow mark
+  const renderLogo = () => (
+    location?.organization?.logoUrl ? (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img src={location.organization.logoUrl} alt={location.organization.name} style={{ height: '48px', maxWidth: '160px', objectFit: 'contain' }} />
+    ) : (
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <rect width="48" height="48" rx="12" fill={brandColor} />
+        <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
+        <circle cx="24" cy="22" r="4" fill="#0d9488"/>
+      </svg>
+    )
+  );
 
   // Mode selector for switching between modes
   const renderModeSelector = () => (
@@ -482,11 +500,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
     <div style={infoContainer}>
       <div style={infoHeader}>
         <div style={logoBox}>
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="#14b8a6" />
-            <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-            <circle cx="24" cy="22" r="4" fill="#0d9488"/>
-          </svg>
+          {renderLogo()}
         </div>
         {renderModeSelector()}
       </div>
@@ -532,9 +546,11 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
         </button>
       </div>
 
-      <p style={footerText}>
-        Powered by <strong>QueueFlow</strong>
-      </p>
+      {!location?.organization?.hidePoweredBy && (
+        <p style={footerText}>
+          Powered by <strong>QueueFlow</strong>
+        </p>
+      )}
     </div>
   );
 
@@ -543,11 +559,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       {/* Header */}
       <div style={infoHeader}>
         <div style={logoBox}>
-          <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="#14b8a6" />
-            <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-            <circle cx="24" cy="22" r="4" fill="#0d9488"/>
-          </svg>
+          {renderLogo()}
         </div>
         {mode !== 'kiosk' && renderModeSelector()}
         {mode === 'kiosk' && (
@@ -617,9 +629,11 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
         )}
       </div>
 
-      <p style={footerText}>
-        Powered by <strong>QueueFlow</strong>
-      </p>
+      {!location?.organization?.hidePoweredBy && (
+        <p style={footerText}>
+          Powered by <strong>QueueFlow</strong>
+        </p>
+      )}
     </div>
   );
 
@@ -742,7 +756,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
         <button
           onClick={handleJoinQueue}
           disabled={joining}
-          style={mode === 'kiosk' ? kioskJoinButton : joinButton}
+          style={{ ...(mode === 'kiosk' ? kioskJoinButton : joinButton), background: brandColor }}
         >
           {joining ? (
             <>
@@ -760,9 +774,11 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
         </button>
       </div>
 
-      <p style={footerText}>
-        Powered by <strong>QueueFlow</strong>
-      </p>
+      {!location?.organization?.hidePoweredBy && (
+        <p style={footerText}>
+          Powered by <strong>QueueFlow</strong>
+        </p>
+      )}
     </div>
   );
 
@@ -917,9 +933,11 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
         )}
       </div>
 
-      <p style={footerText}>
-        Powered by <strong>QueueFlow</strong>
-      </p>
+      {!location?.organization?.hidePoweredBy && (
+        <p style={footerText}>
+          Powered by <strong>QueueFlow</strong>
+        </p>
+      )}
     </div>
   );
 
