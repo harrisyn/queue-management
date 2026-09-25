@@ -6,6 +6,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { buildAdminUrl } from '@/lib/subdomain';
+import { APP_NAME } from '@/lib/appConfig';
 
 interface ImpersonationInfo {
   returnToken: string;
@@ -80,7 +81,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
               <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
               <circle cx="24" cy="22" r="4" fill="#0d9488"/>
             </svg>
-            <span style={logoText}>QueueFlow</span>
+            <span style={logoText}>{APP_NAME}</span>
           </div>
         </Link>
 
@@ -138,7 +139,7 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
             <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
             <circle cx="24" cy="22" r="4" fill="#0d9488"/>
           </svg>
-          <span style={mobileLogoText}>QueueFlow</span>
+          <span style={mobileLogoText}>{APP_NAME}</span>
         </Link>
         {user && (
           <button 

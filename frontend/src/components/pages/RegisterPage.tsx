@@ -8,6 +8,7 @@ import api from '@/api/client';
 import { isReservedSlug } from '@/lib/reservedSlugs';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { Button, Icon } from '@/components/ui';
+import { APP_NAME } from '@/lib/appConfig';
 
 // ============================================================================
 // MULTI-STEP REGISTRATION COMPONENT
@@ -280,7 +281,7 @@ const RegisterPage: React.FC = () => {
           <div style={styles.infoPanelContent}>
             <Link href="/" style={styles.logoLink}>
               <Icon icon={Building2} size={28} color="#2dd4bf" />
-              <span style={styles.logoText}>QueueFlow</span>
+              <span style={styles.logoText}>{APP_NAME}</span>
             </Link>
 
             <h1 style={styles.infoTitle}>
@@ -289,7 +290,7 @@ const RegisterPage: React.FC = () => {
             </h1>
 
             <p style={styles.infoSubtitle}>
-              Join thousands of organizations using QueueFlow to reduce wait times and improve customer satisfaction.
+              Join thousands of organizations using {APP_NAME} to reduce wait times and improve customer satisfaction.
             </p>
 
             <div style={styles.featureList}>

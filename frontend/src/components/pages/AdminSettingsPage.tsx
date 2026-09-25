@@ -10,6 +10,7 @@ import Layout from '@/components/Layout';
 import { Icon, PageHeader, Button } from '@/components/ui';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
+import { APP_NAME } from '@/lib/appConfig';
 
 interface IdentityField {
   key: string;
@@ -696,7 +697,7 @@ export default function AdminSettingsPage() {
                         onChange={(e) => setFormData({ ...formData, hidePoweredBy: e.target.checked })}
                         style={{ width: 'auto' }}
                       />
-                      <span style={{ color: '#374151' }}>Hide &quot;Powered by QueueFlow&quot;</span>
+                      <span style={{ color: '#374151' }}>Hide &quot;Powered by {APP_NAME}&quot;</span>
                     </label>
                   </>
                 )}
@@ -709,7 +710,7 @@ export default function AdminSettingsPage() {
                 <div style={sectionHeader}>
                   <h2 style={sectionTitle}>Custom Domain</h2>
                   <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                    Point your own domain at your workspace so staff sign in at your address instead of a QueueFlow subdomain.
+                    Point your own domain at your workspace so staff sign in at your address instead of a {APP_NAME} subdomain.
                   </p>
                 </div>
 

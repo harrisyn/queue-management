@@ -8,6 +8,7 @@ import { useAuthContext } from '@/contexts/AuthContext';
 import { extractSubdomain, extractCustomDomainCandidate, buildTenantUrl, buildRootUrl } from '@/lib/subdomain';
 import { api } from '@/api/client';
 import { Button, Icon } from '@/components/ui';
+import { APP_NAME } from '@/lib/appConfig';
 
 type SlugStatus = 'idle' | 'checking' | 'found' | 'not-found';
 
@@ -170,7 +171,7 @@ const LoginPage: React.FC = () => {
                 </svg>
               )}
             </div>
-            <span style={logoText}>QueueFlow</span>
+            <span style={logoText}>{APP_NAME}</span>
           </div>
 
           <h1 style={heroTitle}>
@@ -255,7 +256,7 @@ const LoginPage: React.FC = () => {
                         spellCheck={false}
                         required
                       />
-                      <span style={slugSuffix}>.queueflow.app</span>
+                      <span style={slugSuffix}>.{buildRootUrl().replace(/^https?:\/\//, '')}</span>
                       <span style={slugStatusIcon}>
                         {slugStatus === 'checking' && <Loader2 className="qf-spin" size={18} color="#9ca3af" />}
                         {slugStatus === 'found' && <Icon icon={Check} size={18} color="#059669" />}

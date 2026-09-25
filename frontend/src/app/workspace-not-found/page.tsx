@@ -1,6 +1,7 @@
 'use client';
 
 import { buildRootUrl } from '@/lib/subdomain';
+import { APP_NAME } from '@/lib/appConfig';
 
 export default function WorkspaceNotFoundPage() {
   return (
@@ -39,7 +40,7 @@ export default function WorkspaceNotFoundPage() {
             fontWeight: 500,
           }}
         >
-          Go to enqueueq.com
+          Go to {APP_NAME}
         </a>
       </div>
     </div>

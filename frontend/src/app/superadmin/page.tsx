@@ -2,9 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2, CheckCircle2, Gift, DollarSign, MapPin, Users, Plus, Search } from 'lucide-react';
+import { Building2, CheckCircle2, Gift, DollarSign, MapPin, Users, Plus, Search, LayoutDashboard } from 'lucide-react';
 import api from '@/api/client';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader, Card, Badge, Button } from '@/components/ui';
+import type { BadgeTone } from '@/components/ui';
 
 interface DashboardStats {
   stats: {
@@ -59,8 +60,8 @@ export default function SuperadminDashboard() {
   if (loading) {
     return (
       <div style={loadingContainer}>
-        <div style={spinner} />
-        <p style={{ color: '#94a3b8' }}>Loading dashboard...</p>
+        <div className="spinner" />
+        <p style={{ color: 'var(--gray-500)' }}>Loading dashboard...</p>
       </div>
     );
   }
@@ -68,8 +69,8 @@ export default function SuperadminDashboard() {
   if (error) {
     return (
       <div style={errorContainer}>
-        <p style={{ color: '#f87171' }}>{error}</p>
-        <button onClick={loadDashboard} style={retryBtn}>Retry</button>
+        <p style={{ color: 'var(--error-600)' }}>{error}</p>
+        <Button variant="primary" onClick={loadDashboard}>Retry</Button>
       </div>
     );
   }
@@ -78,61 +79,58 @@ export default function SuperadminDashboard() {
 
   return (
     <div style={pageContainer}>
-      <header style={header}>
-        <h1 style={pageTitle}>SuperAdmin Dashboard</h1>
-        <p style={subtitle}>System-wide overview and management</p>
-      </header>
+      <PageHeader title="SuperAdmin Dashboard" subtitle="System-wide overview and management" icon={LayoutDashboard} />
 
       {/* Stats Grid */}
       <div style={statsGrid}>
-        <div style={statCard}>
-          <div style={statIcon}><Icon icon={Building2} size={28} color="#2dd4bf" /></div>
+        <Card style={statCard}>
+          <div style={statIconWrap}><Icon icon={Building2} size={24} color="var(--primary-600)" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.totalOrganizations}</span>
             <span style={statLabel}>Organizations</span>
           </div>
-        </div>
-        <div style={statCard}>
-          <div style={statIcon}><Icon icon={CheckCircle2} size={28} color="#2dd4bf" /></div>
+        </Card>
+        <Card style={statCard}>
+          <div style={statIconWrap}><Icon icon={CheckCircle2} size={24} color="var(--primary-600)" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.activeSubscriptions}</span>
             <span style={statLabel}>Active Subscriptions</span>
           </div>
-        </div>
-        <div style={statCard}>
-          <div style={statIcon}><Icon icon={Gift} size={28} color="#2dd4bf" /></div>
+        </Card>
+        <Card style={statCard}>
+          <div style={statIconWrap}><Icon icon={Gift} size={24} color="var(--primary-600)" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.trialSubscriptions}</span>
             <span style={statLabel}>On Trial</span>
           </div>
-        </div>
-        <div style={{ ...statCard, background: '#059669' }}>
-          <div style={statIcon}><Icon icon={DollarSign} size={28} color="#fff" /></div>
+        </Card>
+        <Card style={{ ...statCard, background: 'var(--success-600)' }}>
+          <div style={{ ...statIconWrap, background: 'rgba(255,255,255,0.2)' }}><Icon icon={DollarSign} size={24} color="#fff" /></div>
           <div style={statContent}>
-            <span style={statValue}>${stats.mrr}</span>
-            <span style={statLabel}>Monthly Revenue</span>
+            <span style={{ ...statValue, color: '#fff' }}>${stats.mrr}</span>
+            <span style={{ ...statLabel, color: 'rgba(255,255,255,0.85)' }}>Monthly Revenue</span>
           </div>
-        </div>
-        <div style={statCard}>
-          <div style={statIcon}><Icon icon={MapPin} size={28} color="#2dd4bf" /></div>
+        </Card>
+        <Card style={statCard}>
+          <div style={statIconWrap}><Icon icon={MapPin} size={24} color="var(--primary-600)" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.totalLocations}</span>
             <span style={statLabel}>Total Locations</span>
           </div>
-        </div>
-        <div style={statCard}>
-          <div style={statIcon}><Icon icon={Users} size={28} color="#2dd4bf" /></div>
+        </Card>
+        <Card style={statCard}>
+          <div style={statIconWrap}><Icon icon={Users} size={24} color="var(--primary-600)" /></div>
           <div style={statContent}>
             <span style={statValue}>{stats.totalUsers}</span>
             <span style={statLabel}>Total Users</span>
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Main Content */}
       <div style={contentGrid}>
         {/* Plan Breakdown */}
-        <div style={card}>
+        <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
             <h2 style={cardTitle}>Subscription Distribution</h2>
             <Link href="/superadmin/plans" style={cardLink}>Manage Plans →</Link>
@@ -157,10 +155,10 @@ export default function SuperadminDashboard() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
 
         {/* Recent Organizations */}
-        <div style={card}>
+        <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
             <h2 style={cardTitle}>Recent Organizations</h2>
             <Link href="/superadmin/organizations" style={cardLink}>View All →</Link>
@@ -173,9 +171,7 @@ export default function SuperadminDashboard() {
                   <span style={orgEmail}>{org.email || 'No email'}</span>
                 </div>
                 <div style={orgMeta}>
-                  <span style={getStatusBadge(org.subscription?.status)}>
-                    {org.subscription?.status || 'No Plan'}
-                  </span>
+                  <Badge tone={getStatusTone(org.subscription?.status)}>{org.subscription?.status || 'No Plan'}</Badge>
                   <span style={orgStats}>
                     {org._count.locations} loc · {org._count.users} users
                   </span>
@@ -188,11 +184,11 @@ export default function SuperadminDashboard() {
               </div>
             )}
           </div>
-        </div>
+        </Card>
       </div>
 
       {/* Quick Actions */}
-      <div style={actionsCard}>
+      <Card style={{ padding: '1.5rem' }}>
         <h3 style={actionsTitle}>Quick Actions</h3>
         <div style={actionsGrid}>
           <Link href="/superadmin/plans" style={actionBtn}>
@@ -204,32 +200,24 @@ export default function SuperadminDashboard() {
             <span>Search Orgs</span>
           </Link>
         </div>
-      </div>
+      </Card>
     </div>
   );
 }
 
-const getStatusBadge = (status?: string): React.CSSProperties => {
-  const base: React.CSSProperties = {
-    padding: '0.25rem 0.5rem',
-    borderRadius: '4px',
-    fontSize: '0.75rem',
-    fontWeight: 500,
-    textTransform: 'uppercase' as const,
-  };
-  
+const getStatusTone = (status?: string): BadgeTone => {
   switch (status) {
     case 'ACTIVE':
-      return { ...base, background: 'rgba(16, 185, 129, 0.2)', color: '#10b981' };
+      return 'success';
     case 'TRIAL':
-      return { ...base, background: 'rgba(20, 184, 166, 0.2)', color: '#5eead4' };
+      return 'primary';
     case 'PAST_DUE':
-      return { ...base, background: 'rgba(245, 158, 11, 0.2)', color: '#f59e0b' };
+      return 'warning';
     case 'CANCELLED':
     case 'EXPIRED':
-      return { ...base, background: 'rgba(239, 68, 68, 0.2)', color: '#f87171' };
+      return 'error';
     default:
-      return { ...base, background: 'rgba(100, 116, 139, 0.2)', color: '#94a3b8' };
+      return 'neutral';
   }
 };
 
@@ -243,15 +231,6 @@ const loadingContainer: React.CSSProperties = {
   gap: '1rem',
 };
 
-const spinner: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  border: '4px solid #1e293b',
-  borderTop: '4px solid #14b8a6',
-  borderRadius: '50%',
-  animation: 'spin 1s linear infinite',
-};
-
 const errorContainer: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
@@ -261,56 +240,34 @@ const errorContainer: React.CSSProperties = {
   gap: '1rem',
 };
 
-const retryBtn: React.CSSProperties = {
-  padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
-  color: '#fff',
-  border: 'none',
-  borderRadius: '8px',
-  cursor: 'pointer',
-  fontWeight: 500,
-};
-
 const pageContainer: React.CSSProperties = {
   maxWidth: '1400px',
   margin: '0 auto',
-};
-
-const header: React.CSSProperties = {
-  marginBottom: '2rem',
-};
-
-const pageTitle: React.CSSProperties = {
-  fontSize: '2rem',
-  fontWeight: 700,
-  color: '#fff',
-  marginBottom: '0.5rem',
-};
-
-const subtitle: React.CSSProperties = {
-  color: '#94a3b8',
-  fontSize: '1rem',
 };
 
 const statsGrid: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
   gap: '1rem',
-  marginBottom: '2rem',
+  marginBottom: '1.5rem',
 };
 
 const statCard: React.CSSProperties = {
-  background: '#1e293b',
-  borderRadius: '12px',
   padding: '1.5rem',
   display: 'flex',
   alignItems: 'center',
   gap: '1rem',
-  border: '1px solid rgba(20, 184, 166, 0.2)',
 };
 
-const statIcon: React.CSSProperties = {
-  fontSize: '2rem',
+const statIconWrap: React.CSSProperties = {
+  width: '48px',
+  height: '48px',
+  borderRadius: 'var(--radius-lg)',
+  background: 'var(--primary-50)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  flexShrink: 0,
 };
 
 const statContent: React.CSSProperties = {
@@ -321,31 +278,24 @@ const statContent: React.CSSProperties = {
 const statValue: React.CSSProperties = {
   fontSize: '1.75rem',
   fontWeight: 700,
-  color: '#fff',
+  color: 'var(--gray-900)',
 };
 
 const statLabel: React.CSSProperties = {
   fontSize: '0.875rem',
-  color: '#94a3b8',
+  color: 'var(--gray-500)',
 };
 
 const contentGrid: React.CSSProperties = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
   gap: '1.5rem',
-  marginBottom: '2rem',
-};
-
-const card: React.CSSProperties = {
-  background: '#1e293b',
-  borderRadius: '12px',
-  border: '1px solid rgba(20, 184, 166, 0.2)',
-  overflow: 'hidden',
+  marginBottom: '1.5rem',
 };
 
 const cardHeader: React.CSSProperties = {
   padding: '1.25rem 1.5rem',
-  borderBottom: '1px solid rgba(20, 184, 166, 0.1)',
+  borderBottom: '1px solid var(--gray-100)',
   display: 'flex',
   justifyContent: 'space-between',
   alignItems: 'center',
@@ -353,18 +303,19 @@ const cardHeader: React.CSSProperties = {
 
 const cardTitle: React.CSSProperties = {
   fontSize: '1.125rem',
-  fontWeight: 600,
-  color: '#fff',
+  fontWeight: 700,
+  color: 'var(--gray-900)',
 };
 
 const cardLink: React.CSSProperties = {
-  color: '#5eead4',
+  color: 'var(--primary-600)',
   textDecoration: 'none',
   fontSize: '0.875rem',
+  fontWeight: 500,
 };
 
 const planList: React.CSSProperties = {
-  padding: '0.5rem',
+  padding: '0.75rem',
 };
 
 const planItem: React.CSSProperties = {
@@ -372,8 +323,8 @@ const planItem: React.CSSProperties = {
   justifyContent: 'space-between',
   alignItems: 'center',
   padding: '1rem',
-  borderRadius: '8px',
-  background: 'rgba(15, 23, 42, 0.5)',
+  borderRadius: 'var(--radius-lg)',
+  background: 'var(--gray-50)',
   marginBottom: '0.5rem',
 };
 
@@ -384,14 +335,14 @@ const planInfo: React.CSSProperties = {
 };
 
 const planName: React.CSSProperties = {
-  color: '#fff',
-  fontWeight: 500,
+  color: 'var(--gray-900)',
+  fontWeight: 600,
 };
 
 const planCode: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
-  fontFamily: 'monospace',
+  fontFamily: 'var(--font-mono)',
 };
 
 const planCount: React.CSSProperties = {
@@ -403,16 +354,16 @@ const planCount: React.CSSProperties = {
 const countValue: React.CSSProperties = {
   fontSize: '1.5rem',
   fontWeight: 700,
-  color: '#5eead4',
+  color: 'var(--primary-600)',
 };
 
 const countLabel: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
 };
 
 const orgList: React.CSSProperties = {
-  padding: '0.5rem',
+  padding: '0.75rem',
 };
 
 const orgItem: React.CSSProperties = {
@@ -420,12 +371,12 @@ const orgItem: React.CSSProperties = {
   justifyContent: 'space-between',
   alignItems: 'center',
   padding: '1rem',
-  borderRadius: '8px',
-  background: 'rgba(15, 23, 42, 0.5)',
+  borderRadius: 'var(--radius-lg)',
+  background: 'var(--gray-50)',
   marginBottom: '0.5rem',
   textDecoration: 'none',
   cursor: 'pointer',
-  transition: 'background 0.2s',
+  transition: 'background var(--transition-fast)',
 };
 
 const orgInfo: React.CSSProperties = {
@@ -435,12 +386,12 @@ const orgInfo: React.CSSProperties = {
 };
 
 const orgName: React.CSSProperties = {
-  color: '#fff',
-  fontWeight: 500,
+  color: 'var(--gray-900)',
+  fontWeight: 600,
 };
 
 const orgEmail: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.875rem',
 };
 
@@ -448,38 +399,31 @@ const orgMeta: React.CSSProperties = {
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'flex-end',
-  gap: '0.25rem',
+  gap: '0.375rem',
 };
 
 const orgStats: React.CSSProperties = {
-  color: '#64748b',
+  color: 'var(--gray-400)',
   fontSize: '0.75rem',
 };
 
 const emptyState: React.CSSProperties = {
   padding: '2rem',
   textAlign: 'center' as const,
-  color: '#64748b',
+  color: 'var(--gray-400)',
 };
 
 const createLink: React.CSSProperties = {
-  color: '#5eead4',
+  color: 'var(--primary-600)',
   textDecoration: 'none',
   display: 'block',
   marginTop: '0.5rem',
 };
 
-const actionsCard: React.CSSProperties = {
-  background: '#1e293b',
-  borderRadius: '12px',
-  padding: '1.5rem',
-  border: '1px solid rgba(20, 184, 166, 0.2)',
-};
-
 const actionsTitle: React.CSSProperties = {
   fontSize: '1rem',
-  fontWeight: 600,
-  color: '#fff',
+  fontWeight: 700,
+  color: 'var(--gray-900)',
   marginBottom: '1rem',
 };
 
@@ -494,17 +438,13 @@ const actionBtn: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
-  background: 'rgba(20, 184, 166, 0.2)',
-  border: '1px solid rgba(20, 184, 166, 0.3)',
-  borderRadius: '8px',
-  color: '#5eead4',
+  background: 'var(--primary-50)',
+  border: '1px solid var(--primary-100)',
+  borderRadius: 'var(--radius-lg)',
+  color: 'var(--primary-700)',
   textDecoration: 'none',
   fontSize: '0.875rem',
-  fontWeight: 500,
+  fontWeight: 600,
   cursor: 'pointer',
-  transition: 'all 0.2s',
-};
-
-const actionIcon: React.CSSProperties = {
-  fontSize: '1rem',
+  transition: 'all var(--transition-fast)',
 };

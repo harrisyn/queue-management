@@ -27,13 +27,18 @@ services:
       MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-dev-only-master-encryption-key-change-in-production}
       REDIS_URL: redis://redis:6379
       FRONTEND_URL: http://localhost:8003
+      # Product name shown in emails and API banners — the single place to
+      # rebrand the app is APP_NAME in the repo-root .env.
+      APP_NAME: ${APP_NAME:-BetaPosition}
       # Enable polling for file changes in Docker
       CHOKIDAR_USEPOLLING: "true"
       # SMTP settings — by default point to the Mailpit service in this compose setup
       SMTP_HOST: ${SMTP_HOST:-mailpit}
       SMTP_PORT: ${SMTP_PORT:-1025}
       SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_FROM: ${SMTP_FROM:-"\"QMS\" <noreply@qms.local>"}
+      # Left unset by default so the backend's own APP_NAME-derived fallback
+      # applies (see backend/src/utils/email.ts) — set this to override it.
+      SMTP_FROM: ${SMTP_FROM:-}
     ports:
       - "8004:9000"
     depends_on:
@@ -46,17 +51,17 @@ services:
     networks:
       - qms-network
 
-  # mailpit:
-  #   image: axllent/mailpit:latest
-  #   container_name: qms-mailpit
-  #   # SMTP (1025) and web UI (8025) exported for local testing
-  #   ports:
-  #     - "1025:1025" # SMTP (in container and exposed to host)
-  #     - "8025:8025" # Web UI
-  #   volumes:
-  #     - mailpit_data:/data
-  #   networks:
-  #     - qms-network
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: qms-mailpit
+    # SMTP (1025) and web UI (8025) exported for local testing
+    ports:
+      - "2025:1025" # SMTP (in container and exposed to host)
+      - "9025:8025" # Web UI
+    volumes:
+      - mailpit_data:/data
+    networks:
+      - qms-network
 
   frontend:
     build:
@@ -67,6 +72,9 @@ services:
       NEXT_PUBLIC_API_URL: http://localhost:8004/api/v1
       NEXT_PUBLIC_SOCKET_URL: http://localhost:8004
       NEXT_PUBLIC_APP_DOMAIN: ${NEXT_PUBLIC_APP_DOMAIN:-localhost:8003}
+      # Product name shown across the UI — the single place to rebrand the
+      # app is APP_NAME in the repo-root .env.
+      NEXT_PUBLIC_APP_NAME: ${APP_NAME:-BetaPosition}
       API_INTERNAL_URL: ${API_INTERNAL_URL:-http://backend:9000/api/v1}
       NODE_ENV: development
       HOST: 0.0.0.0

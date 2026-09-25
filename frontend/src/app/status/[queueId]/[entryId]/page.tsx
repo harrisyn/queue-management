@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { useSocket } from '@/hooks/useSocket';
+import { APP_NAME } from '@/lib/appConfig';
 
 interface QueueStatus {
   ticketNumber: string;
@@ -769,7 +770,7 @@ export default function QueueStatusPage({
 
         {!status.organization?.hidePoweredBy && (
           <p style={footerText}>
-            Powered by <strong>QueueFlow</strong>
+            Powered by <strong>{APP_NAME}</strong>
           </p>
         )}
       </div>

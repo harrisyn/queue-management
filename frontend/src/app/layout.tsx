@@ -3,10 +3,11 @@ import { GeistSans } from 'geist/font/sans';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
+import { APP_NAME } from '@/lib/appConfig';
 
 export const metadata: Metadata = {
-  title: 'QueueFlow',
-  description: 'Professional queue management system for healthcare and services',
+  title: APP_NAME,
+  description: `Professional queue management system for healthcare and services, powered by ${APP_NAME}`,
 };
 
 export default function RootLayout({

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
+import { APP_NAME } from '@/lib/appConfig';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
 
@@ -430,7 +431,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
   const selectedService = location?.services.find(s => s.id === selectedServiceId);
   const brandColor = location?.organization?.primaryColor || '#14b8a6';
 
-  // Org logo if the org has uploaded one, otherwise the default QueueFlow mark
+  // Org logo if the org has uploaded one, otherwise the app's default mark
   const renderLogo = (size: number = 48) => (
     location?.organization?.logoUrl ? (
       // eslint-disable-next-line @next/next/no-img-element
@@ -554,7 +555,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
       {!location?.organization?.hidePoweredBy && (
         <p style={footerText}>
-          Powered by <strong>QueueFlow</strong>
+          Powered by <strong>{APP_NAME}</strong>
         </p>
       )}
     </div>
@@ -637,7 +638,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
       {!location?.organization?.hidePoweredBy && (
         <p style={footerText}>
-          Powered by <strong>QueueFlow</strong>
+          Powered by <strong>{APP_NAME}</strong>
         </p>
       )}
     </div>
@@ -782,7 +783,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
       {!location?.organization?.hidePoweredBy && (
         <p style={footerText}>
-          Powered by <strong>QueueFlow</strong>
+          Powered by <strong>{APP_NAME}</strong>
         </p>
       )}
     </div>
@@ -937,7 +938,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
       {!location?.organization?.hidePoweredBy && (
         <p style={footerText}>
-          Powered by <strong>QueueFlow</strong>
+          Powered by <strong>{APP_NAME}</strong>
         </p>
       )}
     </div>

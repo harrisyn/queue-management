@@ -7,6 +7,7 @@ import routes from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { setSocketIO } from './lib/socket';
 import { handleStripeWebhook, handlePaystackWebhook } from './controllers/paymentWebhook.controller';
+import { APP_NAME } from './config/appConfig';
 
 // dotenv is loaded above via import 'dotenv/config'
 // This ensures environment variables (DATABASE_URL) are available
@@ -112,7 +113,7 @@ const PORT = process.env.PORT || 3000;
 
 httpServer.listen(PORT, () => {
   console.log(`
-  🚀 Queue Management System API
+  🚀 ${APP_NAME} API
   ==============================
   Server running on port ${PORT}
   Health check: http://localhost:${PORT}/health

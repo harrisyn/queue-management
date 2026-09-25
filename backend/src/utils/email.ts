@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { APP_NAME } from '../config/appConfig';
 
 // In development, we use Ethereal (fake SMTP) or console logging
 // In production, configure real SMTP settings via environment variables
@@ -80,7 +81,7 @@ export const sendEmail = async (options: EmailOptions): Promise<{ success: boole
 
   try {
     const info = await transporter.sendMail({
-      from: process.env.SMTP_FROM || '"QMS" <noreply@qms.local>',
+      from: process.env.SMTP_FROM || `"${APP_NAME}" <noreply@${APP_NAME.toLowerCase().replace(/\s+/g, '')}.local>`,
       to,
       subject,
       html,
@@ -162,7 +163,7 @@ export const sendOTPEmail = async (email: string): Promise<{ success: boolean; e
               <!-- Header -->
               <tr>
                 <td style="background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%); padding: 32px; text-align: center;">
-                  <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">🏥 Queue Management</h1>
+                  <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 700;">🏥 ${APP_NAME}</h1>
                 </td>
               </tr>
               
@@ -190,7 +191,7 @@ export const sendOTPEmail = async (email: string): Promise<{ success: boolean; e
               <tr>
                 <td style="background-color: #f9fafb; padding: 24px 32px; text-align: center; border-top: 1px solid #e5e7eb;">
                   <p style="margin: 0; color: #9ca3af; font-size: 12px;">
-                    © ${new Date().getFullYear()} Queue Management System. All rights reserved.
+                    © ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.
                   </p>
                 </td>
               </tr>
@@ -204,9 +205,9 @@ export const sendOTPEmail = async (email: string): Promise<{ success: boolean; e
 
   const result = await sendEmail({
     to: email,
-    subject: `${code} - Your QMS Verification Code`,
+    subject: `${code} - Your ${APP_NAME} Verification Code`,
     html,
-    text: `Your QMS verification code is: ${code}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this code, you can safely ignore this email.`,
+    text: `Your ${APP_NAME} verification code is: ${code}\n\nThis code will expire in 10 minutes.\n\nIf you didn't request this code, you can safely ignore this email.`,
   });
 
   return result;

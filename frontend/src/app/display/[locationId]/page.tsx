@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import api from '@/api/client';
 import { useSocket } from '@/hooks/useSocket';
 import type { Location } from '@/types';
+import { APP_NAME } from '@/lib/appConfig';
 
 interface BrandedLocation extends Location {
   organization?: {
@@ -683,7 +684,7 @@ const TVDisplayPage: React.FC = () => {
           className="powered-by-badge"
           style={viewMode === 'service-points' && activePoints.length > 0 ? { bottom: '6rem' } : undefined}
         >
-          Powered by <strong>QueueFlow</strong>
+          Powered by <strong>{APP_NAME}</strong>
         </div>
       )}
 

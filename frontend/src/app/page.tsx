@@ -1,38 +1,105 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import {
   Building2,
   Zap,
   QrCode,
   Monitor,
-  MapPin,
   BarChart3,
-  Shield,
   ArrowRight,
-  Bell,
-  Ticket,
-  Users,
-  TrendingUp,
   Stethoscope,
-  Syringe,
+  Landmark,
+  ShoppingBag,
+  GraduationCap,
 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import DashboardPage from '@/components/pages/DashboardPage';
 import { Button, Icon } from '@/components/ui';
+import { APP_NAME } from '@/lib/appConfig';
 
 // ============================================================================
-// SAAS LANDING PAGE
+// REVEAL-ON-SCROLL HOOK
+// ============================================================================
+
+function useReveal<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (prefersReducedMotion) {
+      setVisible(true);
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          observer.disconnect();
+        }
+      },
+      { threshold: 0.15, rootMargin: '0px 0px -5% 0px' }
+    );
+    observer.observe(node);
+
+    // Safety net: a section that never crosses the intersection threshold
+    // (e.g. a renderer that paints the full page at once, no incremental
+    // scroll) must not stay invisible forever — content correctness beats
+    // the reveal flourish.
+    const fallback = window.setTimeout(() => setVisible(true), 1200);
+
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(fallback);
+    };
+  }, []);
+
+  return { ref, visible };
+}
+
+// ============================================================================
+// SPLIT-FLAP TICKET DISPLAY (the hero's signature element)
+// ============================================================================
+
+function SplitFlap({ value, delay = 0 }: { value: string; delay?: number }) {
+  const chars = value.split('');
+  return (
+    <div style={flapStyles.row}>
+      {chars.map((char, i) => (
+        <span
+          key={i}
+          style={{
+            ...flapStyles.char,
+            ...(char === '-' || char === ' ' ? flapStyles.charDivider : {}),
+            animationDelay: `${delay + i * 90}ms`,
+          }}
+          className="qfl-flap-char"
+        >
+          {char}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// LANDING PAGE
 // ============================================================================
 
 function LandingPage() {
   const [isScrolled, setIsScrolled] = useState(false);
+  const featuresReveal = useReveal<HTMLDivElement>();
+  const stepsReveal = useReveal<HTMLDivElement>();
+  const ctaReveal = useReveal<HTMLDivElement>();
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
+    const handleScroll = () => setIsScrolled(window.scrollY > 24);
     window.addEventListener('scroll', handleScroll);
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
@@ -40,197 +107,156 @@ function LandingPage() {
   const features = [
     {
       icon: Zap,
-      title: 'Real-time Updates',
-      description: 'Live position and wait-time updates powered by WebSockets — no page refresh needed.',
+      title: 'Live position, not a guess',
+      description: 'Every customer sees exactly where they stand in line, updating in real time — no refreshing, no wondering.',
     },
     {
       icon: QrCode,
-      title: 'QR Code Check-in',
-      description: 'Scan and join a queue in seconds, right from a browser. No app to install.',
+      title: 'Join with a scan',
+      description: 'One QR code at the door. Customers join from their own phone in seconds — nothing to download.',
     },
     {
       icon: Monitor,
-      title: 'Live Display Boards',
-      description: 'Purpose-built TV displays show queue status and who’s being served, in real time.',
-    },
-    {
-      icon: MapPin,
-      title: 'Multi-location',
-      description: 'Manage every branch and location from a single dashboard.',
+      title: 'A screen that calls the room',
+      description: 'Put a display at the counter. It announces who’s being served, automatically, so no one has to shout a number.',
     },
     {
       icon: BarChart3,
-      title: 'Analytics Dashboard',
-      description: 'Track wait times, peak hours, and throughput to plan staffing.',
-    },
-    {
-      icon: Shield,
-      title: 'Workspace Isolation',
-      description: 'Every organization gets its own subdomain and role-scoped access — your data stays yours.',
+      title: 'Numbers your team can act on',
+      description: 'Wait times, peak hours, throughput by location — enough signal to staff the next shift correctly.',
     },
   ];
 
   const steps = [
-    { num: '01', title: 'Create a location', desc: 'Set up your first location in minutes.' },
-    { num: '02', title: 'Configure services', desc: 'Define the services and service points customers can queue for.' },
-    { num: '03', title: 'Share a join link or QR code', desc: 'Customers join from any browser — no app required.' },
-    { num: '04', title: 'Manage the queue live', desc: 'Call the next customer, track wait times, keep everyone informed.' },
+    { num: '01', title: 'Set up a location', desc: 'Add your first branch and you’re ready to configure it.' },
+    { num: '02', title: 'Define your services', desc: `Tell ${APP_NAME} what people are waiting for, and where.` },
+    { num: '03', title: 'Share the join link', desc: 'A QR code or URL — customers join from any browser.' },
+    { num: '04', title: 'Run the queue live', desc: 'Call the next customer, watch wait times drop.' },
+  ];
+
+  const industries = [
+    { icon: Stethoscope, label: 'Clinics & hospitals' },
+    { icon: Landmark, label: 'Government offices' },
+    { icon: ShoppingBag, label: 'Retail & banking' },
+    { icon: GraduationCap, label: 'Schools & campuses' },
   ];
 
   return (
     <div style={styles.page}>
-      {/* Background Elements */}
-      <div style={styles.bgGradient} />
-      <div style={styles.bgGrid} />
-      <div style={styles.glowOrb1} />
-      <div style={styles.glowOrb2} />
-
       {/* Navigation */}
-      <nav style={{
-        ...styles.nav,
-        ...(isScrolled ? styles.navScrolled : {}),
-      }}>
+      <nav style={{ ...styles.nav, ...(isScrolled ? styles.navScrolled : {}) }} className="qfl-nav">
         <div style={styles.navContent}>
           <Link href="/" style={styles.logo}>
-            <Icon icon={Building2} size={26} color="#2dd4bf" />
-            <span style={styles.logoText}>QueueFlow</span>
+            <div style={styles.logoMark}>
+              <Icon icon={Building2} size={18} color="#ffffff" />
+            </div>
+            <span style={styles.logoText}>{APP_NAME}</span>
           </Link>
 
-          <div style={styles.navLinks}>
+          <div className="qfl-nav-links">
             <a href="#features" style={styles.navLink}>Features</a>
-            <a href="#how-it-works" style={styles.navLink}>How it Works</a>
+            <a href="#how-it-works" style={styles.navLink}>How it works</a>
           </div>
 
-          <div style={styles.navActions}>
-            <Link href="/login" style={styles.loginBtn}>
-              Sign In
-            </Link>
+          <div style={styles.navActions} className="qfl-nav-actions">
+            <Link href="/login" style={styles.loginBtn}>Sign in</Link>
             <Link href="/register" style={{ textDecoration: 'none' }}>
-              <Button variant="primary" size="md">Get Started Free</Button>
+              <Button variant="primary" size="md">Get started free</Button>
             </Link>
           </div>
         </div>
       </nav>
 
-      {/* Hero Section */}
-      <section style={styles.hero}>
+      {/* Hero */}
+      <section style={styles.hero} className="qfl-hero">
         <div style={styles.heroContent}>
-          <div style={styles.heroBadge}>
-            <span style={styles.badgeDot} />
-            <span>A subdomain workspace for every organization</span>
-          </div>
+          <span style={styles.eyebrow}>QUEUE MANAGEMENT, MADE VISIBLE</span>
 
           <h1 style={styles.heroTitle}>
-            Transform Your
+            Turn any line
             <br />
-            <span style={styles.accentText}>Queue Experience</span>
+            into a number
+            <br />
+            <span style={styles.heroTitleMuted}>people can watch.</span>
           </h1>
 
           <p style={styles.heroSubtitle}>
-            The modern queue management system that reduces wait times,
-            improves customer satisfaction, and gives you real-time insights
-            into your operations.
+            {APP_NAME} replaces the waiting room with a live queue your customers
+            can follow from their phone — real position, real wait time, one QR
+            code to join.
           </p>
 
           <div style={styles.heroCtas}>
             <Link href="/register" style={{ textDecoration: 'none' }}>
               <Button variant="primary" size="lg">
-                <span>Start Free</span>
+                <span>Start free</span>
                 <Icon icon={ArrowRight} size={18} />
               </Button>
             </Link>
+            <a href="#how-it-works" style={styles.heroSecondaryLink}>See how it works</a>
           </div>
         </div>
 
-        {/* Hero Visual */}
         <div style={styles.heroVisual}>
-          <div style={styles.mockupContainer}>
-            {/* Dashboard Mockup */}
-            <div style={styles.dashboardMockup}>
-              <div style={styles.mockupHeader}>
-                <div style={styles.mockupDots}>
-                  <span style={{ ...styles.mockupDot, background: '#ef4444' }} />
-                  <span style={{ ...styles.mockupDot, background: '#f59e0b' }} />
-                  <span style={{ ...styles.mockupDot, background: '#10b981' }} />
-                </div>
-                <span style={styles.mockupTitle}>QueueFlow Dashboard</span>
-              </div>
-              <div style={styles.mockupContent}>
-                <div style={styles.mockupSidebar}>
-                  <div style={styles.sidebarItem}><Icon icon={BarChart3} size={14} /> Overview</div>
-                  <div style={{ ...styles.sidebarItem, ...styles.sidebarItemActive }}><Icon icon={Users} size={14} /> Queues</div>
-                  <div style={styles.sidebarItem}><Icon icon={MapPin} size={14} /> Locations</div>
-                  <div style={styles.sidebarItem}><Icon icon={TrendingUp} size={14} /> Analytics</div>
-                </div>
-                <div style={styles.mockupMain}>
-                  <div style={styles.queueCard}>
-                    <div style={styles.queueHeader}>
-                      <span style={styles.queueHeaderLabel}><Icon icon={Stethoscope} size={14} /> General Consultation</span>
-                      <span style={styles.queueBadge}>12 waiting</span>
-                    </div>
-                    <div style={styles.queueProgress}>
-                      <div style={{ ...styles.queueProgressBar, width: '65%' }} />
-                    </div>
-                    <div style={styles.queueStats}>
-                      <span>Avg wait: 8 min</span>
-                      <span>Next: A-024</span>
-                    </div>
-                  </div>
-                  <div style={styles.queueCard}>
-                    <div style={styles.queueHeader}>
-                      <span style={styles.queueHeaderLabel}><Icon icon={Syringe} size={14} /> Vaccination</span>
-                      <span style={styles.queueBadge}>5 waiting</span>
-                    </div>
-                    <div style={styles.queueProgress}>
-                      <div style={{ ...styles.queueProgressBar, width: '30%' }} />
-                    </div>
-                    <div style={styles.queueStats}>
-                      <span>Avg wait: 3 min</span>
-                      <span>Next: V-089</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
+          <div style={styles.board}>
+            <div style={styles.boardLabel}>
+              <span style={styles.boardLabelDot} />
+              NOW SERVING
             </div>
-
-            {/* Floating ticket */}
-            <div style={styles.floatingTicket}>
-              <div style={styles.ticketHeader}><Icon icon={Ticket} size={13} color="rgba(255,255,255,0.8)" /> Your Ticket</div>
-              <div style={styles.ticketNumber}>A-024</div>
-              <div style={styles.ticketInfo}>Position: #3 &bull; ~8 min</div>
-            </div>
-
-            {/* Floating notification */}
-            <div style={styles.floatingNotification}>
-              <Icon icon={Bell} size={22} color="#2dd4bf" />
-              <div>
-                <strong>You&apos;re next!</strong>
-                <p style={styles.notifText}>Please proceed to Counter 2</p>
-              </div>
+            <SplitFlap value="A-024" delay={150} />
+            <div style={styles.boardStats}>
+              <span>12 waiting</span>
+              <span style={styles.boardStatsDivider}>&bull;</span>
+              <span>avg. wait 8 min</span>
             </div>
           </div>
+          <p style={styles.heroVisualCaption}>Live on every screen the moment it changes.</p>
         </div>
       </section>
 
-      {/* Features Section */}
+      {/* Industries strip */}
+      <section style={styles.industries}>
+        <p style={styles.industriesLabel}>Built for anywhere people wait</p>
+        <div style={styles.industriesRow}>
+          {industries.map((ind) => (
+            <div key={ind.label} style={styles.industryItem}>
+              <Icon icon={ind.icon} size={18} color="#5B6472" />
+              <span>{ind.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Features */}
       <section id="features" style={styles.featuresSection}>
-        <div style={styles.sectionHeader}>
+        <div
+          ref={featuresReveal.ref}
+          style={{
+            ...styles.sectionHeader,
+            opacity: featuresReveal.visible ? 1 : 0,
+            transform: featuresReveal.visible ? 'translateY(0)' : 'translateY(16px)',
+          }}
+          className="qfl-transition"
+        >
           <span style={styles.sectionBadge}>Features</span>
-          <h2 style={styles.sectionTitle}>
-            Everything you need to
-            <br />
-            <span style={styles.accentText}>manage queues effectively</span>
-          </h2>
+          <h2 style={styles.sectionTitle}>Everything a queue actually needs</h2>
           <p style={styles.sectionSubtitle}>
-            From simple check-ins to multi-location operations, QueueFlow has you covered.
+            No bloat, no busywork — just the parts that make a line shorter and calmer.
           </p>
         </div>
 
-        <div style={styles.featuresGrid}>
-          {features.map((feature, i) => (
-            <div key={i} style={styles.featureCard}>
+        <div
+          style={{
+            ...styles.featuresGrid,
+            opacity: featuresReveal.visible ? 1 : 0,
+            transform: featuresReveal.visible ? 'translateY(0)' : 'translateY(16px)',
+          }}
+          className="qfl-transition qfl-features-grid"
+        >
+          {features.map((feature) => (
+            <div key={feature.title} style={styles.featureCard} className="qfl-feature-card">
               <div style={styles.featureIcon}>
-                <Icon icon={feature.icon} size={24} color="#2dd4bf" />
+                <Icon icon={feature.icon} size={22} color="#0d9488" />
               </div>
               <h3 style={styles.featureTitle}>{feature.title}</h3>
               <p style={styles.featureDesc}>{feature.description}</p>
@@ -239,21 +265,28 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* How it Works Section */}
+      {/* How it Works */}
       <section id="how-it-works" style={styles.howSection}>
         <div style={styles.sectionHeader}>
-          <span style={styles.sectionBadge}>How it Works</span>
-          <h2 style={styles.sectionTitle}>
-            Get started in
-            <br />
-            <span style={styles.accentText}>four simple steps</span>
-          </h2>
+          <span style={styles.sectionBadge}>How it works</span>
+          <h2 style={styles.sectionTitle}>Four steps, then you&apos;re live</h2>
         </div>
 
-        <div style={styles.stepsGrid}>
-          {steps.map((step) => (
-            <div key={step.num} style={styles.stepCard}>
-              <div style={styles.stepNumber}>{step.num}</div>
+        <div
+          ref={stepsReveal.ref}
+          style={{
+            ...styles.stepsRow,
+            opacity: stepsReveal.visible ? 1 : 0,
+            transform: stepsReveal.visible ? 'translateY(0)' : 'translateY(16px)',
+          }}
+          className="qfl-transition qfl-steps-row"
+        >
+          {steps.map((step, i) => (
+            <div key={step.num} style={styles.stepItem} className="qfl-step-item">
+              <div style={styles.stepNumberRow}>
+                <span style={styles.stepNumber}>{step.num}</span>
+                {i < steps.length - 1 && <span style={styles.stepLine} className="qfl-step-line" />}
+              </div>
               <h3 style={styles.stepTitle}>{step.title}</h3>
               <p style={styles.stepDesc}>{step.desc}</p>
             </div>
@@ -261,21 +294,30 @@ function LandingPage() {
         </div>
       </section>
 
-      {/* CTA Section */}
+      {/* CTA */}
       <section style={styles.ctaSection}>
-        <div style={styles.ctaCard}>
-          <h2 style={styles.ctaTitle}>
-            Ready to get started?
-          </h2>
+        <div
+          ref={ctaReveal.ref}
+          style={{
+            ...styles.ctaCard,
+            opacity: ctaReveal.visible ? 1 : 0,
+            transform: ctaReveal.visible ? 'translateY(0)' : 'translateY(16px)',
+          }}
+          className="qfl-transition"
+        >
+          <div style={styles.ctaFlap}>
+            <SplitFlap value="00" />
+          </div>
+          <h2 style={styles.ctaTitle}>Ready when you are.</h2>
           <p style={styles.ctaSubtitle}>
             Create your workspace in minutes &mdash; no credit card required.
           </p>
           <div style={styles.ctaButtons}>
             <Link href="/register" style={{ textDecoration: 'none' }}>
-              <Button variant="primary" size="lg">Get Started Free</Button>
+              <Button variant="primary" size="lg">Get started free</Button>
             </Link>
             <Link href="/login" style={{ textDecoration: 'none' }}>
-              <Button variant="secondary" size="lg">Sign In</Button>
+              <button style={styles.ctaGhostBtn}>Sign in</button>
             </Link>
           </div>
         </div>
@@ -286,111 +328,99 @@ function LandingPage() {
         <div style={styles.footerContent}>
           <div style={styles.footerBrand}>
             <Link href="/" style={styles.footerLogo}>
-              <Icon icon={Building2} size={22} color="#2dd4bf" />
-              <span style={styles.logoText}>QueueFlow</span>
+              <div style={styles.logoMarkSmall}>
+                <Icon icon={Building2} size={15} color="#ffffff" />
+              </div>
+              <span style={styles.footerLogoText}>{APP_NAME}</span>
             </Link>
-            <p style={styles.footerDesc}>
-              Modern queue management for modern businesses.
-            </p>
+            <p style={styles.footerDesc}>Queue management for places where people wait.</p>
           </div>
 
           <div style={styles.footerLinks}>
             <a href="#features" style={styles.footerLink}>Features</a>
-            <a href="#how-it-works" style={styles.footerLink}>How it Works</a>
+            <a href="#how-it-works" style={styles.footerLink}>How it works</a>
             <Link href="/join" style={styles.footerLink}>Public join pages</Link>
             <Link href="/login" style={styles.footerLink}>Sign in</Link>
           </div>
         </div>
 
         <div style={styles.footerBottom}>
-          <p>&copy; 2026 QueueFlow. All rights reserved.</p>
+          <p>&copy; 2026 {APP_NAME}. All rights reserved.</p>
         </div>
       </footer>
 
-      <style>{animations}</style>
+      <style>{landingStyles}</style>
     </div>
   );
 }
 
 // ============================================================================
-// ANIMATIONS
+// STYLES — tokens
 // ============================================================================
 
-const animations = `
-  @keyframes float {
-    0%, 100% { transform: translateY(0px); }
-    50% { transform: translateY(-20px); }
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 0.6; transform: scale(1); }
-    50% { opacity: 1; transform: scale(1.05); }
-  }
-`;
+const palette = {
+  bg: '#FAFAF8',
+  surface: '#FFFFFF',
+  ink: '#0B0F14',
+  inkMuted: '#5B6472',
+  inkFaint: '#8A93A0',
+  border: '#E7E5E1',
+  teal: '#0d9488',
+  tealSoft: '#EAF6F4',
+  board: '#10131A',
+  boardChar: '#161B24',
+  amber: '#f59e0b',
+};
 
-// ============================================================================
-// STYLES
-// ============================================================================
+const flapStyles: Record<string, React.CSSProperties> = {
+  row: {
+    display: 'flex',
+    gap: '0.4rem',
+  },
+  char: {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '2.75rem',
+    height: '3.75rem',
+    background: palette.boardChar,
+    borderRadius: '8px',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '2.25rem',
+    fontWeight: 700,
+    color: '#F5F7F5',
+    position: 'relative',
+    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 1px 0 rgba(0,0,0,0.4)',
+  },
+  charDivider: {
+    background: 'transparent',
+    boxShadow: 'none',
+    width: '1.25rem',
+    color: palette.inkFaint,
+  },
+};
 
 const styles: Record<string, React.CSSProperties> = {
   page: {
     minHeight: '100vh',
-    background: '#0a0a0f',
-    color: 'white',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  bgGradient: {
-    position: 'fixed',
-    inset: 0,
-    background: 'radial-gradient(ellipse at 50% 0%, rgba(20, 184, 166, 0.15) 0%, transparent 60%), radial-gradient(ellipse at 100% 50%, rgba(13, 148, 136, 0.1) 0%, transparent 50%)',
-    zIndex: 0,
-  },
-  bgGrid: {
-    position: 'fixed',
-    inset: 0,
-    backgroundImage: `linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px)`,
-    backgroundSize: '64px 64px',
-    zIndex: 0,
-  },
-  glowOrb1: {
-    position: 'fixed',
-    top: '-10%',
-    right: '20%',
-    width: '600px',
-    height: '600px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(20, 184, 166, 0.3) 0%, transparent 70%)',
-    filter: 'blur(80px)',
-    animation: 'pulse 8s ease-in-out infinite',
-    zIndex: 0,
-  },
-  glowOrb2: {
-    position: 'fixed',
-    bottom: '10%',
-    left: '-10%',
-    width: '500px',
-    height: '500px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(13, 148, 136, 0.25) 0%, transparent 70%)',
-    filter: 'blur(80px)',
-    animation: 'pulse 10s ease-in-out infinite reverse',
-    zIndex: 0,
+    background: palette.bg,
+    color: palette.ink,
   },
 
-  // Navigation
+  // Nav
   nav: {
     position: 'fixed',
     top: 0,
     left: 0,
     right: 0,
     zIndex: 100,
-    padding: '1.25rem 2rem',
-    transition: 'all 0.3s ease',
+    padding: '1.5rem 2rem',
+    transition: 'all 250ms ease',
   },
   navScrolled: {
-    background: 'rgba(10, 10, 15, 0.9)',
-    backdropFilter: 'blur(20px)',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
+    background: 'rgba(250, 250, 248, 0.85)',
+    backdropFilter: 'blur(16px)',
+    borderBottom: `1px solid ${palette.border}`,
     padding: '1rem 2rem',
   },
   navContent: {
@@ -403,392 +433,326 @@ const styles: Record<string, React.CSSProperties> = {
   logo: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.5rem',
+    gap: '0.6rem',
     textDecoration: 'none',
+  },
+  logoMark: {
+    width: '30px',
+    height: '30px',
+    borderRadius: '8px',
+    background: palette.teal,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoText: {
-    fontSize: '1.35rem',
+    fontSize: '1.15rem',
     fontWeight: 700,
-    color: 'white',
-  },
-  navLinks: {
-    display: 'flex',
-    gap: '2rem',
+    letterSpacing: '-0.01em',
+    color: palette.ink,
   },
   navLink: {
-    color: 'rgba(255,255,255,0.7)',
+    color: palette.inkMuted,
     textDecoration: 'none',
-    fontSize: '0.95rem',
-    transition: 'color 0.2s',
+    fontSize: '0.925rem',
+    fontWeight: 500,
   },
   navActions: {
     display: 'flex',
     alignItems: 'center',
-    gap: '1rem',
+    gap: '1.25rem',
   },
   loginBtn: {
-    color: 'rgba(255,255,255,0.8)',
+    color: palette.ink,
     textDecoration: 'none',
-    fontSize: '0.95rem',
-    fontWeight: 500,
-    padding: '0.5rem 1rem',
+    fontSize: '0.925rem',
+    fontWeight: 600,
   },
 
   // Hero
   hero: {
-    position: 'relative',
-    zIndex: 1,
-    minHeight: '100vh',
     display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '4rem',
+    gridTemplateColumns: '1.1fr 0.9fr',
+    gap: '3rem',
     alignItems: 'center',
-    padding: '8rem 4rem 4rem',
-    maxWidth: '1400px',
+    maxWidth: '1280px',
     margin: '0 auto',
+    padding: '9.5rem 2rem 7rem',
   },
   heroContent: {
-    maxWidth: '600px',
+    maxWidth: '620px',
   },
-  heroBadge: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.5rem 1rem',
-    background: 'rgba(20, 184, 166, 0.1)',
-    border: '1px solid rgba(20, 184, 166, 0.2)',
-    borderRadius: '50px',
-    fontSize: '0.85rem',
-    color: '#5eead4',
+  eyebrow: {
+    display: 'inline-block',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    letterSpacing: '0.08em',
+    color: palette.teal,
     marginBottom: '1.5rem',
-  },
-  badgeDot: {
-    width: '8px',
-    height: '8px',
-    borderRadius: '50%',
-    background: '#10b981',
-    animation: 'pulse 2s infinite',
   },
   heroTitle: {
-    fontSize: '3.75rem',
-    fontWeight: 800,
-    lineHeight: 1.1,
-    marginBottom: '1.5rem',
-    color: 'white',
+    fontSize: 'clamp(2.75rem, 5.2vw, 4.5rem)',
+    fontWeight: 700,
+    lineHeight: 1.05,
+    letterSpacing: '-0.02em',
+    color: palette.ink,
+    marginBottom: '1.75rem',
   },
-  accentText: {
-    color: '#2dd4bf',
+  heroTitleMuted: {
+    color: palette.inkFaint,
   },
   heroSubtitle: {
     fontSize: '1.2rem',
-    lineHeight: 1.7,
-    color: 'rgba(255,255,255,0.6)',
+    lineHeight: 1.65,
+    color: palette.inkMuted,
     marginBottom: '2.5rem',
+    maxWidth: '520px',
   },
   heroCtas: {
     display: 'flex',
-    gap: '1rem',
-    marginBottom: '3rem',
+    alignItems: 'center',
+    gap: '1.75rem',
+  },
+  heroSecondaryLink: {
+    fontSize: '0.95rem',
+    fontWeight: 600,
+    color: palette.ink,
+    textDecoration: 'underline',
+    textUnderlineOffset: '3px',
+    textDecorationColor: palette.border,
   },
   heroVisual: {
-    position: 'relative',
     display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  mockupContainer: {
-    position: 'relative',
-    width: '100%',
-    maxWidth: '600px',
-  },
-  dashboardMockup: {
-    background: 'rgba(15, 15, 25, 0.9)',
-    borderRadius: '16px',
-    border: '1px solid rgba(255,255,255,0.1)',
-    overflow: 'hidden',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-  },
-  mockupHeader: {
-    display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
     gap: '1rem',
-    padding: '0.75rem 1rem',
-    background: 'rgba(255,255,255,0.03)',
-    borderBottom: '1px solid rgba(255,255,255,0.05)',
   },
-  mockupDots: {
+  board: {
+    background: palette.board,
+    borderRadius: '20px',
+    padding: '2rem 2.25rem',
+    boxShadow: '0 30px 60px -20px rgba(11, 15, 20, 0.35)',
     display: 'flex',
-    gap: '6px',
+    flexDirection: 'column',
+    alignItems: 'center',
+    gap: '1.25rem',
+    width: '100%',
+    maxWidth: '360px',
   },
-  mockupDot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-  },
-  mockupTitle: {
-    fontSize: '0.8rem',
-    color: 'rgba(255,255,255,0.5)',
-  },
-  mockupContent: {
-    display: 'flex',
-    minHeight: '300px',
-  },
-  mockupSidebar: {
-    width: '140px',
-    borderRight: '1px solid rgba(255,255,255,0.05)',
-    padding: '1rem 0.5rem',
-  },
-  sidebarItem: {
-    padding: '0.5rem 0.75rem',
-    borderRadius: '8px',
-    fontSize: '0.8rem',
-    color: 'rgba(255,255,255,0.5)',
-    marginBottom: '0.25rem',
+  boardLabel: {
     display: 'flex',
     alignItems: 'center',
     gap: '0.5rem',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.7rem',
+    fontWeight: 600,
+    letterSpacing: '0.12em',
+    color: palette.amber,
   },
-  sidebarItemActive: {
-    background: 'rgba(20, 184, 166, 0.2)',
-    color: '#5eead4',
+  boardLabelDot: {
+    width: '6px',
+    height: '6px',
+    borderRadius: '50%',
+    background: palette.amber,
   },
-  mockupMain: {
-    flex: 1,
-    padding: '1rem',
+  boardStats: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.5rem',
+    fontSize: '0.8rem',
+    color: 'rgba(245, 247, 245, 0.55)',
+  },
+  boardStatsDivider: {
+    opacity: 0.5,
+  },
+  heroVisualCaption: {
+    fontSize: '0.85rem',
+    color: palette.inkFaint,
+  },
+
+  // Industries strip
+  industries: {
+    maxWidth: '1280px',
+    margin: '0 auto',
+    padding: '0 2rem 6rem',
     display: 'flex',
     flexDirection: 'column',
-    gap: '0.75rem',
-  },
-  queueCard: {
-    background: 'rgba(255,255,255,0.03)',
-    borderRadius: '10px',
-    padding: '0.875rem',
-    border: '1px solid rgba(255,255,255,0.05)',
-  },
-  queueHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '0.5rem',
+    gap: '1.5rem',
+  },
+  industriesLabel: {
     fontSize: '0.85rem',
-    color: 'white',
+    color: palette.inkFaint,
+    fontWeight: 500,
   },
-  queueHeaderLabel: {
+  industriesRow: {
+    display: 'flex',
+    flexWrap: 'wrap',
+    justifyContent: 'center',
+    gap: '2.5rem',
+  },
+  industryItem: {
     display: 'flex',
     alignItems: 'center',
-    gap: '0.375rem',
-  },
-  queueBadge: {
-    background: 'rgba(20, 184, 166, 0.2)',
-    color: '#5eead4',
-    padding: '0.2rem 0.5rem',
-    borderRadius: '4px',
-    fontSize: '0.7rem',
-  },
-  queueProgress: {
-    height: '4px',
-    background: 'rgba(255,255,255,0.1)',
-    borderRadius: '2px',
-    overflow: 'hidden',
-    marginBottom: '0.5rem',
-  },
-  queueProgressBar: {
-    height: '100%',
-    background: '#14b8a6',
-    borderRadius: '2px',
-  },
-  queueStats: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    fontSize: '0.7rem',
-    color: 'rgba(255,255,255,0.4)',
-  },
-  floatingTicket: {
-    position: 'absolute',
-    bottom: '-20px',
-    left: '-40px',
-    background: 'linear-gradient(135deg, #10b981, #059669)',
-    borderRadius: '12px',
-    padding: '1rem 1.25rem',
-    boxShadow: '0 10px 30px rgba(16, 185, 129, 0.3)',
-    animation: 'float 4s ease-in-out infinite',
-  },
-  ticketHeader: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.375rem',
-    fontSize: '0.75rem',
-    color: 'rgba(255,255,255,0.8)',
-    marginBottom: '0.25rem',
-  },
-  ticketNumber: {
-    fontSize: '1.75rem',
-    fontWeight: 700,
-    color: 'white',
-    fontFamily: 'monospace',
-  },
-  ticketInfo: {
-    fontSize: '0.7rem',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  floatingNotification: {
-    position: 'absolute',
-    top: '20%',
-    right: '-30px',
-    background: 'rgba(15, 15, 25, 0.95)',
-    borderRadius: '12px',
-    padding: '0.875rem 1rem',
-    border: '1px solid rgba(20, 184, 166, 0.3)',
-    boxShadow: '0 10px 30px rgba(0, 0, 0, 0.3)',
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.75rem',
-    animation: 'float 5s ease-in-out infinite reverse',
-  },
-  notifText: {
-    fontSize: '0.75rem',
-    color: 'rgba(255,255,255,0.6)',
-    margin: '0.125rem 0 0',
+    gap: '0.5rem',
+    fontSize: '0.9rem',
+    color: palette.inkMuted,
+    fontWeight: 500,
   },
 
   // Features
   featuresSection: {
-    position: 'relative',
-    zIndex: 1,
-    padding: '6rem 2rem',
+    padding: '2rem 2rem 7rem',
+    maxWidth: '1280px',
+    margin: '0 auto',
   },
   sectionHeader: {
     textAlign: 'center',
-    maxWidth: '600px',
-    margin: '0 auto 4rem',
+    maxWidth: '580px',
+    margin: '0 auto 3.5rem',
   },
   sectionBadge: {
     display: 'inline-block',
-    padding: '0.375rem 1rem',
-    background: 'rgba(20, 184, 166, 0.1)',
-    border: '1px solid rgba(20, 184, 166, 0.2)',
-    borderRadius: '50px',
-    fontSize: '0.85rem',
-    color: '#5eead4',
-    marginBottom: '1.25rem',
-  },
-  sectionTitle: {
-    fontSize: '2.5rem',
-    fontWeight: 800,
-    lineHeight: 1.2,
-    color: 'white',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.75rem',
+    fontWeight: 600,
+    letterSpacing: '0.08em',
+    color: palette.teal,
     marginBottom: '1rem',
   },
+  sectionTitle: {
+    fontSize: 'clamp(2rem, 3.5vw, 2.75rem)',
+    fontWeight: 700,
+    letterSpacing: '-0.015em',
+    lineHeight: 1.2,
+    color: palette.ink,
+    marginBottom: '0.75rem',
+  },
   sectionSubtitle: {
-    fontSize: '1.1rem',
-    color: 'rgba(255,255,255,0.5)',
+    fontSize: '1.05rem',
+    color: palette.inkMuted,
     lineHeight: 1.6,
   },
   featuresGrid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '1.5rem',
-    maxWidth: '1200px',
-    margin: '0 auto',
+    gridTemplateColumns: 'repeat(4, 1fr)',
+    gap: '1.25rem',
   },
   featureCard: {
-    background: 'rgba(255,255,255,0.03)',
+    background: palette.surface,
     borderRadius: '16px',
-    border: '1px solid rgba(255,255,255,0.05)',
-    padding: '2rem',
-    transition: 'all 0.3s ease',
+    border: `1px solid ${palette.border}`,
+    padding: '1.75rem',
   },
   featureIcon: {
-    width: '56px',
-    height: '56px',
-    borderRadius: '14px',
+    width: '44px',
+    height: '44px',
+    borderRadius: '11px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: '1.25rem',
-    background: 'rgba(20, 184, 166, 0.1)',
+    background: palette.tealSoft,
   },
   featureTitle: {
-    fontSize: '1.2rem',
+    fontSize: '1.05rem',
     fontWeight: 600,
-    color: 'white',
-    marginBottom: '0.75rem',
+    color: palette.ink,
+    marginBottom: '0.5rem',
+    letterSpacing: '-0.005em',
   },
   featureDesc: {
-    fontSize: '0.95rem',
-    color: 'rgba(255,255,255,0.5)',
+    fontSize: '0.9rem',
+    color: palette.inkMuted,
     lineHeight: 1.6,
     margin: 0,
   },
 
-  // How it Works
+  // How it works
   howSection: {
-    position: 'relative',
-    zIndex: 1,
-    padding: '6rem 2rem',
-    background: 'rgba(255,255,255,0.01)',
-  },
-  stepsGrid: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-    gap: '1.5rem',
-    maxWidth: '1200px',
+    padding: '2rem 2rem 7rem',
+    maxWidth: '1280px',
     margin: '0 auto',
-    flexWrap: 'wrap',
   },
-  stepCard: {
-    position: 'relative',
-    background: 'rgba(255,255,255,0.03)',
-    borderRadius: '16px',
-    border: '1px solid rgba(255,255,255,0.05)',
-    padding: '2rem',
-    width: '250px',
-    textAlign: 'center',
+  stepsRow: {
+    display: 'flex',
+    gap: '0',
+    maxWidth: '1100px',
+    margin: '0 auto',
+  },
+  stepItem: {
+    flex: 1,
+    paddingRight: '1.5rem',
+  },
+  stepNumberRow: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '0.75rem',
+    marginBottom: '1.25rem',
   },
   stepNumber: {
-    fontSize: '2rem',
-    fontWeight: 800,
-    color: '#2dd4bf',
-    marginBottom: '1rem',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.9rem',
+    fontWeight: 700,
+    color: palette.teal,
+    background: palette.tealSoft,
+    borderRadius: '8px',
+    padding: '0.35rem 0.6rem',
+    flexShrink: 0,
+  },
+  stepLine: {
+    height: '1px',
+    background: palette.border,
+    flex: 1,
   },
   stepTitle: {
-    fontSize: '1.05rem',
+    fontSize: '1rem',
     fontWeight: 600,
-    color: 'white',
-    marginBottom: '0.75rem',
+    color: palette.ink,
+    marginBottom: '0.5rem',
   },
   stepDesc: {
-    fontSize: '0.88rem',
-    color: 'rgba(255,255,255,0.5)',
+    fontSize: '0.875rem',
+    color: palette.inkMuted,
     lineHeight: 1.6,
     margin: 0,
   },
+
   // CTA
   ctaSection: {
-    position: 'relative',
-    zIndex: 1,
-    padding: '6rem 2rem',
+    padding: '0 2rem 7rem',
+    maxWidth: '1280px',
+    margin: '0 auto',
   },
   ctaCard: {
-    maxWidth: '800px',
+    maxWidth: '860px',
     margin: '0 auto',
-    background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.2) 0%, rgba(13, 148, 136, 0.1) 100%)',
-    borderRadius: '24px',
-    border: '1px solid rgba(20, 184, 166, 0.2)',
-    padding: '4rem',
+    background: palette.board,
+    borderRadius: '28px',
+    padding: '4rem 3rem',
     textAlign: 'center',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  ctaFlap: {
+    display: 'flex',
+    justifyContent: 'center',
+    marginBottom: '2rem',
+    opacity: 0.5,
+    transform: 'scale(0.6)',
   },
   ctaTitle: {
-    fontSize: '2.25rem',
-    fontWeight: 800,
-    color: 'white',
-    marginBottom: '1rem',
+    fontSize: 'clamp(2rem, 3.5vw, 2.5rem)',
+    fontWeight: 700,
+    letterSpacing: '-0.015em',
+    color: '#ffffff',
+    marginBottom: '0.75rem',
   },
   ctaSubtitle: {
-    fontSize: '1.1rem',
+    fontSize: '1.05rem',
     color: 'rgba(255,255,255,0.6)',
-    marginBottom: '2rem',
+    marginBottom: '2.25rem',
     lineHeight: 1.6,
   },
   ctaButtons: {
@@ -796,23 +760,30 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '1rem',
     justifyContent: 'center',
   },
+  ctaGhostBtn: {
+    padding: '0.75rem 1.5rem',
+    borderRadius: '10px',
+    border: '1px solid rgba(255,255,255,0.2)',
+    background: 'transparent',
+    color: '#ffffff',
+    fontSize: '1rem',
+    fontWeight: 600,
+  },
 
   // Footer
   footer: {
-    position: 'relative',
-    zIndex: 1,
-    borderTop: '1px solid rgba(255,255,255,0.05)',
-    padding: '4rem 2rem 2rem',
+    borderTop: `1px solid ${palette.border}`,
+    padding: '3.5rem 2rem 2rem',
   },
   footerContent: {
-    maxWidth: '1200px',
+    maxWidth: '1280px',
     margin: '0 auto',
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
     flexWrap: 'wrap',
     gap: '2rem',
-    marginBottom: '3rem',
+    marginBottom: '2.5rem',
   },
   footerBrand: {
     maxWidth: '280px',
@@ -822,11 +793,25 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '0.5rem',
     textDecoration: 'none',
-    marginBottom: '1rem',
+    marginBottom: '0.75rem',
+  },
+  logoMarkSmall: {
+    width: '24px',
+    height: '24px',
+    borderRadius: '6px',
+    background: palette.teal,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  footerLogoText: {
+    fontSize: '1rem',
+    fontWeight: 700,
+    color: palette.ink,
   },
   footerDesc: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: '0.9rem',
+    color: palette.inkMuted,
+    fontSize: '0.875rem',
     lineHeight: 1.6,
     margin: 0,
   },
@@ -836,23 +821,92 @@ const styles: Record<string, React.CSSProperties> = {
     flexWrap: 'wrap',
   },
   footerLink: {
-    color: 'rgba(255,255,255,0.5)',
+    color: palette.inkMuted,
     textDecoration: 'none',
-    fontSize: '0.9rem',
-    transition: 'color 0.2s',
+    fontSize: '0.875rem',
+    fontWeight: 500,
   },
   footerBottom: {
-    maxWidth: '1200px',
+    maxWidth: '1280px',
     margin: '0 auto',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingTop: '2rem',
-    borderTop: '1px solid rgba(255,255,255,0.05)',
-    fontSize: '0.85rem',
-    color: 'rgba(255,255,255,0.4)',
+    paddingTop: '1.5rem',
+    borderTop: `1px solid ${palette.border}`,
+    fontSize: '0.8rem',
+    color: palette.inkFaint,
   },
 };
+
+// ============================================================================
+// SCOPED CSS — flap animation, hover, responsive
+// ============================================================================
+
+const landingStyles = `
+  @keyframes qfl-flap-in {
+    from { transform: rotateX(-100deg); opacity: 0.15; }
+    to { transform: rotateX(0deg); opacity: 1; }
+  }
+  .qfl-flap-char {
+    animation: qfl-flap-in 520ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+    transform-style: preserve-3d;
+  }
+  .qfl-transition {
+    transition: opacity 550ms ease, transform 550ms ease;
+  }
+  .qfl-feature-card {
+    transition: border-color 200ms ease, transform 200ms ease;
+  }
+  .qfl-feature-card:hover {
+    border-color: #0d9488;
+    transform: translateY(-2px);
+  }
+  a:hover.qfl-nolink {}
+  .qfl-nav-links a:hover,
+  .qfl-footer-link:hover {
+    color: #0B0F14;
+  }
+
+  .qfl-nav-links {
+    display: flex;
+    gap: 2rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .qfl-flap-char { animation: none; opacity: 1; transform: none; }
+    .qfl-transition { transition: none; }
+  }
+
+  @media (max-width: 900px) {
+    .qfl-nav-links { display: none; }
+  }
+
+  @media (max-width: 480px) {
+    .qfl-nav { padding: 1rem 1.25rem !important; }
+    .qfl-nav-actions { gap: 0.6rem !important; }
+    .qfl-nav-actions .btn { padding: 0.6rem 0.9rem !important; font-size: 0.85rem !important; }
+  }
+
+  @media (max-width: 860px) {
+    .qfl-hero {
+      grid-template-columns: 1fr !important;
+      padding-top: 7.5rem !important;
+      text-align: center;
+    }
+    .qfl-hero > div:first-child {
+      max-width: 100% !important;
+      margin: 0 auto;
+    }
+  }
+
+  @media (max-width: 760px) {
+    .qfl-features-grid { grid-template-columns: repeat(2, 1fr) !important; }
+    .qfl-steps-row { flex-direction: column !important; gap: 2rem !important; }
+    .qfl-step-line { display: none; }
+  }
+
+  @media (max-width: 480px) {
+    .qfl-features-grid { grid-template-columns: 1fr !important; }
+  }
+`;
 
 // ============================================================================
 // MAIN EXPORT
@@ -868,18 +922,16 @@ export default function Home() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#0a0a0f',
+        background: '#FAFAF8',
       }}>
         <div className="spinner" style={{ width: 40, height: 40 }} />
       </div>
     );
   }
 
-  // If authenticated, show dashboard
   if (isAuthenticated) {
     return <DashboardPage />;
   }
 
-  // Otherwise show landing page
   return <LandingPage />;
 }
