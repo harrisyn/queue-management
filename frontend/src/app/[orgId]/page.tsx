@@ -20,7 +20,7 @@ interface Organization {
 }
 
 export default function OrganizationPage() {
-  const params = useParams();
+  const params = useParams() ?? {};
   const router = useRouter();
   const orgId = params.orgId as string;
   

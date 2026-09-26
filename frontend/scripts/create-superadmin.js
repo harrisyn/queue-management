@@ -4,6 +4,11 @@ const { PrismaClient } = require('@prisma/client');
 async function main() {
   const prisma = new PrismaClient();
   try {
+    if (process.env.NODE_ENV === 'production' && (!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD)) {
+      console.error('Set ADMIN_EMAIL and ADMIN_PASSWORD - no default credentials in production.');
+      process.exitCode = 1;
+      return;
+    }
     const email = process.env.ADMIN_EMAIL || 'admin@example.com';
     const password = process.env.ADMIN_PASSWORD || 'AdminPass123!';
     const firstName = process.env.ADMIN_FIRSTNAME || 'Super';

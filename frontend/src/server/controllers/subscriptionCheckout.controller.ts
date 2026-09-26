@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { getProvider, ProviderNotActiveError } from '../services/payments';
 import { ProviderName } from '../services/payments/types';
+import { returnBaseUrl } from '../lib/cors';
 
 export const createCheckoutSession = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -45,7 +46,8 @@ export const createCheckoutSession = async (req: Request, res: Response, next: N
     const cycle: 'monthly' | 'quarterly' | 'yearly' =
       billingCycle === 'yearly' ? 'yearly' : billingCycle === 'quarterly' ? 'quarterly' : 'monthly';
     const amount = cycle === 'yearly' ? Number(plan.priceYearly) : cycle === 'quarterly' ? Number(plan.priceQuarterly) : Number(plan.priceMonthly);
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8003';
+    const org = await prisma.organization.findUnique({ where: { id: user.organizationId }, select: { slug: true } });
+    const frontendUrl = await returnBaseUrl(req.headers?.origin, org?.slug);
 
     let redirectUrl: string;
     try {

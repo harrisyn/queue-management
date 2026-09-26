@@ -29,7 +29,7 @@ interface QueueStatus {
   } | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
+import { API_BASE } from '@/lib/apiBase';
 
 export default function QueueStatusPage({ 
   params 

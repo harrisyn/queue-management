@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { API_BASE } from '@/lib/apiBase';
 
 type LocationItem = {
   id: string;
@@ -19,7 +20,7 @@ export default function LocationsPage() {
   useEffect(() => {
     const fetchLocations = async () => {
       try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/locations`);
+        const res = await fetch(`${API_BASE}/public/locations`);
         if (!res.ok) throw new Error('Failed to load');
         const data = await res.json();
         setLocations(data);

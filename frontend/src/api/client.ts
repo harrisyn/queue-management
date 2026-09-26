@@ -1,7 +1,105 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import type { Service } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
+import { API_BASE as API_BASE_URL } from '@/lib/apiBase';
+
+export interface AvailableSlot {
+  id: string;
+  startTime: string;
+  endTime: string;
+  available: number;
+  capacity: number;
+}
+
+export interface PatientSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  email: string | null;
+}
+
+export interface Appointment {
+  id: string;
+  status: 'SCHEDULED' | 'CONFIRMED' | 'CHECKED_IN' | 'CANCELLED' | 'COMPLETED';
+  notes: string | null;
+  rescheduledAt: string | null;
+  serviceId: string;
+  user: { id: string; firstName: string; lastName: string; email: string; phone: string | null };
+  service: { id: string; name: string; location: { id: string; name: string } };
+  slot: { id: string; startTime: string; endTime: string };
+}
+
+export interface NotificationSettings {
+  turnApproachingAt: number;
+  email: boolean;
+  sms: boolean;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  description: string | null;
+  events: string[];
+  isActive: boolean;
+  createdAt: string;
+  lastDelivery?: { status: string; responseCode: number | null; createdAt: string } | null;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  status: 'PENDING' | 'SUCCEEDED' | 'FAILED';
+  attempts: number;
+  responseCode: number | null;
+  lastError: string | null;
+  createdAt: string;
+  nextAttemptAt: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  createdAt: string;
+  data: Record<string, unknown> | null;
+  actor: { id: string; firstName: string; lastName: string; role: string } | null;
+  entry: { ticketNumber: string; serviceName: string } | null;
+}
+
+export interface AiStatus {
+  planIncludesAi: boolean;
+  enabled: boolean;
+  providerConfigured: boolean;
+  provider: string | null;
+}
+
+export interface AiInsight {
+  id: string;
+  kind: 'ASK' | 'DIGEST';
+  question: string | null;
+  answer: string;
+  sources: { tool: string; input: Record<string, unknown>; output: unknown }[] | null;
+  model: string | null;
+  createdAt: string;
+}
+
+export interface WaitAlert {
+  serviceId: string;
+  service: string;
+  severity: 'warning' | 'critical' | 'info';
+  message: string;
+}
+
+export interface AiProviderConfig {
+  provider: 'anthropic' | 'openai' | 'gemini' | 'openai_compatible';
+  configured: boolean;
+  isActive: boolean;
+  model: string | null;
+  defaultModel: string | null;
+  baseUrl: string | null;
+  apiKeyMasked: string | null;
+  updatedAt: string | null;
+}
 
 export interface CustomDomainInfo {
   domain: string;
@@ -37,7 +135,10 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
+        // A 401 from /auth/* is a failed sign-in, not an expired session -
+        // let the form show the error instead of reloading the page.
+        const isAuthRequest = error.config?.url?.startsWith('/auth/');
+        if (error.response?.status === 401 && !isAuthRequest) {
           if (typeof window !== 'undefined') {
             localStorage.removeItem('token');
             window.location.href = '/login';
@@ -56,6 +157,30 @@ class ApiClient {
 
   async register(userData: { email: string; password: string; firstName: string; lastName: string }) {
     const { data } = await this.client.post('/auth/register', userData);
+    return data;
+  }
+
+  async previewInvite(code: string): Promise<{
+    role: string;
+    status: 'valid' | 'used' | 'expired';
+    organization: { name: string; slug: string | null; logoUrl: string | null };
+  }> {
+    const { data } = await this.client.get(`/public/invites/${encodeURIComponent(code)}`);
+    return data;
+  }
+
+  async acceptInvite(payload: { inviteToken: string; email: string; password: string; firstName: string; lastName: string; phone?: string }): Promise<{ organizationSlug: string | null }> {
+    const { data } = await this.client.post('/auth/register', payload);
+    return data;
+  }
+
+  async forgotPassword(email: string) {
+    const { data } = await this.client.post('/auth/forgot-password', { email });
+    return data;
+  }
+
+  async resetPassword(token: string, password: string) {
+    const { data } = await this.client.post('/auth/reset-password', { token, password });
     return data;
   }
 
@@ -192,13 +317,34 @@ class ApiClient {
   }
 
   // Appointments
-  async createAppointment(appointment: { userId: string; serviceId: string; slotId: string; notes?: string }) {
+  async createAppointment(appointment: {
+    serviceId: string;
+    slotId: string;
+    userId?: string;
+    patient?: { firstName: string; lastName: string; phone?: string; email?: string };
+    notes?: string;
+  }): Promise<Appointment> {
     const { data } = await this.client.post('/appointments', appointment);
     return data;
   }
 
-  async getAppointments(params?: { userId?: string; serviceId?: string; date?: string }) {
+  async getAppointments(params?: { userId?: string; serviceId?: string; locationId?: string; date?: string; status?: string }): Promise<Appointment[]> {
     const { data } = await this.client.get('/appointments', { params });
+    return data;
+  }
+
+  async rescheduleAppointment(id: string, newSlotId: string): Promise<Appointment> {
+    const { data } = await this.client.patch(`/appointments/${id}/reschedule`, { newSlotId });
+    return data;
+  }
+
+  async cancelAppointment(id: string): Promise<Appointment> {
+    const { data } = await this.client.patch(`/appointments/${id}/cancel`);
+    return data;
+  }
+
+  async searchPatients(q: string): Promise<PatientSummary[]> {
+    const { data } = await this.client.get('/appointments/patients/search', { params: { q } });
     return data;
   }
 
@@ -208,9 +354,8 @@ class ApiClient {
     return data;
   }
 
-  async getAvailableSlots(serviceId: string, date?: string) {
-    const params = date ? `?date=${date}` : '';
-    const { data } = await this.client.get(`/appointments/service/${serviceId}/slots${params}`);
+  async getAvailableSlots(serviceId: string, date?: string): Promise<{ slots: AvailableSlot[]; message?: string; queueId?: string }> {
+    const { data } = await this.client.get(`/appointments/service/${serviceId}/slots`, { params: date ? { date } : undefined });
     return data;
   }
 
@@ -623,6 +768,102 @@ class ApiClient {
     return data;
   }
 
+  async transferEntry(queueId: string, entryId: string, serviceId: string): Promise<{ ticketNumber: string; serviceName: string; queueId: string }> {
+    const { data } = await this.client.post(`/queues/${queueId}/entry/${entryId}/transfer`, { serviceId });
+    return data;
+  }
+
+  // Integrations: outbound webhooks + audit log
+  async getWebhookEvents(): Promise<string[]> {
+    const { data } = await this.client.get('/webhook-events');
+    return data;
+  }
+
+  async getWebhooks(organizationId: string): Promise<WebhookEndpoint[]> {
+    const { data } = await this.client.get(`/orgs/${organizationId}/webhooks`);
+    return data;
+  }
+
+  async createWebhook(organizationId: string, payload: { url: string; description?: string; events: string[] }): Promise<WebhookEndpoint & { secret: string }> {
+    const { data } = await this.client.post(`/orgs/${organizationId}/webhooks`, payload);
+    return data;
+  }
+
+  async updateWebhook(id: string, payload: { url?: string; description?: string; events?: string[]; isActive?: boolean }): Promise<WebhookEndpoint> {
+    const { data } = await this.client.patch(`/webhooks/${id}`, payload);
+    return data;
+  }
+
+  async rotateWebhookSecret(id: string): Promise<WebhookEndpoint & { secret: string }> {
+    const { data } = await this.client.post(`/webhooks/${id}/rotate-secret`);
+    return data;
+  }
+
+  async testWebhook(id: string): Promise<{ status: string; responseCode: number | null; error: string | null }> {
+    const { data } = await this.client.post(`/webhooks/${id}/test`);
+    return data;
+  }
+
+  async deleteWebhook(id: string) {
+    await this.client.delete(`/webhooks/${id}`);
+  }
+
+  async getWebhookDeliveries(id: string): Promise<WebhookDelivery[]> {
+    const { data } = await this.client.get(`/webhooks/${id}/deliveries`);
+    return data;
+  }
+
+  async getAuditLogs(organizationId: string, params?: { action?: string; before?: string; limit?: number }): Promise<{ logs: AuditLogEntry[]; nextCursor: string | null }> {
+    const { data } = await this.client.get(`/orgs/${organizationId}/audit-logs`, { params });
+    return data;
+  }
+
+  // AI-assisted analytics (provider-agnostic)
+  async getAiStatus(): Promise<AiStatus> {
+    const { data } = await this.client.get('/ai/status');
+    return data;
+  }
+
+  async updateAiSettings(enabled: boolean): Promise<{ enabled: boolean }> {
+    const { data } = await this.client.put('/ai/settings', { enabled });
+    return data;
+  }
+
+  async askAi(question: string, locationId?: string): Promise<AiInsight & { creditsRemaining: number | null }> {
+    const { data } = await this.client.post('/ai/ask', { question, locationId });
+    return data;
+  }
+
+  async getAiInsights(kind?: 'ASK' | 'DIGEST', limit = 10): Promise<AiInsight[]> {
+    const { data } = await this.client.get('/ai/insights', { params: { kind, limit } });
+    return data;
+  }
+
+  async getWaitForecast(serviceId: string) {
+    const { data } = await this.client.get(`/ai/forecast/${serviceId}`);
+    return data;
+  }
+
+  async getWaitAlerts(locationId: string): Promise<WaitAlert[]> {
+    const { data } = await this.client.get('/ai/alerts', { params: { locationId } });
+    return data;
+  }
+
+  async getAiProviders(): Promise<AiProviderConfig[]> {
+    const { data } = await this.client.get('/superadmin/ai-providers');
+    return data;
+  }
+
+  async saveAiProvider(provider: string, payload: { apiKey?: string; model?: string; baseUrl?: string; isActive: boolean }) {
+    const { data } = await this.client.put(`/superadmin/ai-providers/${provider}`, payload);
+    return data;
+  }
+
+  async testAiProvider(provider: string): Promise<{ ok: boolean; model?: string; reply?: string; error?: string }> {
+    const { data } = await this.client.post(`/superadmin/ai-providers/${provider}/test`);
+    return data;
+  }
+
   async completeEntryWithSuggestions(queueId: string, entryId: string) {
     const { data } = await this.client.patch(`/queues/${queueId}/entry/${entryId}/complete`);
     return data;
@@ -680,6 +921,7 @@ class ApiClient {
     defaultDisplayMode?: string;
     primaryColor?: string | null;
     hidePoweredBy?: boolean;
+    notificationSettings?: NotificationSettings;
   }) {
     const { data } = await this.client.put(`/orgs/${id}`, payload);
     return data;

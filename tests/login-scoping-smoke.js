@@ -1,4 +1,4 @@
-const API_BASE = process.env.API_BASE || 'http://localhost:8004/api/v1';
+const API_BASE = process.env.API_BASE || 'http://localhost:8003/api/v1';
 
 // Assumes the seeded tenant admin harrisyn@gmail.com / 12345678 exists,
 // belonging to an org with slug 'nyaho' (set one first if it isn't set —

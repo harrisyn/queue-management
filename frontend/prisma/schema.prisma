@@ -1,7 +1,7 @@
 // Queue Management System - Database Schema
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["debian-openssl-3.0.x"]
+  binaryTargets = ["native", "debian-openssl-3.0.x", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
@@ -30,6 +30,11 @@ model Organization {
   // tenant admin app and blocks public customer-facing entry points
   // (join/status pages) without blocking staff login.
   status                OrganizationStatus       @default(ACTIVE)
+  // Patient notification preferences:
+  // {"turnApproachingAt": 3, "email": true, "sms": false}
+  notificationSettings  Json?
+  // Tenant opt-in for AI-assisted analytics (also needs the plan's "ai" feature)
+  aiEnabled             Boolean                  @default(false)
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
   locations             Location[]
@@ -41,6 +46,9 @@ model Organization {
   creditLedgerEntries   CreditLedgerEntry[]
   customDomain          CustomDomain?
   impersonationLogs     ImpersonationLog[]
+  auditLogs             AuditLog[]
+  webhookEndpoints      WebhookEndpoint[]
+  aiInsights            AiInsight[]
 }
 
 enum OrganizationStatus {
@@ -390,11 +398,14 @@ model Notification {
   type      NotificationType
   channel   NotificationChannel
   message   String
+  // Set for queue notifications so each (entry, type) is only sent once.
+  queueEntryId String?
   sentAt    DateTime            @default(now())
   readAt    DateTime?
   user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
   
   @@index([userId, readAt])
+  @@index([queueEntryId, type])
 }
 
 model Invite {
@@ -701,4 +712,127 @@ model OrganizationAddOn {
 
   @@index([organizationId, resourceType, status])
   @@index([externalSubscriptionId])
+}
+
+enum VerificationPurpose {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+// Server-side store for one-time codes and reset tokens. Only a SHA-256 hash
+// of the code is stored. EMAIL_VERIFY rows are marked verifiedAt when the
+// code is checked, then consumedAt when registration actually uses them -
+// the server never trusts a client-sent "emailVerified" flag.
+model VerificationCode {
+  id         String              @id @default(uuid())
+  purpose    VerificationPurpose
+  identifier String              // normalized email
+  codeHash   String
+  attempts   Int                 @default(0)
+  expiresAt  DateTime
+  verifiedAt DateTime?
+  consumedAt DateTime?
+  createdAt  DateTime            @default(now())
+
+  @@index([purpose, identifier])
+  @@index([codeHash])
+}
+
+// Fixed-window rate limit counters. Kept in Postgres rather than process
+// memory so limits hold across serverless instances.
+model RateLimitBucket {
+  key         String
+  windowStart DateTime
+  count       Int      @default(0)
+
+  @@id([key, windowStart])
+  @@index([windowStart])
+}
+
+// Append-only record of queue operations (PRD 7: "all queue movements,
+// reschedules, and transitions logged").
+model AuditLog {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  actorUserId    String?      // null = system / public patient action
+  action         String       // e.g. entry.called, entry.transferred, appointment.rescheduled
+  queueId        String?
+  entryId        String?
+  data           Json?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, createdAt])
+  @@index([entryId])
+}
+
+// Outbound integration webhooks (PRD 5.3: service completion / flow
+// transition updates to an EMR). Payloads are signed with HMAC-SHA256 using
+// the endpoint's secret (stored encrypted).
+model WebhookEndpoint {
+  id              String            @id @default(uuid())
+  organizationId  String
+  organization    Organization      @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  url             String
+  description     String?
+  encryptedSecret String
+  events          String[]          // subset of WEBHOOK_EVENTS; empty = all
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  deliveries      WebhookDelivery[]
+
+  @@index([organizationId])
+}
+
+model WebhookDelivery {
+  id           String          @id @default(uuid())
+  endpointId   String
+  endpoint     WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  event        String
+  payload      Json
+  status       String          @default("PENDING") // PENDING | SUCCEEDED | FAILED
+  attempts     Int             @default(0)
+  responseCode Int?
+  lastError    String?
+  nextAttemptAt DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  @@index([endpointId, createdAt])
+  @@index([status, nextAttemptAt])
+}
+
+// Superadmin-configured LLM provider (API key encrypted at rest). At most one
+// row is active; with none active, AI_PROVIDER + the provider's env key are
+// used (see services/ai/index.ts).
+model AiProviderConfig {
+  id              String   @id @default(uuid())
+  provider        String   @unique // anthropic | openai | gemini | openai_compatible
+  encryptedApiKey String
+  model           String?
+  baseUrl         String?  // openai_compatible (and optional OpenAI/Azure proxies)
+  isActive        Boolean  @default(false)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// AI answers and digests, kept with the exact aggregates the model was
+// given (`sources`) so staff can check the numbers behind every statement.
+model AiInsight {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  kind           String       // ASK | DIGEST
+  locationId     String?
+  question       String?
+  answer         String
+  sources        Json?
+  model          String?
+  inputTokens    Int?
+  outputTokens   Int?
+  createdBy      String?
+  createdAt      DateTime     @default(now())
+
+  @@index([organizationId, kind, createdAt])
 }

@@ -1,17 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { isValidDomain, generateVerificationToken, verifyCnameMatches } from '../services/customDomain.service';
+import { addDomain, checkDomain, removeDomain, cnameTarget, isHostingManaged } from '../services/hosting.service';
 
-// The hostname a custom domain's CNAME record must point at. Derived from
-// FRONTEND_URL so it tracks whatever domain this deployment is actually
-// served from - no separate env var to keep in sync.
+// The hostname a custom domain's CNAME record must point at: the hosting
+// provider's target on Vercel, otherwise this deployment's own hostname.
 export function getCnameTarget(): string {
-  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8003';
-  try {
-    return new URL(frontendUrl).hostname;
-  } catch {
-    return 'localhost';
-  }
+  return cnameTarget();
 }
 
 function serializeCustomDomain(customDomain: {
@@ -58,6 +53,8 @@ export const setCustomDomain = async (req: Request, res: Response, next: NextFun
       return res.status(409).json({ error: 'This domain is already in use by another organization' });
     }
 
+    const previous = await prisma.customDomain.findUnique({ where: { organizationId: id } });
+
     const customDomain = await prisma.customDomain.upsert({
       where: { organizationId: id },
       create: {
@@ -74,7 +71,12 @@ export const setCustomDomain = async (req: Request, res: Response, next: NextFun
       },
     });
 
-    res.json(serializeCustomDomain(customDomain));
+    // Attach the domain to the hosting project so it's routed here and gets
+    // a certificate once DNS is in place. Detach a domain it replaced.
+    if (previous && previous.domain !== normalizedDomain) await removeDomain(previous.domain);
+    const hosting = await addDomain(normalizedDomain);
+
+    res.json({ ...serializeCustomDomain(customDomain), hostingMessage: hosting.message ?? null });
   } catch (error) {
     next(error);
   }
@@ -88,7 +90,11 @@ export const verifyCustomDomain = async (req: Request, res: Response, next: Next
       return res.status(404).json({ error: 'No custom domain configured' });
     }
 
-    const matches = await verifyCnameMatches(customDomain.domain, getCnameTarget());
+    // With a hosting provider, its own DNS + certificate check is the source
+    // of truth; otherwise the CNAME must point at this deployment.
+    const matches = isHostingManaged()
+      ? (await checkDomain(customDomain.domain)).verified
+      : await verifyCnameMatches(customDomain.domain, getCnameTarget());
     if (!matches) {
       return res.status(400).json({
         error: 'Verification failed',
@@ -111,6 +117,8 @@ export const verifyCustomDomain = async (req: Request, res: Response, next: Next
 export const deleteCustomDomain = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
+    const existing = await prisma.customDomain.findUnique({ where: { organizationId: id } });
+    if (existing) await removeDomain(existing.domain);
     await prisma.customDomain.deleteMany({ where: { organizationId: id } });
     res.status(204).send();
   } catch (error) {

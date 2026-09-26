@@ -17,7 +17,7 @@ export class UploadcareProvider implements FileStorageProvider {
     const form = new FormData();
     form.append('UPLOADCARE_PUB_KEY', this.publicKey);
     form.append('UPLOADCARE_STORE', '1');
-    form.append('file', new Blob([buffer], { type: mimeType }), filename);
+    form.append('file', new Blob([new Uint8Array(buffer)], { type: mimeType }), filename);
 
     const res = await fetch(UPLOAD_URL, { method: 'POST', body: form });
     if (!res.ok) {

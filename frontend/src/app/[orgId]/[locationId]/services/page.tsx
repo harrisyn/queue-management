@@ -27,7 +27,7 @@ interface TicketResult {
 }
 
 export default function ServicesPage() {
-  const params = useParams();
+  const params = useParams() ?? {};
   const router = useRouter();
   const orgId = params.orgId as string;
   const locationId = params.locationId as string;

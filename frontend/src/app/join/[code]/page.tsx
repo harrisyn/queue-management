@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { APP_NAME } from '@/lib/appConfig';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
+import { API_BASE } from '@/lib/apiBase';
 
 interface IdentityFieldConfig {
   required: boolean;
@@ -67,8 +67,8 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
   const searchParams = useSearchParams();
   
   // Determine mode from URL params
-  const urlMode = searchParams.get('mode') as PageMode | null;
-  const kioskAutoReset = parseInt(searchParams.get('resetTime') || '15', 10); // seconds
+  const urlMode = (searchParams?.get('mode') ?? null) as PageMode | null;
+  const kioskAutoReset = parseInt(searchParams?.get('resetTime') || '15', 10); // seconds
   
   const [mode, setMode] = useState<PageMode>(urlMode || 'normal');
   const [step, setStep] = useState<'loading' | 'select-service' | 'form' | 'success' | 'error' | 'session-tickets'>('loading');

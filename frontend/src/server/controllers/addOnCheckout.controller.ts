@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { getProvider, ProviderNotActiveError } from '../services/payments';
 import { ProviderName, AddOnResourceType, AddOnBillingMode } from '../services/payments/types';
+import { returnBaseUrl } from '../lib/cors';
 
 // Resolves the per-unit price for one add-on purchase: a plan-specific
 // override takes precedence over the global default. See
@@ -88,7 +89,8 @@ export const createAddOnCheckout = async (req: Request, res: Response, next: Nex
     }
 
     const { unitPrice, currency } = pricing;
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:8003';
+    const org = await prisma.organization.findUnique({ where: { id: user.organizationId }, select: { slug: true } });
+    const frontendUrl = await returnBaseUrl(req.headers?.origin, org?.slug);
 
     let redirectUrl: string;
     try {
