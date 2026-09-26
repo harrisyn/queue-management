@@ -19,6 +19,7 @@ import {
 import { listPaymentProviders, upsertPaymentProvider, testPaymentProvider } from '../controllers/paymentProvider.controller';
 import { listAddOnPricing, updateAddOnPricing } from '../controllers/addOnPricing.controller';
 import { listFileStorageProviders, upsertFileStorageProvider, testFileStorageProvider } from '../controllers/fileStorageProvider.controller';
+import { listAiProviders, upsertAiProvider, testAiProvider } from '../controllers/ai.controller';
 
 const router = Router();
 
@@ -59,5 +60,10 @@ router.put('/addon-pricing/:resourceType', updateAddOnPricing);
 router.get('/file-storage', listFileStorageProviders);
 router.put('/file-storage/:provider', upsertFileStorageProvider);
 router.post('/file-storage/:provider/test', testFileStorageProvider);
+
+// AI (LLM) provider configuration
+router.get('/ai-providers', listAiProviders);
+router.put('/ai-providers/:provider', upsertAiProvider);
+router.post('/ai-providers/:provider/test', testAiProvider);
 
 export default router;

@@ -7,6 +7,7 @@ import Layout from '@/components/Layout';
 import { PageHeader } from '@/components/ui';
 import { useAuthContext } from '@/contexts/AuthContext';
 import type { Location } from '@/types';
+import AiInsightsPanel from '@/components/ai/AiInsightsPanel';
 
 interface ServiceMetrics {
   serviceId: string;
@@ -182,6 +183,8 @@ const AnalyticsPage: React.FC = () => {
           }
         />
 
+        <AiInsightsPanel locationId={selectedLocation || undefined} />
+
         {/* Tabs Navigation */}
         <div className="tabs-container">
           <button 
@@ -234,13 +237,6 @@ const AnalyticsPage: React.FC = () => {
                 <div className="card-content">
                   <span className="card-value">{metrics.totals?.total || 0}</span>
                   <span className="card-label">Total Visitors Today</span>
-                </div>
-                <div className="card-trend positive">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" />
-                    <polyline points="17 6 23 6 23 12" />
-                  </svg>
-                  +12%
                 </div>
               </div>
 

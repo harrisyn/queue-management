@@ -29,6 +29,7 @@ interface SubscriptionFeatures {
   customDomain?: boolean;
   serviceFlows?: boolean;
   servicePoints?: boolean;
+  ai?: boolean;
 }
 
 // Default features for organizations without a subscription (free tier)
@@ -44,6 +45,7 @@ const DEFAULT_FEATURES: SubscriptionFeatures = {
   customDomain: false,
   serviceFlows: false,
   servicePoints: true,
+  ai: false,
 };
 
 // Applies resolveExpiry's decision to a subscription row, writing the
