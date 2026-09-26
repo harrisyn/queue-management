@@ -1,5 +1,7 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Layers } from 'lucide-react';
 import api from '@/api/client';
@@ -176,7 +178,7 @@ const ServicesPage: React.FC = () => {
       await loadServices(selectedLocation);
       resetForm();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to update service');
+      toast.error(errorMessage(err, 'Couldn’t save the service.'));
     }
   };
 
@@ -191,7 +193,7 @@ const ServicesPage: React.FC = () => {
       setShowDetails(false);
       setSelectedService(null);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete service');
+      toast.error(errorMessage(err, 'Couldn’t delete the service.'));
     }
   };
 
@@ -252,13 +254,7 @@ const ServicesPage: React.FC = () => {
   };
 
   if (!loading && !user?.organizationId) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
+    return <NoOrganization />;
   }
 
   return (

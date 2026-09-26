@@ -1,7 +1,8 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { emitToQueue, SOCKET_EVENTS } from '../lib/realtime';
-import { getStartOfDay, getEndOfDay, isDayActive } from '../utils/date';
+import { getStartOfDay, getEndOfDay, isDayActive, startOfLocalDate, validTimeZone } from '../utils/date';
+import { serviceTimeZone } from '../services/queueEvents.service';
 import { generateTicketNumber, getNextSequence } from '../utils/ticket';
 import { listScopeOrgId, loadCaller } from '../middleware/tenantScope.middleware';
 import {
@@ -127,8 +128,12 @@ export const getAppointments = async (req: Request, res: Response, next: NextFun
     if (serviceId) whereClause.serviceId = serviceId as string;
     if (status) whereClause.status = status as string;
     if (date) {
-      const day = new Date(date as string);
-      whereClause.slot = { startTime: { gte: getStartOfDay(day), lte: getEndOfDay(day) } };
+      // "That day" is the location's day.
+      const tz = locationId
+        ? validTimeZone((await prisma.location.findUnique({ where: { id: locationId as string }, select: { timezone: true } }))?.timezone)
+        : serviceId ? await serviceTimeZone(serviceId as string) : undefined;
+      const day = startOfLocalDate(String(date), tz);
+      whereClause.slot = { startTime: { gte: day, lte: getEndOfDay(day, tz) } };
     }
 
     const appointments = await prisma.appointment.findMany({
@@ -267,7 +272,8 @@ export const checkInAppointment = async (req: Request, res: Response, next: Next
     }
 
     const queue = appointment.slot.queue;
-    if (getStartOfDay(queue.date).getTime() !== getStartOfDay().getTime()) {
+    const tz = await serviceTimeZone(queue.serviceId);
+    if (getStartOfDay(queue.date, tz).getTime() !== getStartOfDay(new Date(), tz).getTime()) {
       return res.status(400).json({ error: 'Check-in opens on the day of the appointment' });
     }
     if (queue.status !== 'ACTIVE') {
@@ -320,16 +326,17 @@ export const getAvailableSlots = async (req: Request, res: Response, next: NextF
     const { serviceId } = req.params;
     const { date } = req.query;
 
-    const targetDate = date ? new Date(date as string) : new Date();
-    if (Number.isNaN(targetDate.getTime())) return res.status(400).json({ error: 'Invalid date' });
-    const startOfDay = getStartOfDay(targetDate);
-    if (startOfDay < getStartOfDay()) {
+    const tz = await serviceTimeZone(serviceId);
+    if (date && !/^\d{4}-\d{2}-\d{2}/.test(String(date))) return res.status(400).json({ error: 'Invalid date' });
+    const startOfDay = date ? startOfLocalDate(String(date), tz) : getStartOfDay(new Date(), tz);
+    if (Number.isNaN(startOfDay.getTime())) return res.status(400).json({ error: 'Invalid date' });
+    if (startOfDay < getStartOfDay(new Date(), tz)) {
       return res.json({ slots: [], message: 'That date has already passed' });
     }
 
     const service = await prisma.service.findUnique({ where: { id: serviceId } });
     if (!service || !service.isActive) return res.json({ slots: [], message: 'This service is not active' });
-    if (!isDayActive(startOfDay, service.activeDays)) {
+    if (!isDayActive(startOfDay, service.activeDays, tz)) {
       return res.json({ slots: [], message: `${service.name} isn't open on this day` });
     }
 

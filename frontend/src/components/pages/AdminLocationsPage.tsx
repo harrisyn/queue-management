@@ -1,5 +1,7 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import api from '@/api/client';
@@ -112,7 +114,7 @@ export default function AdminLocationsPage() {
       await refreshSubscription(); // Refresh subscription to update limits
       resetForm();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to create location');
+      toast.error(errorMessage(err, 'Couldn’t add the location.'));
     }
   };
 
@@ -131,7 +133,7 @@ export default function AdminLocationsPage() {
       await loadLocations(orgId!);
       resetForm();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to update location');
+      toast.error(errorMessage(err, 'Couldn’t save the location.'));
     }
   };
 
@@ -146,7 +148,7 @@ export default function AdminLocationsPage() {
       setShowDetails(false);
       setSelectedLocation(null);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete location');
+      toast.error(errorMessage(err, 'Couldn’t delete the location.'));
     }
   };
 
@@ -206,13 +208,7 @@ export default function AdminLocationsPage() {
   }
 
   if (!loading && !user?.organizationId) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
+    return <NoOrganization />;
   }
 
   return (

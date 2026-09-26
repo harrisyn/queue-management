@@ -25,6 +25,11 @@ import {
   Menu,
   X,
   type LucideIcon,
+  Building2,
+  PackagePlus,
+  Wallet,
+  ImageIcon,
+  Sparkles,
 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useTerms } from '@/hooks/useTerms';
@@ -98,7 +103,21 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
 
   // Grouped by what people come here to do: run today, look back, set up,
   // administer the organization.
-  const groups: { label: string; items: NavItem[] }[] = [
+  // A platform admin outside any organization only has platform pages.
+  const platformOnly = isSuperAdmin && !user?.organizationId;
+  const platformGroup = {
+    label: 'Platform',
+    items: [
+      { href: '/superadmin', label: 'Overview', icon: ShieldCheck, show: isSuperAdmin },
+      { href: '/superadmin/organizations', label: 'Organizations', icon: Building2, show: isSuperAdmin },
+      { href: '/superadmin/plans', label: 'Plans', icon: CreditCard, show: isSuperAdmin },
+      { href: '/superadmin/addon-pricing', label: 'Add-on pricing', icon: PackagePlus, show: isSuperAdmin },
+      { href: '/superadmin/payment-providers', label: 'Payment providers', icon: Wallet, show: isSuperAdmin },
+      { href: '/superadmin/file-storage', label: 'File storage', icon: ImageIcon, show: isSuperAdmin },
+      { href: '/superadmin/ai-providers', label: 'AI providers', icon: Sparkles, show: isSuperAdmin },
+    ],
+  };
+  const groups: { label: string; items: NavItem[] }[] = (platformOnly ? [platformGroup] : [
     {
       label: 'Today',
       items: [
@@ -137,15 +156,15 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     },
     {
       label: 'Platform',
-      items: [{ href: '/superadmin', label: 'Super admin', icon: ShieldCheck, show: isSuperAdmin }],
+      items: [{ href: '/superadmin', label: 'Platform admin', icon: ShieldCheck, show: isSuperAdmin }],
     },
-  ]
+  ])
     .map((g) => ({ ...g, items: g.items.filter((i) => i.show) }))
     .filter((g) => g.items.length > 0);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
-    if (href === '/superadmin') return pathname?.startsWith('/superadmin') || false;
+    if (href === '/superadmin') return platformOnly ? pathname === '/superadmin' : pathname?.startsWith('/superadmin') || false;
     return pathname === href;
   };
 

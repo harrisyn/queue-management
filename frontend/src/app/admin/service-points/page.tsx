@@ -1,5 +1,6 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
 import React, { useEffect, useState, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Building2, Syringe, Stethoscope, Wallet, Pill, FlaskConical, Camera, MapPin } from 'lucide-react';
@@ -167,13 +168,7 @@ const ServicePointsPage: React.FC = () => {
   }
 
   if (!user?.organizationId) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
+    return <NoOrganization />;
   }
 
   return (

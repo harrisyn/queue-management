@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma';
-import { getStartOfDay, getEndOfDay } from '../utils/date';
+import { validTimeZone } from '../utils/date';
 import { consumeCredits } from '../middleware/subscription.middleware';
 import { sendNotificationEmail } from '../utils/email';
 import { getSmsProvider } from './sms';
@@ -14,11 +14,15 @@ const isRealEmail = (email: string) => !email.endsWith('@guest.qms.local');
  * notification settings; each message uses a credit.
  */
 export async function sendAppointmentReminders(): Promise<number> {
-  const tomorrow = new Date(Date.now() + 86400000);
+  // Runs once a day. A rolling 12-36 hour window gives every appointment one
+  // reminder roughly a day ahead, whatever timezone its location is in (the
+  // dedupe key stops repeats).
+  const from = new Date(Date.now() + 12 * 3600000);
+  const to = new Date(Date.now() + 36 * 3600000);
   const appointments = await prisma.appointment.findMany({
     where: {
       status: { in: ['SCHEDULED', 'CONFIRMED'] },
-      slot: { startTime: { gte: getStartOfDay(tomorrow), lte: getEndOfDay(tomorrow) } },
+      slot: { startTime: { gte: from, lt: to } },
     },
     include: {
       user: { select: { id: true, email: true, phone: true, firstName: true } },
@@ -26,7 +30,7 @@ export async function sendAppointmentReminders(): Promise<number> {
       service: {
         select: {
           name: true,
-          location: { select: { name: true, organization: { select: { id: true, name: true, notificationSettings: true, status: true } } } },
+          location: { select: { name: true, timezone: true, organization: { select: { id: true, name: true, notificationSettings: true, status: true } } } },
         },
       },
     },
@@ -43,8 +47,11 @@ export async function sendAppointmentReminders(): Promise<number> {
     if (already) continue;
 
     const settings = readNotificationSettings(org.notificationSettings);
-    const time = appt.slot.startTime.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' });
-    const message = `Reminder: your ${appt.service.name} appointment at ${appt.service.location.name} is tomorrow at ${time}. Please check in at reception when you arrive.`;
+    const tz = validTimeZone(appt.service.location.timezone);
+    const zone = tz ? { timeZone: tz } : {};
+    const day = appt.slot.startTime.toLocaleDateString('en', { weekday: 'long', day: 'numeric', month: 'long', ...zone });
+    const time = appt.slot.startTime.toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit', ...zone });
+    const message = `Reminder: your ${appt.service.name} appointment at ${appt.service.location.name} is on ${day} at ${time}. Please check in when you arrive.`;
 
     let delivered = false;
     if (settings.email && isRealEmail(appt.user.email)) {

@@ -1,5 +1,6 @@
 'use client';
 
+import { localDay } from '@/lib/localDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import api from '@/api/client';
 import Layout from '@/components/Layout';
@@ -51,7 +52,7 @@ const PERIODS = [
 type PeriodId = (typeof PERIODS)[number]['id'];
 
 const mins = (n: number) => (!n ? '–' : n >= 60 ? `${Math.floor(n / 60)}h ${Math.round(n % 60)}m` : `${Math.round(n)} min`);
-const isoDay = (d: Date) => d.toISOString().slice(0, 10);
+const isoDay = localDay;
 const hourLabel = (h: number) => new Date(2000, 0, 1, h).toLocaleTimeString([], { hour: 'numeric' });
 
 /** People per hour of the day. One series: one hue, no legend. */

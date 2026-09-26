@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
 import { PackagePlus } from 'lucide-react';
 import api from '@/api/client';
@@ -60,7 +61,7 @@ export default function AddOnPricingPage() {
       await loadPricing();
     } catch (err) {
       console.error('Failed to save add-on pricing', err);
-      alert('Failed to save. Check the console for details.');
+      toast.error('Couldn’t save the prices. Try again.');
     } finally {
       setSaving(null);
     }

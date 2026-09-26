@@ -1,5 +1,6 @@
 'use client';
 
+import { localDay } from '@/lib/localDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ArrowUp, ArrowDown, ExternalLink, Film, Image as ImageIcon, Link2, Trash2, Upload, Plus, X, CalendarRange,
@@ -29,7 +30,7 @@ const EVERY = [
 
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
-const toDateInput = (iso?: string | null) => (iso ? new Date(iso).toISOString().slice(0, 10) : '');
+const toDateInput = (iso?: string | null) => (iso ? localDay(new Date(iso)) : '');
 const fromDateInput = (value: string, endOfDay: boolean) => (value ? new Date(`${value}T${endOfDay ? '23:59:59' : '00:00:00'}`).toISOString() : null);
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
 

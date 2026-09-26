@@ -1,9 +1,10 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 import { screenName } from '../lib/screenName';
+import { estimateWaitMinutes } from '../services/waitEstimate';
 import { emitToQueue, emitToService, emitToLocation, emitToQueueAndLocation, SOCKET_EVENTS } from '../lib/realtime';
 import { generateTicketNumber, getNextSequence, generateQRData } from '../utils/ticket';
-import { getStartOfDay, generateTimeSlots } from '../utils/date';
+import { getStartOfDay, startOfLocalDate, validTimeZone } from '../utils/date';
 import { v4 as uuidv4 } from 'uuid';
 import { checkLimit } from '../middleware/subscription.middleware';
 import { WAITING_ORDER, computePosition, notifyEntry } from '../services/notifications.service';
@@ -15,6 +16,8 @@ import {
   afterEntryCalled,
   transferEntryToService,
   TransferError,
+  getOrCreateQueueForDate,
+  serviceTimeZone,
 } from '../services/queueEvents.service';
 
 const actorId = (req: Request) => req.user?.userId ?? null;
@@ -34,51 +37,12 @@ const getLocationIdFromQueue = async (queueId: string): Promise<string | null> =
 export const createQueue = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { serviceId, date } = req.body;
-    const queueDate = date ? new Date(date) : getStartOfDay();
-
-    // Check if queue already exists for this service and date
-    let queue = await prisma.queue.findFirst({
-      where: {
-        serviceId,
-        date: queueDate,
-      },
-    });
-
-    if (queue) {
-      return res.json(queue);
-    }
-
-    // Get service to generate slots
-    const service = await prisma.service.findUnique({
-      where: { id: serviceId },
-    });
-
-    if (!service) {
+    const tz = await serviceTimeZone(serviceId);
+    const result = await getOrCreateQueueForDate(serviceId, date ? startOfLocalDate(String(date), tz) : new Date());
+    if (!result) {
       return res.status(404).json({ error: 'Service not found' });
     }
-
-    // Create queue with slots
-    const slots = generateTimeSlots(
-      service.startTime,
-      service.endTime,
-      service.slotDuration,
-      queueDate
-    );
-
-    queue = await prisma.queue.create({
-      data: {
-        serviceId,
-        date: queueDate,
-        slots: {
-          create: slots.map(slot => ({
-            startTime: slot.startTime,
-            endTime: slot.endTime,
-            capacity: service.concurrentLimit,
-          })),
-        },
-      },
-      include: { slots: true },
-    });
+    const queue = await prisma.queue.findUniqueOrThrow({ where: { id: result.queue.id }, include: { slots: true } });
 
     res.status(201).json(queue);
   } catch (error) {
@@ -538,8 +502,8 @@ export const getWaitTime = async (req: Request, res: Response, next: NextFunctio
     const slotDuration = queue.service.slotDuration;
     const concurrentLimit = queue.service.concurrentLimit;
 
-    // Estimate wait time based on queue length and service capacity
-    const estimatedMinutes = Math.ceil((waiting * slotDuration) / concurrentLimit);
+    // From how long service actually takes here, across the desks open now
+    const estimatedMinutes = await estimateWaitMinutes(queue.service, waiting);
 
     res.json({
       queueId: id,
@@ -615,35 +579,8 @@ export const publicJoinQueue = async (req: Request, res: Response, next: NextFun
       });
     }
 
-    // Get or create today's queue for this service
-    const today = getStartOfDay();
-    let queue = await prisma.queue.findFirst({
-      where: { serviceId, date: today },
-    });
-
-    if (!queue) {
-      // Create queue with slots
-      const slots = generateTimeSlots(
-        service.startTime,
-        service.endTime,
-        service.slotDuration,
-        today
-      );
-
-      queue = await prisma.queue.create({
-        data: {
-          serviceId,
-          date: today,
-          slots: {
-            create: slots.map(slot => ({
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-              capacity: service.concurrentLimit,
-            })),
-          },
-        },
-      });
-    }
+    // Today's queue for this service, in the location's own day
+    const { queue } = (await getOrCreateQueueForDate(serviceId))!;
 
     if (queue.status !== 'ACTIVE') {
       return res.status(400).json({ error: 'Queue is not accepting new entries at this time' });
@@ -686,7 +623,7 @@ export const publicJoinQueue = async (req: Request, res: Response, next: NextFun
     const position = Math.max(0, (await computePosition(queue.id, entry.id)) - 1);
 
     // Estimate wait time (rough: position * average slot duration)
-    const estimatedWait = (position + 1) * service.slotDuration;
+    const estimatedWait = await estimateWaitMinutes(service, position + 1);
 
     // Emit real-time update to both queue and location rooms
     const updateData = {
@@ -833,9 +770,7 @@ export const getPublicStatus = async (req: Request, res: Response, next: NextFun
     // Estimate wait time based on position and service configuration
     const slotDuration = queue.service.slotDuration;
     const concurrentLimit = queue.service.concurrentLimit;
-    const estimatedWaitTime = position 
-      ? Math.ceil((position * slotDuration) / concurrentLimit)
-      : 0;
+    const estimatedWaitTime = position ? await estimateWaitMinutes(queue.service, position) : 0;
 
     // Count totals
     const waitingCount = allEntries.filter(e => e.status === 'WAITING').length;
@@ -1146,35 +1081,8 @@ export const publicJoinQueueWithSession = async (req: Request, res: Response, ne
       });
     }
 
-    // Get or create today's queue for this service
-    const today = getStartOfDay();
-    let queue = await prisma.queue.findFirst({
-      where: { serviceId, date: today },
-    });
-
-    if (!queue) {
-      // Create queue with slots
-      const slots = generateTimeSlots(
-        service.startTime,
-        service.endTime,
-        service.slotDuration,
-        today
-      );
-
-      queue = await prisma.queue.create({
-        data: {
-          serviceId,
-          date: today,
-          slots: {
-            create: slots.map(slot => ({
-              startTime: slot.startTime,
-              endTime: slot.endTime,
-              capacity: service.concurrentLimit,
-            })),
-          },
-        },
-      });
-    }
+    // Today's queue for this service, in the location's own day
+    const { queue } = (await getOrCreateQueueForDate(serviceId))!;
 
     if (queue.status !== 'ACTIVE') {
       return res.status(400).json({ error: 'Queue is not accepting new entries at this time' });
@@ -1226,7 +1134,7 @@ export const publicJoinQueueWithSession = async (req: Request, res: Response, ne
     const position = Math.max(0, (await computePosition(queue.id, entry.id)) - 1);
 
     // Estimate wait time (rough: position * average slot duration)
-    const estimatedWait = (position + 1) * service.slotDuration;
+    const estimatedWait = await estimateWaitMinutes(service, position + 1);
 
     // Emit real-time update to both queue and location rooms
     const updateData = {
@@ -1306,7 +1214,7 @@ export const getSessionTickets = async (req: Request, res: Response, next: NextF
           ticketNumber: entry.ticketNumber,
           status: entry.status,
           position,
-          estimatedWait: position ? position * entry.queue.service.slotDuration : 0,
+          estimatedWait: position ? await estimateWaitMinutes(entry.queue.service, position) : 0,
           serviceName: entry.queue.service.name,
           locationName: entry.queue.service.location.name,
           queueId: entry.queueId,
@@ -1329,6 +1237,8 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
   try {
     const { id, entryId } = req.params;
 
+    const currentQueue = await prisma.queue.findUnique({ where: { id }, select: { serviceId: true } });
+    const todayHere = getStartOfDay(new Date(), currentQueue ? await serviceTimeZone(currentQueue.serviceId) : undefined);
     const existing = await prisma.queueEntry.findUnique({ where: { id: entryId }, select: { calledAt: true } });
     const entry = await prisma.queueEntry.update({
       where: { id: entryId },
@@ -1354,7 +1264,7 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
                         location: true,
                         queues: {
                           where: {
-                            date: getStartOfDay(),
+                            date: todayHere,
                             status: 'ACTIVE',
                           },
                           include: {
@@ -1439,9 +1349,6 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
 export const getLocationQueues = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { locationId } = req.params;
-    const today = getStartOfDay();
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
     // Get the location with organization's default display mode
     const locationData = await prisma.location.findUnique({
@@ -1452,6 +1359,8 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
         }
       }
     });
+    const today = getStartOfDay(new Date(), validTimeZone(locationData?.timezone));
+    const thirtyDaysAgo = new Date(today.getTime() - 30 * 86400000);
     
     const orgDefaultDisplayMode = locationData?.organization?.defaultDisplayMode || 'TICKET_ONLY';
 

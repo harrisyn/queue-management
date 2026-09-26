@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import { useTerms } from '@/hooks/useTerms';
 import React, { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
@@ -194,7 +195,7 @@ export default function AdminDataSourcesPage() {
       loadDataSources();
     } catch (err) {
       console.error('Failed to save data source:', err);
-      alert('Failed to save data source');
+      toast.error('Couldn’t save the data source.');
     }
   };
 
@@ -209,7 +210,7 @@ export default function AdminDataSourcesPage() {
       }
     } catch (err) {
       console.error('Failed to delete data source:', err);
-      alert('Failed to delete data source');
+      toast.error('Couldn’t delete the data source.');
     }
   };
 
@@ -255,7 +256,7 @@ export default function AdminDataSourcesPage() {
       setSelectedSource(updated);
     } catch (err) {
       console.error('Failed to add mapping:', err);
-      alert('Failed to add field mapping');
+      toast.error('Couldn’t add the field mapping.');
     }
   };
 

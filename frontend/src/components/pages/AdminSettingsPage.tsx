@@ -1,5 +1,6 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Building2, ContactRound, MonitorSmartphone, Bell, Palette, Globe, Lock, Upload, ArrowUp, ArrowDown, X, Plus,
@@ -259,7 +260,8 @@ export default function AdminSettingsPage() {
     return <Layout><div style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" /></div></Layout>;
   }
   if (!organization) {
-    return <Layout><div className="inline-alert inline-alert-error">{message?.text || 'No organization is associated with this account.'}</div></Layout>;
+    if (!user?.organizationId) return <NoOrganization />;
+    return <Layout><div className="inline-alert inline-alert-error">{message?.text || 'Couldn’t load your settings. Refresh to try again.'}</div></Layout>;
   }
 
   const standardAvailable = STANDARD_FIELDS.filter((f) => !fields.some((x) => x.key === f.key));

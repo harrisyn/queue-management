@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState, useCallback } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import api from '@/api/client';
@@ -65,7 +66,7 @@ const MyQueuePage: React.FC = () => {
     });
 
     const unsubNotify = onNotification((notification) => {
-      alert(notification.message);
+      toast(notification.message);
     });
 
     return () => {

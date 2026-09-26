@@ -232,13 +232,13 @@ export default function OrganizationsPage() {
                     </td>
                     <td style={td}>
                       <Badge tone={getStatusTone(org.subscription?.status)}>
-                        {org.subscription?.status || 'None'}
+                        {org.subscription?.status ? org.subscription.status[0] + org.subscription.status.slice(1).toLowerCase().replace('_', ' ') : 'No plan'}
                       </Badge>
                     </td>
                     <td style={td}>
                       <div style={usageCell}>
-                        <span>{org._count.locations} locations</span>
-                        <span>{org._count.users} users</span>
+                        <span>{org._count.locations} {org._count.locations === 1 ? 'location' : 'locations'}</span>
+                        <span>{org._count.users} {org._count.users === 1 ? 'person' : 'people'}</span>
                       </div>
                     </td>
                     <td style={td}>

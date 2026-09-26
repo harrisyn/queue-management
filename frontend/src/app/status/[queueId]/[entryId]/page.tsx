@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import QrCode from '@/components/QrCode';
 import React, { useState, useEffect, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
@@ -741,7 +742,7 @@ export default function QueueStatusPage({
                     });
                   } else {
                     navigator.clipboard.writeText(window.location.href);
-                    alert('Link copied to clipboard!');
+                    toast.success('Link copied.');
                   }
                 }}
                 style={{ ...shareUrlButton, background: brandColor }}

@@ -1,5 +1,6 @@
 'use client';
 
+import { localDay } from '@/lib/localDate';
 import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Check, Circle, X } from 'lucide-react';
@@ -107,7 +108,7 @@ export default function DashboardPage() {
   }, [user?.organizationId]);
 
   const load = useCallback(async (id: string) => {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = localDay();
     const [m, d, a] = await Promise.all([
       api.getDetailedAnalytics(id).catch(() => null),
       api.getLocationInstances(id).catch(() => []),

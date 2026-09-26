@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma';
 import { emitToQueue, emitToLocation, SOCKET_EVENTS } from '../lib/realtime';
 import { generateTicketNumber, getNextSequence } from '../utils/ticket';
-import { getStartOfDay, generateTimeSlots } from '../utils/date';
+import { getStartOfDay, generateTimeSlots, validTimeZone } from '../utils/date';
 import { dispatchWebhook, WebhookEvent } from './webhooks.service';
 import { notifyEntry, notifyPositions } from './notifications.service';
 
@@ -170,24 +170,45 @@ export async function afterEntryCalled(entryId: string, servicePointName?: strin
 // Transfers
 // ---------------------------------------------------------------------------
 
-export async function getOrCreateQueueForDate(serviceId: string, date: Date = new Date()) {
-  const service = await prisma.service.findUnique({ where: { id: serviceId } });
-  if (!service) return null;
-  const day = getStartOfDay(date);
-  const existing = await prisma.queue.findFirst({ where: { serviceId, date: day } });
-  if (existing) return { queue: existing, service };
+/** The location's timezone for a service, if it's a real one. */
+export async function serviceTimeZone(serviceId: string): Promise<string | undefined> {
+  const s = await prisma.service.findUnique({ where: { id: serviceId }, select: { location: { select: { timezone: true } } } });
+  return validTimeZone(s?.location?.timezone);
+}
 
-  const slots = generateTimeSlots(service.startTime, service.endTime, service.slotDuration, day);
-  const queue = await prisma.queue.create({
-    data: {
-      serviceId,
-      date: day,
-      slots: {
-        create: slots.map((slot) => ({ startTime: slot.startTime, endTime: slot.endTime, capacity: service.concurrentLimit })),
+/**
+ * Today's (or a given day's) queue for a service, created on first use with
+ * its appointment slots. "Today" and the opening hours are the location's
+ * local time. Safe when two people join at the same moment.
+ */
+export async function getOrCreateQueueForDate(serviceId: string, date: Date = new Date()) {
+  const service = await prisma.service.findUnique({ where: { id: serviceId }, include: { location: { select: { timezone: true } } } });
+  if (!service) return null;
+  const tz = validTimeZone(service.location?.timezone);
+  const day = getStartOfDay(date, tz);
+  const existing = await prisma.queue.findFirst({ where: { serviceId, date: day } });
+  if (existing) return { queue: existing, service, tz };
+
+  const slots = generateTimeSlots(service.startTime, service.endTime, service.slotDuration, day, tz);
+  try {
+    const queue = await prisma.queue.create({
+      data: {
+        serviceId,
+        date: day,
+        slots: {
+          create: slots.map((slot) => ({ startTime: slot.startTime, endTime: slot.endTime, capacity: service.concurrentLimit })),
+        },
       },
-    },
-  });
-  return { queue, service };
+    });
+    return { queue, service, tz };
+  } catch (error) {
+    // Someone else created it between our read and write.
+    if ((error as { code?: string }).code === 'P2002') {
+      const queue = await prisma.queue.findFirst({ where: { serviceId, date: day } });
+      if (queue) return { queue, service, tz };
+    }
+    throw error;
+  }
 }
 
 export class TransferError extends Error {

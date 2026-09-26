@@ -6,6 +6,22 @@ import { sendAppointmentReminders } from '../services/reminders.service';
 import { createDailyDigest } from '../controllers/ai.controller';
 import { sendNotificationEmail } from '../utils/email';
 import { buildAppUrl } from '../config/appConfig';
+import { sealConfig } from '../lib/dataSourceSecrets';
+
+/** Encrypts any data-source secrets still stored in plain text (rows saved
+ * before encryption existed). Idempotent: sealed values are left alone. */
+async function sealPlaintextDataSourceSecrets() {
+  const sources = await prisma.dataSource.findMany({ select: { id: true, config: true } });
+  let sealed = 0;
+  for (const ds of sources) {
+    const next = sealConfig(ds.config, ds.config);
+    if (JSON.stringify(next) !== JSON.stringify(ds.config)) {
+      await prisma.dataSource.update({ where: { id: ds.id }, data: { config: next as any } });
+      sealed++;
+    }
+  }
+  return sealed;
+}
 
 // Scheduled jobs, triggered by Vercel Cron (or any scheduler) with
 // `Authorization: Bearer $CRON_SECRET`.
@@ -41,6 +57,7 @@ router.all('/frequent', async (_req, res, next) => {
 router.all('/daily', async (_req, res, next) => {
   try {
     const reminders = await sendAppointmentReminders();
+    const secretsSealed = await sealPlaintextDataSourceSecrets().catch((e) => { console.error('Sealing data source secrets failed:', e); return 0; });
 
     const orgs = await prisma.organization.findMany({
       where: { aiEnabled: true, status: 'ACTIVE' },
@@ -66,7 +83,7 @@ More detail: ${link}`, org.name);
         console.error(`Digest failed for org ${org.id}:`, error);
       }
     }
-    res.json({ reminders, digests });
+    res.json({ reminders, digests, secretsSealed });
   } catch (error) {
     next(error);
   }

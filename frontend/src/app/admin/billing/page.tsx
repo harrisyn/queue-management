@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard, XCircle } from 'lucide-react';
 import api from '@/api/client';
@@ -174,7 +175,7 @@ export default function BillingPage() {
       window.location.href = redirectUrl;
     } catch (err) {
       console.error('Add-on checkout failed', err);
-      alert('Could not start checkout. Please try again.');
+      toast.error('Checkout didn’t start. Try again.');
     }
   };
 
@@ -185,7 +186,7 @@ export default function BillingPage() {
       await load();
     } catch (err) {
       console.error('Failed to cancel add-on', err);
-      alert('Could not cancel add-on. Please try again.');
+      toast.error('Couldn’t cancel the add-on. Try again.');
     }
   };
 
@@ -198,7 +199,7 @@ export default function BillingPage() {
         await load();
       } catch (err) {
         console.error('Failed to switch plan', err);
-        alert('Could not switch plans. Please try again.');
+        toast.error('Couldn’t switch plans. Try again.');
       }
       return;
     }
@@ -216,7 +217,7 @@ export default function BillingPage() {
       window.location.href = redirectUrl;
     } catch (err) {
       console.error('Checkout failed', err);
-      alert('Could not start checkout. Please try again.');
+      toast.error('Checkout didn’t start. Try again.');
     }
   };
 
@@ -286,12 +287,12 @@ export default function BillingPage() {
                         onChange={e => setAddOnForms(prev => ({ ...prev, [pricing.resourceType]: { ...form, quantity: Math.max(1, parseInt(e.target.value) || 1) } }))}
                       />
                       <Select
-                        label="Billing"
+                        label="Pay"
                         value={form.billingMode}
                         onChange={e => setAddOnForms(prev => ({ ...prev, [pricing.resourceType]: { ...form, billingMode: e.target.value as 'recurring' | 'one_off' } }))}
                       >
-                        <option value="recurring">Recurring (monthly)</option>
-                        <option value="one_off">One-off (permanent)</option>
+                        <option value="recurring">Every month</option>
+                        <option value="one_off">Once, keep forever</option>
                       </Select>
                     </div>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>

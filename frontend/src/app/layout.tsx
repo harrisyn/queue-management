@@ -5,6 +5,7 @@ import './settings.css';
 import './desk.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
+import ToastHost from '@/components/ui/ToastHost';
 import { APP_NAME } from '@/lib/appConfig';
 
 // Two families: Public Sans for UI/body (plain, highly legible - civic and
@@ -73,6 +74,7 @@ export default function RootLayout({
         <AuthProvider>
           <SubscriptionProvider>
             {children}
+            <ToastHost />
           </SubscriptionProvider>
         </AuthProvider>
       </body>

@@ -81,58 +81,21 @@ export default function SuperadminDashboard() {
     <div style={pageContainer}>
       <PageHeader title="Platform overview" subtitle="Every organization on the platform, at a glance." icon={LayoutDashboard} />
 
-      {/* Stats Grid */}
-      <div style={statsGrid}>
-        <Card style={statCard}>
-          <div style={statIconWrap}><Icon icon={Building2} size={24} color="var(--primary-600)" /></div>
-          <div style={statContent}>
-            <span style={statValue}>{stats.totalOrganizations}</span>
-            <span style={statLabel}>Organizations</span>
-          </div>
-        </Card>
-        <Card style={statCard}>
-          <div style={statIconWrap}><Icon icon={CheckCircle2} size={24} color="var(--primary-600)" /></div>
-          <div style={statContent}>
-            <span style={statValue}>{stats.activeSubscriptions}</span>
-            <span style={statLabel}>Active Subscriptions</span>
-          </div>
-        </Card>
-        <Card style={statCard}>
-          <div style={statIconWrap}><Icon icon={Gift} size={24} color="var(--primary-600)" /></div>
-          <div style={statContent}>
-            <span style={statValue}>{stats.trialSubscriptions}</span>
-            <span style={statLabel}>On Trial</span>
-          </div>
-        </Card>
-        <Card style={{ ...statCard, background: 'var(--success-600)' }}>
-          <div style={{ ...statIconWrap, background: 'rgba(255,255,255,0.2)' }}><Icon icon={DollarSign} size={24} color="#fff" /></div>
-          <div style={statContent}>
-            <span style={{ ...statValue, color: '#fff' }}>${stats.mrr}</span>
-            <span style={{ ...statLabel, color: 'rgba(255,255,255,0.85)' }}>Monthly Revenue</span>
-          </div>
-        </Card>
-        <Card style={statCard}>
-          <div style={statIconWrap}><Icon icon={MapPin} size={24} color="var(--primary-600)" /></div>
-          <div style={statContent}>
-            <span style={statValue}>{stats.totalLocations}</span>
-            <span style={statLabel}>Total Locations</span>
-          </div>
-        </Card>
-        <Card style={statCard}>
-          <div style={statIconWrap}><Icon icon={Users} size={24} color="var(--primary-600)" /></div>
-          <div style={statContent}>
-            <span style={statValue}>{stats.totalUsers}</span>
-            <span style={statLabel}>Total Users</span>
-          </div>
-        </Card>
-      </div>
+      <section className="today-numbers sa-numbers" aria-label="Platform totals">
+        <div><b>{stats.totalOrganizations}</b><span>organizations</span></div>
+        <div><b>{stats.activeSubscriptions}</b><span>paying or active plans</span></div>
+        <div><b>{stats.trialSubscriptions}</b><span>on a trial</span></div>
+        <div><b>${stats.mrr}</b><span>monthly revenue</span></div>
+        <div><b>{stats.totalLocations}</b><span>locations</span></div>
+        <div><b>{stats.totalUsers}</b><span>people with accounts</span></div>
+      </section>
 
       {/* Main Content */}
       <div style={contentGrid}>
         {/* Plan Breakdown */}
         <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
-            <h2 style={cardTitle}>Subscription Distribution</h2>
+            <h2 style={cardTitle}>Organizations by plan</h2>
             <Link href="/superadmin/plans" style={cardLink}>Manage Plans →</Link>
           </div>
           <div style={planList}>
@@ -160,7 +123,7 @@ export default function SuperadminDashboard() {
         {/* Recent Organizations */}
         <Card style={{ overflow: 'hidden' }}>
           <div style={cardHeader}>
-            <h2 style={cardTitle}>Recent Organizations</h2>
+            <h2 style={cardTitle}>Newest organizations</h2>
             <Link href="/superadmin/organizations" style={cardLink}>View All →</Link>
           </div>
           <div style={orgList}>
@@ -173,7 +136,7 @@ export default function SuperadminDashboard() {
                 <div style={orgMeta}>
                   <Badge tone={getStatusTone(org.subscription?.status)}>{org.subscription?.status || 'No Plan'}</Badge>
                   <span style={orgStats}>
-                    {org._count.locations} loc · {org._count.users} users
+                    {org._count.locations} {org._count.locations === 1 ? 'location' : 'locations'}, {org._count.users} {org._count.users === 1 ? 'person' : 'people'}
                   </span>
                 </div>
               </Link>

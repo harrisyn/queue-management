@@ -27,4 +27,19 @@ describe('dataSourceSecrets', () => {
     const updated = sealConfig({ ...plain, auth: { type: 'bearer', token: 'tok_new' } }, stored);
     expect(openConfig(updated).auth.token).toBe('tok_new');
   });
+
+  it('encrypts custom header values and hides them from the client', () => {
+    const withHeaders = { ...plain, headers: { 'X-Api-Key': 'key_abc' } };
+    const sealed = sealConfig(withHeaders);
+    expect(sealed.headers['X-Api-Key']).toMatch(/^enc:/);
+    expect(openConfig(sealed).headers['X-Api-Key']).toBe('key_abc');
+    expect(redactConfig(sealed).headers['X-Api-Key']).toBe(SECRET_PLACEHOLDER);
+    const resaved = sealConfig({ ...withHeaders, headers: { 'X-Api-Key': SECRET_PLACEHOLDER } }, sealed);
+    expect(resaved.headers['X-Api-Key']).toBe(sealed.headers['X-Api-Key']);
+  });
+
+  it('is idempotent, so a backfill can run over already-sealed rows', () => {
+    const sealed = sealConfig({ ...plain, headers: { A: 'b' } });
+    expect(sealConfig(sealed, sealed)).toEqual(sealed);
+  });
 });

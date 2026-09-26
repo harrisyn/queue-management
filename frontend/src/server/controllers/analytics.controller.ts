@@ -1,6 +1,26 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
-import { getStartOfDay, getEndOfDay } from '../utils/date';
+import { getStartOfDay, getEndOfDay, startOfLocalDate, hourIn, validTimeZone } from '../utils/date';
+import { serviceTimeZone } from '../services/queueEvents.service';
+
+/** Timezone of the location, service or queue named in the URL. */
+async function tzFor(req: Request): Promise<string | undefined> {
+  const { locationId, serviceId, id } = req.params as Record<string, string | undefined>;
+  if (locationId) return validTimeZone((await prisma.location.findUnique({ where: { id: locationId }, select: { timezone: true } }))?.timezone);
+  if (serviceId) return serviceTimeZone(serviceId);
+  if (id) {
+    const q = await prisma.queue.findUnique({ where: { id }, select: { serviceId: true } });
+    return q ? serviceTimeZone(q.serviceId) : undefined;
+  }
+  return undefined;
+}
+
+/** startDate/endDate ("YYYY-MM-DD") as local days; defaults to today. */
+function localRange(query: Request['query'], tz: string | undefined, defaultStart?: Date) {
+  const start = query.startDate ? startOfLocalDate(String(query.startDate), tz) : defaultStart ?? getStartOfDay(new Date(), tz);
+  const end = query.endDate ? getEndOfDay(startOfLocalDate(String(query.endDate), tz), tz) : getEndOfDay(new Date(), tz);
+  return { start, end };
+}
 
 // Queue metrics for a specific date
 export const getQueueMetrics = async (req: Request, res: Response, next: NextFunction) => {
@@ -69,8 +89,7 @@ export const getServiceMetrics = async (req: Request, res: Response, next: NextF
     const { serviceId } = req.params;
     const { startDate, endDate } = req.query;
 
-    const start = startDate ? getStartOfDay(new Date(startDate as string)) : getStartOfDay(new Date());
-    const end = endDate ? getEndOfDay(new Date(endDate as string)) : getEndOfDay(new Date());
+    const { start, end } = localRange(req.query, await tzFor(req));
 
     const queues = await prisma.queue.findMany({
       where: {
@@ -131,7 +150,8 @@ export const getLocationMetrics = async (req: Request, res: Response, next: Next
     const { locationId } = req.params;
     const { date } = req.query;
 
-    const targetDate = date ? getStartOfDay(new Date(date as string)) : getStartOfDay(new Date());
+    const tzHere = await tzFor(req);
+    const targetDate = date ? startOfLocalDate(String(date), tzHere) : getStartOfDay(new Date(), tzHere);
 
     const services = await prisma.service.findMany({
       where: { locationId },
@@ -195,8 +215,8 @@ export const getFlowAnalytics = async (req: Request, res: Response, next: NextFu
     const { locationId } = req.params;
     const { startDate, endDate } = req.query;
 
-    const start = startDate ? getStartOfDay(new Date(startDate as string)) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-    const end = endDate ? getEndOfDay(new Date(endDate as string)) : new Date();
+    const tzHere = await tzFor(req);
+    const { start, end } = localRange(req.query, tzHere, new Date(Date.now() - 7 * 24 * 60 * 60 * 1000));
 
     // Get service flows for this location
     const services = await prisma.service.findMany({
@@ -236,6 +256,7 @@ export const getPeakHoursAnalysis = async (req: Request, res: Response, next: Ne
 
     const daysBack = parseInt(days as string) || 30;
     const startDate = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000);
+    const tzHere = await tzFor(req);
 
     const entries = await prisma.queueEntry.findMany({
       where: {
@@ -251,7 +272,7 @@ export const getPeakHoursAnalysis = async (req: Request, res: Response, next: Ne
     for (let i = 0; i < 24; i++) hourCounts[i] = 0;
 
     entries.forEach(entry => {
-      const hour = entry.joinedAt.getHours();
+      const hour = hourIn(entry.joinedAt, tzHere);
       hourCounts[hour]++;
     });
 
@@ -278,8 +299,7 @@ export const getDetailedLocationMetrics = async (req: Request, res: Response, ne
     const { locationId } = req.params;
     const { startDate, endDate } = req.query;
 
-    const start = startDate ? getStartOfDay(new Date(startDate as string)) : getStartOfDay(new Date());
-    const end = endDate ? getEndOfDay(new Date(endDate as string)) : getEndOfDay(new Date());
+    const { start, end } = localRange(req.query, await tzFor(req));
 
     // Get all services at this location
     const services = await prisma.service.findMany({
@@ -402,8 +422,7 @@ export const getJourneyAnalytics = async (req: Request, res: Response, next: Nex
     const { locationId } = req.params;
     const { startDate, endDate } = req.query;
 
-    const start = startDate ? getStartOfDay(new Date(startDate as string)) : getStartOfDay(new Date());
-    const end = endDate ? getEndOfDay(new Date(endDate as string)) : getEndOfDay(new Date());
+    const { start, end } = localRange(req.query, await tzFor(req));
 
     // Get customer journeys for this location
     const journeys = await prisma.customerJourney.findMany({

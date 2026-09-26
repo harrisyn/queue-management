@@ -1,5 +1,6 @@
 import prisma from '../../lib/prisma';
-import { getStartOfDay } from '../../utils/date';
+import { getStartOfDay, hourIn, weekdayIn, zonedParts } from '../../utils/date';
+import { serviceTimeZone } from '../queueEvents.service';
 import { liveStatus } from './metrics';
 
 /**
@@ -19,15 +20,17 @@ function quantile(values: number[], q: number): number | null {
 
 const median = (values: number[]) => quantile(values, 0.5);
 
-async function history(serviceId: string, weekday: number) {
-  const since = getStartOfDay(new Date(Date.now() - HISTORY_WEEKS * 7 * 86400000));
+// Hours and weekdays are the location's local time.
+async function history(serviceId: string, weekday: number, tz?: string) {
+  const since = getStartOfDay(new Date(Date.now() - HISTORY_WEEKS * 7 * 86400000), tz);
   const entries = await prisma.queueEntry.findMany({
-    where: { queue: { serviceId }, joinedAt: { gte: since, lt: getStartOfDay() } },
+    where: { queue: { serviceId }, joinedAt: { gte: since, lt: getStartOfDay(new Date(), tz) } },
     select: { joinedAt: true, calledAt: true, completedAt: true, status: true, waitDuration: true, serviceDuration: true },
     take: 20_000,
   });
-  const sameWeekday = entries.filter((e) => e.joinedAt.getDay() === weekday);
-  const weekdaysSeen = new Set(sameWeekday.map((e) => e.joinedAt.toISOString().slice(0, 10))).size;
+  const sameWeekday = entries.filter((e) => weekdayIn(e.joinedAt, tz) === weekday);
+  const dayKey = (d: Date) => (tz ? (({ year, month, day }) => `${year}-${month}-${day}`)(zonedParts(d, tz)) : d.toDateString());
+  const weekdaysSeen = new Set(sameWeekday.map((e) => dayKey(e.joinedAt))).size;
   return { entries, sameWeekday, weekdaysSeen };
 }
 
@@ -52,7 +55,9 @@ export async function forecastService(organizationId: string, serviceId: string)
   if (!service) return null;
 
   const now = new Date();
-  const { entries, sameWeekday, weekdaysSeen } = await history(serviceId, now.getDay());
+  const tz = await serviceTimeZone(serviceId);
+  const nowHour = hourIn(now, tz);
+  const { entries, sameWeekday, weekdaysSeen } = await history(serviceId, weekdayIn(now, tz), tz);
 
   const serviceTimes = entries
     .map((e) => e.serviceDuration ?? (e.status === 'SERVED' && e.calledAt && e.completedAt ? (e.completedAt.getTime() - e.calledAt.getTime()) / 60000 : null))
@@ -60,19 +65,19 @@ export async function forecastService(organizationId: string, serviceId: string)
   const typicalServiceMinutes = median(serviceTimes) ?? service.slotDuration;
 
   const arrivalsByHour = new Map<number, number>();
-  for (const e of sameWeekday) arrivalsByHour.set(e.joinedAt.getHours(), (arrivalsByHour.get(e.joinedAt.getHours()) || 0) + 1);
+  for (const e of sameWeekday) arrivalsByHour.set(hourIn(e.joinedAt, tz), (arrivalsByHour.get(hourIn(e.joinedAt, tz)) || 0) + 1);
   const expectedArrivals = [...arrivalsByHour.entries()]
-    .filter(([hour]) => hour >= now.getHours())
+    .filter(([hour]) => hour >= nowHour)
     .sort((a, b) => a[0] - b[0])
     .map(([hour, count]) => ({ hour, expectedArrivals: Math.round((count / Math.max(1, weekdaysSeen)) * 10) / 10 }));
 
   const waitsThisHour = sameWeekday
-    .filter((e) => e.joinedAt.getHours() === now.getHours())
+    .filter((e) => hourIn(e.joinedAt, tz) === nowHour)
     .map(waitOf)
     .filter((v): v is number => v !== null);
 
   const waiting = await prisma.queueEntry.count({
-    where: { status: 'WAITING', queue: { serviceId, date: getStartOfDay() } },
+    where: { status: 'WAITING', queue: { serviceId, date: getStartOfDay(new Date(), tz) } },
   });
   const servers = await activeServers(serviceId);
 
@@ -125,9 +130,10 @@ export async function locationAlerts(organizationId: string, locationId: string)
       });
       continue;
     }
-    const { sameWeekday } = await history(s.serviceId, now.getDay());
+    const tz = await serviceTimeZone(s.serviceId);
+    const { sameWeekday } = await history(s.serviceId, weekdayIn(now, tz), tz);
     const busy = quantile(
-      sameWeekday.filter((e) => e.joinedAt.getHours() === now.getHours()).map(waitOf).filter((v): v is number => v !== null),
+      sameWeekday.filter((e) => hourIn(e.joinedAt, tz) === hourIn(now, tz)).map(waitOf).filter((v): v is number => v !== null),
       0.75
     );
     const threshold = Math.max(15, (busy ?? 10) * 1.5);
@@ -138,7 +144,7 @@ export async function locationAlerts(organizationId: string, locationId: string)
         severity: 'warning',
         message:
           `Longest wait is ${s.longestCurrentWaitMinutes} min with ${s.waiting} waiting` +
-          (busy !== null ? `; a busy ${now.toLocaleDateString('en', { weekday: 'long' })} at this hour is about ${Math.round(busy)} min.` : '.'),
+          (busy !== null ? `; a busy ${now.toLocaleDateString('en', { weekday: 'long', ...(tz ? { timeZone: tz } : {}) })} at this hour is about ${Math.round(busy)} min.` : '.'),
       });
     }
   }

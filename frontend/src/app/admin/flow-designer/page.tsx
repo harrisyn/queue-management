@@ -1,5 +1,6 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
 import { useTerms } from '@/hooks/useTerms';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Workflow } from 'lucide-react';
@@ -380,13 +381,7 @@ const FlowDesignerPage: React.FC = () => {
   }
 
   if (!user?.organizationId) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
+    return <NoOrganization />;
   }
 
   return (

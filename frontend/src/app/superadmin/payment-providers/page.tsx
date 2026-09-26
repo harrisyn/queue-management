@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Loader2, Wallet } from 'lucide-react';
 import api from '@/api/client';
@@ -55,7 +56,7 @@ export default function PaymentProvidersPage() {
   const handleSave = async (provider: 'stripe' | 'paystack') => {
     const form = forms[provider];
     if (!form.secretKey || !form.webhookSecret) {
-      alert('Secret key and webhook secret are required to save.');
+      toast.error('Add the secret key and webhook secret to save.');
       return;
     }
     setSaving(provider);
@@ -64,7 +65,7 @@ export default function PaymentProvidersPage() {
       await loadProviders();
     } catch (err) {
       console.error('Failed to save provider config', err);
-      alert('Failed to save. Check the console for details.');
+      toast.error('Couldn’t save. Check the keys and try again.');
     } finally {
       setSaving(null);
     }
