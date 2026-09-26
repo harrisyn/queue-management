@@ -49,13 +49,16 @@ interface ServiceFormData {
 
 const ServicesPage: React.FC = () => {
   const { user, isAdmin } = useAuthContext();
-  const { canCreate, limits, refresh: refreshSubscription } = useSubscription();
+  const { canCreate, limits, refresh: refreshSubscription, loading: subscriptionLoading } = useSubscription();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  // Services for the selected location have been fetched at least once; until
+  // then show the spinner, not the "No Services Yet" / "No locations" states.
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -102,9 +105,11 @@ const ServicesPage: React.FC = () => {
       } else {
         setSelectedLocation('');
         setServices([]);
+        setDataLoaded(true);
       }
     } catch (err) {
       console.error(err);
+      setDataLoaded(true);
     }
   }, []);
 
@@ -114,6 +119,8 @@ const ServicesPage: React.FC = () => {
       setServices(svcs);
     } catch (err) {
       console.error(err);
+    } finally {
+      setDataLoaded(true);
     }
   }, []);
 
@@ -260,7 +267,7 @@ const ServicesPage: React.FC = () => {
         <PageHeader
           icon={Layers}
           title="Services"
-          subtitle={`Configure and manage your queue services (${limits.services.current}/${limits.services.limit} used)`}
+          subtitle={subscriptionLoading ? 'Configure and manage your queue services' : `Configure and manage your queue services (${limits.services.current}/${limits.services.limit} used)`}
           actions={
             <button
               onClick={() => setShowWizard(true)}
@@ -324,7 +331,7 @@ const ServicesPage: React.FC = () => {
               style={filterSelect}
             >
               {locations.length === 0 ? (
-                <option value="">No locations available</option>
+                <option value="">{dataLoaded ? 'No locations available' : 'Loading…'}</option>
               ) : (
                 locations.map(loc => (
                   <option key={loc.id} value={loc.id}>{loc.name}</option>
@@ -544,7 +551,7 @@ const ServicesPage: React.FC = () => {
         )}
 
         {/* Services Grid */}
-        {loading ? (
+        {loading || (user?.organizationId && !dataLoaded) ? (
           <div style={{ padding: '2rem', textAlign: 'center' }}>
             <div className="spinner" />
           </div>

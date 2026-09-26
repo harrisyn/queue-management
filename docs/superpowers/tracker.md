@@ -84,7 +84,11 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 
 ## UI pass (as pages are touched)
 
-- [~] Headed-browser pass so far: invite, forgot/reset password, login, dashboard, appointments, audit log, integrations, settings, analytics, display 404, privacy, superadmin AI providers + payment providers. Not yet walked: services, locations, service points, flow designer, QR, data sources, billing, join/status/display (happy path), superadmin orgs/plans
+- [x] Headed-browser pass: every tenant admin page, superadmin dashboard/orgs/plans/payment/AI providers, auth pages, and the public join → status → display flow (live updates confirmed on the status page and display board)
+- [x] Services/Locations flashed "No services / No locations" and a wrong usage count before data loaded
+- [x] Join page: fields now First/Last name → contact → custom (was Phone, Last, MR, First); labels linked to inputs (screen readers); friendly "Please enter your name" instead of "Service ID and name are required"
+- [x] Kiosk mode hid optional name fields, so kiosk joins always failed for orgs whose name fields aren't marked required
+- [x] A transient API/DB error on `/users/me` signed the user out; now only a real 401 does
 - [x] New shared `AuthShell` (dark bg, single card) for invite / forgot / reset pages
 - [x] Emails: shared flat-teal layout replaces purple-gradient + emoji header
 - [x] Login page: solid hero heading; layout collapses to one column under 900px
@@ -99,6 +103,10 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [ ] Shared `RequireRole` guard exists; ~15 older page wrappers still copy the guard logic
 
 ## Improvements noticed (not yet scheduled)
+
+- [x] Plan user limit counted walk-in patients and deactivated users as seats (Nyaho showed 12/10 with 2 staff); now active staff only
+- [ ] Local dev DB via `host.docker.internal` is slow (~1.5s/query) and drops intermittently on this machine — consider a Postgres service in docker-compose
+- [ ] Billing page add-on "Billing" select text truncates ("Recurrin…") at laptop widths
 
 - [ ] Plan editor feature keys (`multipleLocations`, `emailNotifications`…) don't match backend feature keys (`multiLocation`, …) — some plan toggles do nothing
 - [ ] `INIT_SYSTEM_NOW.js` (repo root) scaffolds the old two-app layout; delete it

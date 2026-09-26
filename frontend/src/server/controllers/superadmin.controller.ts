@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { signToken } from '../lib/jwt';
 import prisma from '../lib/prisma';
 import { Prisma } from '@prisma/client';
+import { staffSeatWhere } from '../middleware/subscription.middleware';
 
 const IMPERSONATION_TOKEN_TTL = '2h';
 
@@ -47,7 +48,7 @@ export const listOrganizations = async (req: Request, res: Response, next: NextF
           _count: {
             select: {
               locations: true,
-              users: true,
+              users: { where: { isActive: true, role: { not: 'PATIENT' } } },
             },
           },
         },
@@ -706,8 +707,8 @@ export const getDashboardStats = async (req: Request, res: Response, next: NextF
       // Total locations
       prisma.location.count(),
       
-      // Total users
-      prisma.user.count(),
+      // Total staff users (patients excluded)
+      prisma.user.count({ where: { isActive: true, role: { not: 'PATIENT' } } }),
       
       // Subscription breakdown by plan
       prisma.subscriptionPlan.findMany({
@@ -811,7 +812,7 @@ export const getOrganizationUsage = async (req: Request, res: Response, next: Ne
       monthEntries,
     ] = await Promise.all([
       prisma.location.count({ where: { organizationId: id } }),
-      prisma.user.count({ where: { organizationId: id } }),
+      prisma.user.count({ where: staffSeatWhere(id) }),
       prisma.service.count({
         where: { location: { organizationId: id } },
       }),

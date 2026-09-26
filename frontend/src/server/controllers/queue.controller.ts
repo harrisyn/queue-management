@@ -593,7 +593,7 @@ export const publicJoinQueue = async (req: Request, res: Response, next: NextFun
       req.body.firstName || req.body.customerName || req.body.patientName;
 
     if (!serviceId || !name) {
-      return res.status(400).json({ error: 'Service ID and name are required' });
+      return res.status(400).json({ error: serviceId ? 'Please enter your name so staff can call you.' : 'Please choose a service.' });
     }
 
     // Get service and verify it's active
@@ -1108,7 +1108,7 @@ export const publicJoinQueueWithSession = async (req: Request, res: Response, ne
       req.body.firstName || req.body.customerName || req.body.patientName;
 
     if (!serviceId || !name) {
-      return res.status(400).json({ error: 'Service ID and name are required' });
+      return res.status(400).json({ error: serviceId ? 'Please enter your name so staff can call you.' : 'Please choose a service.' });
     }
 
     // Generate session ID if not provided

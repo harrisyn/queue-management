@@ -208,11 +208,17 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
     setStep('form');
   };
 
+  const NAME_FIELDS = ['name', 'fullName', 'firstName', 'lastName', 'customerName', 'patientName'];
+
   // Get identity fields config from organization, with fallback defaults
   const getIdentityFields = (): Record<string, IdentityFieldConfig> => {
     const orgConfig = location?.organization?.identityFieldsConfig;
     if (orgConfig && Object.keys(orgConfig).length > 0) {
-      return orgConfig;
+      // Saved configs keep whatever key order they were written in; show
+      // names first, then contact details, then org-specific fields.
+      const ORDER = ['name', 'fullName', 'firstName', 'lastName', 'phone', 'email'];
+      const rank = (key: string) => (ORDER.includes(key) ? ORDER.indexOf(key) : ORDER.length);
+      return Object.fromEntries(Object.entries(orgConfig).sort(([a], [b]) => rank(a) - rank(b)));
     }
     // Default fallback if no config
     return {
@@ -224,6 +230,14 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
   const handleJoinQueue = async () => {
     const identityFields = getIdentityFields();
+
+    // Staff call people by name, and the server rejects a ticket without one -
+    // even when an org's config marks every name field optional.
+    const nameKeys = Object.keys(identityFields).filter((k) => NAME_FIELDS.includes(k));
+    if (nameKeys.length > 0 && !nameKeys.some((k) => formData[k]?.trim())) {
+      setError('Please enter your name so staff can call you.');
+      return;
+    }
     
     // Validate required fields
     for (const [fieldKey, fieldConfig] of Object.entries(identityFields)) {
@@ -701,7 +715,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
           {/* Render fields dynamically based on organization identity config */}
           {Object.entries(getIdentityFields()).map(([fieldKey, fieldConfig]) => {
             // In kiosk mode, only show required fields (typically just name)
-            if (mode === 'kiosk' && !fieldConfig.required && fieldKey !== 'name') {
+            if (mode === 'kiosk' && !fieldConfig.required && !NAME_FIELDS.includes(fieldKey)) {
               return null;
             }
 
@@ -710,12 +724,13 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
             return (
               <div key={fieldKey} style={fieldGroup}>
-                <label style={labelStyle}>
+                <label style={labelStyle} htmlFor={`field-${fieldKey}`}>
                   {fieldConfig.label}
                   {fieldConfig.required && ' *'}
                 </label>
                 {isTextarea ? (
                   <textarea
+                    id={`field-${fieldKey}`}
                     value={formData[fieldKey] || ''}
                     onChange={(e) => { 
                       setError(''); 
@@ -727,6 +742,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
                   />
                 ) : fieldKey === 'gender' ? (
                   <select
+                    id={`field-${fieldKey}`}
                     value={formData[fieldKey] || ''}
                     onChange={(e) => { 
                       setError(''); 
@@ -742,6 +758,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
                 ) : (
                   <input
                     type={inputType}
+                    id={`field-${fieldKey}`}
                     value={formData[fieldKey] || ''}
                     onChange={(e) => { 
                       setError(''); 

@@ -32,6 +32,15 @@ interface SubscriptionFeatures {
   ai?: boolean;
 }
 
+// A plan's user limit counts staff seats: active, non-patient accounts.
+// Walk-in and booked patients get PATIENT user rows too, and must never use
+// up seats (a busy clinic would otherwise be blocked from adding staff).
+export const staffSeatWhere = (organizationId: string) => ({
+  organizationId,
+  isActive: true,
+  role: { not: 'PATIENT' as const },
+});
+
 // Default features for organizations without a subscription (free tier)
 const DEFAULT_FEATURES: SubscriptionFeatures = {
   multiLocation: false,
@@ -365,7 +374,7 @@ export const checkLimit = async (
       limit = planLimits.maxServicesPerLoc ?? DEFAULT_FEATURES.maxServices ?? 3;
       break;
     case 'users': {
-      current = await prisma.user.count({ where: { organizationId } });
+      current = await prisma.user.count({ where: staffSeatWhere(organizationId) });
       const baseLimit = planLimits.maxUsersPerOrg ?? DEFAULT_FEATURES.maxUsers ?? 5;
       limit = isUsable ? baseLimit + (await addOnBoost(organizationId, 'USERS')) : baseLimit;
       break;
@@ -570,7 +579,7 @@ export const getMySubscription = async (req: Request, res: Response) => {
     const [locationCount, serviceCount, userCount, queueEntriesTodayCount, queueEntriesPeriodCount] = await Promise.all([
       prisma.location.count({ where: { organizationId: user.organizationId } }),
       prisma.service.count({ where: { location: { organizationId: user.organizationId } } }),
-      prisma.user.count({ where: { organizationId: user.organizationId } }),
+      prisma.user.count({ where: staffSeatWhere(user.organizationId) }),
       prisma.queueEntry.count({
         where: {
           queue: { service: { location: { organizationId: user.organizationId } } },

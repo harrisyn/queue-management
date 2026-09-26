@@ -25,7 +25,7 @@ interface Organization {
 
 export default function AdminLocationsPage() {
   const { user, isAdmin } = useAuthContext();
-  const { canCreate, limits, refresh: refreshSubscription } = useSubscription();
+  const { canCreate, limits, refresh: refreshSubscription, loading: subscriptionLoading } = useSubscription();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -58,6 +58,9 @@ export default function AdminLocationsPage() {
         const org = await api.getOrganization(user.organizationId);
         setOrgs([org]);
         setOrgId(org.id);
+        // Stay in the loading state until loadLocations finishes, so the
+        // "No locations yet" empty state never flashes before data arrives.
+        return;
       } else {
         // No organization on this account (e.g. a superadmin). Never guess an
         // org - render the empty state instead of leaking another tenant's data.
@@ -66,9 +69,8 @@ export default function AdminLocationsPage() {
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -219,7 +221,7 @@ export default function AdminLocationsPage() {
         <PageHeader
           icon={MapPin}
           title="Locations"
-          subtitle={`Manage your physical locations and their public access codes (${limits.locations.current}/${limits.locations.limit} used)`}
+          subtitle={subscriptionLoading ? 'Manage your physical locations and their public access codes' : `Manage your physical locations and their public access codes (${limits.locations.current}/${limits.locations.limit} used)`}
           actions={
             <button
               onClick={() => { resetForm(); setShowForm(true); }}
