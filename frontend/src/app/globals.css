@@ -77,7 +77,7 @@
      still consume it are redesigned in a later phase, not here. */
   --gradient-ticket: linear-gradient(135deg, #0e8f80 0%, #0b7a6d 50%, #e09f12 100%);
   --gradient-dark: linear-gradient(135deg, #1f2937 0%, #111827 100%);
-  --gradient-hero: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  --gradient-hero: linear-gradient(135deg, var(--primary-600) 0%, var(--primary-800) 100%);
   --gradient-success: linear-gradient(135deg, #10b981 0%, #059669 100%);
   --gradient-glass: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0.05) 100%);
 

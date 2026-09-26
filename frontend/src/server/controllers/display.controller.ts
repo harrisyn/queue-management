@@ -256,6 +256,62 @@ export const uploadDisplayMedia = async (req: Request, res: Response, next: Next
   }
 };
 
+/** Whether the browser can upload big files straight to storage. */
+export const getUploadConfig = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const provider = await getActiveFileStorageProvider().catch(() => null);
+    const direct = provider?.directUploadConfig?.() ?? null;
+    res.json({ serverMaxBytes: MAX_UPLOAD_BYTES, direct: direct ? { ...direct, maxBytes: 500 * 1024 * 1024 } : null });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Registers a file the browser uploaded straight to storage. */
+export const registerDirectUpload = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const fileId = String(req.body?.fileId || '');
+    if (!/^[0-9a-f-]{36}$/i.test(fileId)) return res.status(400).json({ error: 'That upload didn’t finish. Try again.' });
+    const provider = await getActiveFileStorageProvider();
+    if (!provider?.confirmDirectUpload) return res.status(400).json({ error: 'Direct uploads aren’t available.' });
+
+    let confirmed;
+    try {
+      confirmed = await provider.confirmDirectUpload(fileId);
+    } catch (err) {
+      console.error('Confirming direct upload failed:', err);
+      return res.status(502).json({ error: 'The file couldn’t be saved. Try uploading it again.' });
+    }
+    const mime = confirmed.mimeType || String(req.body?.mimeType || '');
+    const kind = IMAGE_TYPES.includes(mime) ? 'IMAGE' : VIDEO_TYPES.includes(mime) || mime.startsWith('video/') ? 'VIDEO' : null;
+    if (!kind) {
+      await provider.deleteFile(fileId).catch(() => {});
+      return res.status(400).json({ error: 'Use an image or an MP4 or WebM video.' });
+    }
+
+    const { title, durationSeconds, locationId } = readFields(req.body);
+    const organizationId = await callerOrgId(req, locationId);
+    if (!organizationId) return res.status(400).json({ error: 'No organization for this media.' });
+    const last = await prisma.displayMedia.findFirst({ where: { organizationId }, orderBy: { sortOrder: 'desc' }, select: { sortOrder: true } });
+    const media = await prisma.displayMedia.create({
+      data: {
+        organizationId,
+        locationId,
+        kind,
+        url: confirmed.url,
+        fileId,
+        title: title || (kind === 'VIDEO' ? 'Video' : 'Image'),
+        durationSeconds,
+        sortOrder: (last?.sortOrder ?? -1) + 1,
+      },
+    });
+    await notifyScreens(organizationId, locationId);
+    res.status(201).json(media);
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const updateDisplayMedia = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const existing = await prisma.displayMedia.findUnique({ where: { id: req.params.id } });

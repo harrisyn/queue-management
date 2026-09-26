@@ -664,6 +664,16 @@ class ApiClient {
     return data as DisplayMediaItem;
   }
 
+  async getDisplayUploadConfig() {
+    const { data } = await this.client.get('/display/upload-config');
+    return data as { serverMaxBytes: number; direct: { provider: 'uploadcare'; publicKey: string; maxBytes: number } | null };
+  }
+
+  async registerDirectUpload(body: { fileId: string; mimeType?: string; title?: string; durationSeconds?: number; locationId?: string | null }) {
+    const { data } = await this.client.post('/display/media/direct', body);
+    return data as DisplayMediaItem;
+  }
+
   async reorderDisplayMedia(ids: string[]) {
     await this.client.put('/display/media/order', { items: ids.map((id) => ({ id })) });
   }
@@ -969,6 +979,21 @@ class ApiClient {
     slug?: string;
   }) {
     const { data } = await this.client.post('/public/register-org', payload);
+    return data;
+  }
+
+  async listSmsProviders() {
+    const { data } = await this.client.get('/superadmin/sms-providers');
+    return data;
+  }
+
+  async saveSmsProvider(provider: string, body: { accountId: string; secret?: string; senderId?: string; isActive: boolean }) {
+    const { data } = await this.client.put(`/superadmin/sms-providers/${provider}`, body);
+    return data;
+  }
+
+  async testSmsProvider(provider: string, to: string) {
+    const { data } = await this.client.post(`/superadmin/sms-providers/${provider}/test`, { to });
     return data;
   }
 

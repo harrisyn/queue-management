@@ -30,6 +30,28 @@ const EVERY = [
 
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
 
+/** Uploads straight from the browser to Uploadcare, reporting progress. */
+function uploadDirect(file: File, publicKey: string, onProgress: (pct: number) => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const form = new FormData();
+    form.append('UPLOADCARE_PUB_KEY', publicKey);
+    form.append('UPLOADCARE_STORE', '0'); // our server stores it once registered
+    form.append('file', file, file.name);
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', 'https://upload.uploadcare.com/base/');
+    xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(Math.round((e.loaded / e.total) * 100)); };
+    xhr.onload = () => {
+      try {
+        const body = JSON.parse(xhr.responseText);
+        if (xhr.status >= 200 && xhr.status < 300 && body.file) resolve(body.file);
+        else reject(new Error('The upload was refused. Check the file and try again.'));
+      } catch { reject(new Error('The upload didn’t finish. Try again.')); }
+    };
+    xhr.onerror = () => reject(new Error('The upload was interrupted. Check your connection and try again.'));
+    xhr.send(form);
+  });
+}
+
 const toDateInput = (iso?: string | null) => (iso ? localDay(new Date(iso)) : '');
 const fromDateInput = (value: string, endOfDay: boolean) => (value ? new Date(`${value}T${endOfDay ? '23:59:59' : '00:00:00'}`).toISOString() : null);
 const shortDate = (iso: string) => new Date(iso).toLocaleDateString([], { day: 'numeric', month: 'short' });
@@ -60,6 +82,7 @@ export default function AdminDisplaysPage() {
   const [title, setTitle] = useState('');
   const [everywhere, setEverywhere] = useState(true);
   const [adding, setAdding] = useState(false);
+  const [progress, setProgress] = useState<number | null>(null);
   const [addError, setAddError] = useState('');
   const [scheduling, setScheduling] = useState<string | null>(null);
 
@@ -122,15 +145,30 @@ export default function AdminDisplaysPage() {
     setAdding(true);
     try {
       const fields = { title: title.trim() || undefined, locationId: everywhere ? null : locationId };
-      const item = addMode === 'upload'
-        ? await (file ? api.uploadDisplayMedia(file, fields) : Promise.reject(new Error('Choose a file to upload.')))
-        : await api.createDisplayMedia({ ...fields, url: link.trim(), kind: VIDEO_EXT.test(link) ? 'VIDEO' : 'IMAGE' });
+      let item: DisplayMediaItem;
+      if (addMode === 'upload') {
+        if (!file) throw new Error('Choose a file to upload.');
+        const config = await api.getDisplayUploadConfig();
+        if (file.size <= config.serverMaxBytes) {
+          item = await api.uploadDisplayMedia(file, fields);
+        } else if (config.direct && file.size <= config.direct.maxBytes) {
+          // Too big to pass through our server: send it straight to storage.
+          setProgress(0);
+          const fileId = await uploadDirect(file, config.direct.publicKey, setProgress);
+          item = await api.registerDirectUpload({ fileId, mimeType: file.type, ...fields });
+        } else {
+          throw new Error(config.direct ? 'That file is over 500MB. Use a shorter video, or add it by link.' : 'That file is over 4MB. Add it by link instead, or ask your platform admin to set up file storage.');
+        }
+      } else {
+        item = await api.createDisplayMedia({ ...fields, url: link.trim(), kind: VIDEO_EXT.test(link) ? 'VIDEO' : 'IMAGE' });
+      }
       setMedia((list) => [...list, item]);
       setFile(null); setLink(''); setTitle('');
     } catch (err: any) {
       setAddError(err.response?.data?.error || err.message || 'Couldn’t add that. Try again.');
     } finally {
       setAdding(false);
+      setProgress(null);
     }
   };
 
@@ -408,7 +446,7 @@ export default function AdminDisplaysPage() {
                   <input type="file" accept="image/png,image/jpeg,image/webp,image/gif,video/mp4,video/webm" onChange={(e) => setFile(e.target.files?.[0] || null)} />
                   <Upload size={18} />
                   <span>{file ? file.name : 'Choose an image or a short video'}</span>
-                  <small>PNG, JPG, WebP, GIF, MP4 or WebM, up to 4MB. Use a link for longer videos.</small>
+                  <small>PNG, JPG, WebP, GIF, MP4 or WebM. Large videos upload straight to storage when it’s set up.</small>
                 </label>
               ) : (
                 <label className="settings-field">
@@ -430,7 +468,7 @@ export default function AdminDisplaysPage() {
               </div>
               {addError && <div className="inline-alert inline-alert-error" role="alert">{addError}</div>}
               <Button type="submit" disabled={adding || (addMode === 'upload' ? !file : !link.trim())}>
-                {adding ? 'Adding…' : 'Add to playlist'}
+                {progress !== null ? `Uploading ${progress}%` : adding ? 'Adding…' : 'Add to playlist'}
               </Button>
             </form>
           </section>

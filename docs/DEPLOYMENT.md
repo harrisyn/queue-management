@@ -100,6 +100,20 @@ docker compose up        # app on :8003, Soketi on :6001, Mailpit UI on :9025
 Postgres runs on the host by default (`DATABASE_URL` in the repo-root `.env`).
 Tenant subdomains work on `*.localhost`, for example `http://nyaho.localhost:8003`.
 
+For a self-contained stack, run Postgres in Docker as well:
+
+```bash
+# in .env: DATABASE_URL=postgresql://postgres:postgres@db:5432/qms_db
+docker compose --profile localdb up -d
+docker compose exec app npx prisma migrate deploy
+docker compose exec app node scripts/create-superadmin.js   # first platform admin
+```
+
+The database is also reachable from the host on port 5433.
+
+The desk widget can be tried outside the app with `/widget/desk`, or embedded
+in any page with `<script src="http://<slug>.localhost:8003/embed/desk.js" async></script>`.
+
 ## Checks
 
 ```bash

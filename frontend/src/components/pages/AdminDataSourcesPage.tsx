@@ -787,12 +787,12 @@ export default function AdminDataSourcesPage() {
           }
 
           .source-card:hover {
-            border-color: #3b82f6;
+            border-color: var(--primary-500);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
           }
 
           .source-card.selected {
-            border-color: #3b82f6;
+            border-color: var(--primary-500);
             background: #f0f7ff;
           }
 
@@ -985,7 +985,7 @@ export default function AdminDataSourcesPage() {
 
           .btn-add {
             padding: 0.5rem 1rem;
-            background: #3b82f6;
+            background: var(--primary-500);
             color: white;
             border: none;
             border-radius: 8px;
@@ -1169,7 +1169,7 @@ export default function AdminDataSourcesPage() {
           }
 
           .type-option.selected {
-            border-color: #3b82f6;
+            border-color: var(--primary-500);
             background: #eff6ff;
           }
 

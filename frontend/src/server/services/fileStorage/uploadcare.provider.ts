@@ -27,6 +27,23 @@ export class UploadcareProvider implements FileStorageProvider {
     return { fileId: body.file, url: `https://ucarecdn.com/${body.file}/` };
   }
 
+  directUploadConfig() {
+    return this.publicKey ? { provider: this.name, publicKey: this.publicKey } : null;
+  }
+
+  async confirmDirectUpload(fileId: string) {
+    const headers = {
+      Authorization: `Uploadcare.Simple ${this.publicKey}:${this.secretKey}`,
+      Accept: 'application/vnd.uploadcare-v0.7+json',
+    };
+    // Storing is done here, with the secret key, so the project never has
+    // to allow browsers to store files themselves.
+    const stored = await fetch(`${API_BASE_URL}/files/${fileId}/storage/`, { method: 'PUT', headers });
+    if (!stored.ok) throw new Error(`Uploadcare store failed: ${stored.status} ${await stored.text()}`);
+    const info = (await stored.json().catch(() => ({}))) as { mime_type?: string; size?: number };
+    return { url: `https://ucarecdn.com/${fileId}/`, mimeType: info.mime_type ?? null, size: info.size ?? null };
+  }
+
   async deleteFile(fileId: string): Promise<void> {
     const res = await fetch(`${API_BASE_URL}/files/${fileId}/storage/`, {
       method: 'DELETE',

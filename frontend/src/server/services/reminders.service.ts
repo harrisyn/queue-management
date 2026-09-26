@@ -37,7 +37,7 @@ export async function sendAppointmentReminders(): Promise<number> {
     take: 5000,
   });
 
-  const sms = getSmsProvider();
+  const sms = await getSmsProvider();
   let sent = 0;
   for (const appt of appointments) {
     const org = appt.service.location.organization;

@@ -80,7 +80,7 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 
 - [x] Appointment reminders for tomorrow (`/cron/daily`, email/SMS per org settings, once per appointment)
 - [ ] Live AI call not verified with a real vendor key in this session (no key available) — run **Test connection** on AI Providers after adding one
-- [ ] Wait forecast could replace the naive estimate shown on public ticket/status pages
+- [x] Ticket wait estimates use the median real service time across the desks open now (`services/waitEstimate.ts`), not the configured slot length
 
 ## UI pass (as pages are touched)
 
@@ -93,14 +93,14 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [x] Emails: shared flat-teal layout replaces purple-gradient + emoji header
 - [x] Login page: solid hero heading; layout collapses to one column under 900px
 - [x] Login page `/join` dead link → `/locations`
-- [ ] Receptionist dashboard shows a "Generate QR" header button for a page they can't open
+- [x] Receptionist dashboard showed a "Generate QR" button for a page they can't open (dashboard replaced by Today)
 - [x] Tenant app main column had no `min-width: 0` → wide tables pushed the whole page sideways
 - [x] Settings tabs wrapped onto two lines at laptop widths
 - [x] Settings save failed for every org without the customBranding feature (always sent branding fields)
 - [x] Analytics: removed a hardcoded "+12%" trend badge (fabricated number)
 - [x] Sidebar: Services and Settings share the same gear icon (new shell uses distinct Lucide icons)
 - [x] Sidebar grouped into Today / Insights / Setup / Organization / Platform
-- [ ] Shared `RequireRole` guard exists; ~15 older page wrappers still copy the guard logic
+- [x] Route wrappers use the shared `RequireRole` guard
 
 ## UI revamp
 
@@ -115,34 +115,62 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [x] **Public display endpoints sent every patient's full name** even in "ticket number only" mode (hidden only in the browser). Now redacted server-side (`lib/screenName.ts`): none / "Kofi B." / full name
 - [x] Lobby screen rebuilt: services view (one service gets the whole screen), desks view, full-screen call flash (+ spoken call when sound is on), "scan to join" QR, auto-hiding controls, light/dark
 - [x] Display media: `DisplayMedia` playlist (image/video, upload ≤4MB or link, per-location or all, order, pause, date window) + per-location `displayConfig` (ticker messages/speed, media on/off, full-screen-when-quiet vs beside-the-queue, quiet interval, call flash). Admin at `/admin/displays`; screens refresh live on change. A new call always interrupts media
-- [ ] Videos over 4MB can only be added by link: direct browser → Uploadcare upload would lift that
+- [x] Files over 4MB upload straight from the browser to Uploadcare (with progress); the server confirms and stores them with the secret key
 - [ ] Display media isn't plan-gated; decide whether adverts are a paid feature
-- [ ] QR codes (welcome, QR page, lobby screen) come from external api.qrserver.com; generate locally instead
-- [ ] Dashboard "finish setup" banner linking `/welcome` when `needsSetup`
-- [ ] Dev notes: test org "Ridgeway UI Test Clinic" (`ridgeway-ui-test-clinic`, location RIDGEWAYUI) exists in the dev DB with sample media pointing at localhost:8765 — delete when done
+- [x] QR codes generated locally (`qrcode`); the ticket page was sending each private ticket URL to api.qrserver.com
+- [x] Setup checklist on Today (desk, QR poster, test join, invite team) until done or dismissed
 - [x] Dev server served a stale route table (Express app cached on `globalThis`); no longer cached
+
+## Desks, widgets and terminology
+
+- [x] Staff desk console at `/queues`: sign in to a desk, call next / done / call again / not here, call someone out of order, drag to reorder, finish people left with no desk, details with data-source lookup
+- [x] Keyboard shortcuts (N, D, A); waiting count in the tab title; browser alert when someone joins while the tab is hidden
+- [x] Pop out: always-on-top Document Picture-in-Picture window sharing live state (Chrome/Edge); small popup window elsewhere
+- [x] `/widget/desk` standalone (own sign-in), installable as an app (manifest + icons)
+- [x] `/embed/desk.js`: floating desk button for other web apps (records systems, help desks) with a live waiting count; snippet under "Use this desk inside another app"
+- [x] Call-next claims atomically (two desks could get the same person); recall endpoint; re-entering your own desk after a refresh works; occupied desks can be taken over
+- [x] "Not here" recorded NO_SHOW (it was cancelling)
+- [x] Organization type + own word for the people it serves (patient, guest, client…), asked in quick setup and Settings; `termsFor()` used across UI, public pages and the AI prompt. Existing orgs default to healthcare
+- [ ] **Desktop app (to consider/build):** a small Tauri tray app wrapping `/widget/desk` for always-on-top without a browser, a global hotkey for "call next" from any app, start at login, native notifications. Browsers can't do global hotkeys
+- [ ] A desk that serves several services at once (sign in once, call from whichever queue is due). Today one desk sign-in = one service
+- [ ] `/my-queue` (PATIENT accounts) is unlinked legacy; decide whether to keep it
+
+## Page review (this pass)
+
+- [x] Today replaces the template dashboard: live numbers, services table, desks, today's appointments
+- [x] Analytics: today / 7 / 30 days, services table, busy-times chart, journeys
+- [x] QR codes: print-ready A4 poster
+- [x] Staff: team list with roles and access, email invites, cancel invites
+- [x] Public join page rebuilt (live waits, one tap for single-service locations, straight to the live ticket); status page restyled; kiosk/multi-ticket are staff link modes (multi-ticket called missing endpoints)
+- [x] `/public/locations` listed every organization's locations to anyone; now only the workspace whose address it is
+- [x] Removed the legacy `/[orgId]` catch-all; real 404 page; workspace-not-found restyled
+- [x] Platform admin pages share the app shell; titles and copy sentence case and plain language throughout; header buttons were forced white by a leftover rule
+- [ ] AI analytics tools (`ai/metrics.ts`) still bucket hours in the server's timezone (org-wide, can span locations)
+- [ ] Upgrade to Next 16 (clears the remaining postcss advisory)
+- [ ] Direct Uploadcare uploads not tried with real keys (dev has only the public demo key)
+- [ ] Dev DB clean-up: smoke-test orgs and the Ridgeway test org (plus its sample media) can be deleted
 
 ## Improvements noticed (not yet scheduled)
 
 - [x] Plan user limit counted walk-in patients and deactivated users as seats (Nyaho showed 12/10 with 2 staff); now active staff only
-- [ ] Local dev DB via `host.docker.internal` is slow (~1.5s/query) and drops intermittently on this machine — consider a Postgres service in docker-compose
-- [ ] Billing page add-on "Billing" select text truncates ("Recurrin…") at laptop widths
+- [x] Optional Postgres in docker-compose (`--profile localdb`); host DB stays the default. See docs/DEPLOYMENT.md
+- [x] Billing add-on select truncated at laptop widths (shorter labels)
 
-- [ ] Plan editor feature keys (`multipleLocations`, `emailNotifications`…) don't match backend feature keys (`multiLocation`, …) — some plan toggles do nothing
-- [ ] `INIT_SYSTEM_NOW.js` (repo root) scaffolds the old two-app layout; delete it
-- [ ] `npm audit` reports vulnerabilities in the merged dependency tree — review
+- [x] Plan editor uses the enforced feature keys; legacy keys on saved plans are read as their equivalents (`normalizePlanFeatures`)
+- [x] Deleted `INIT_SYSTEM_NOW.js`
+- [x] `npm audit`: fixed all but one (nodemailer → 10, verified sending). Remaining: postcss bundled inside Next 15, build-time only; fixed by the Next 16 upgrade (below)
 
 - [x] AI tools return aggregates + service/location names only (enforced in `ai/metrics.ts`)
 
-- [ ] Dates are server-timezone based (`getStartOfDay`); `Location.timezone` is ignored
-- [ ] SMS provider configured by env only; could get a superadmin UI like payment providers
+- [x] Days, opening hours, slots, check-in, reminders, analytics ranges and the forecaster use the location's timezone (`utils/date.ts`, tested incl. DST)
+- [x] Platform → Text messages: Twilio or Africa's Talking, encrypted keys, send-a-test; env Twilio stays the fallback
 
-- [ ] `DataSource.config.headers` values aren't encrypted (only `auth.token/password/apiKey` are)
-- [ ] README still documents `REGISTRATION_MODE`
-- [ ] Old plaintext data-source secrets get encrypted only on next save (no backfill script)
+- [x] Data-source header values encrypted at rest and redacted in responses
+- [x] README no longer documents `REGISTRATION_MODE`
+- [x] Daily cron seals any data-source secrets still in plain text (idempotent)
 
 - [x] Slug change in Settings silently locks the admin out — now warns, then redirects to the new address
-- [ ] "No organization" empty-state JSX duplicated across ~8 pages
-- [ ] Replace `alert()` error handling with inline/toast errors
+- [x] Shared `NoOrganization` state
+- [x] `alert()` replaced with toasts (`lib/toast.ts`) that show the server's message
 - [ ] Delete temp `superadmin@qms.local` dev account before any non-dev use
 - [ ] Real-money Stripe/Paystack checkout verification with test-mode keys

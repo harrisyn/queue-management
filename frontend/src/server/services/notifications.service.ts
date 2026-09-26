@@ -131,7 +131,7 @@ export async function notifyEntry(
   }
 
   if (settings.sms && entry.user.phone) {
-    const provider = getSmsProvider();
+    const provider = await getSmsProvider();
     if (provider) {
       const credit = await consumeCredits(org.id, 'SMS', 1, `queue notification ${type}`);
       if (credit.allowed) {

@@ -1,48 +1,19 @@
-'use client';
-
 import { buildRootUrl } from '@/lib/subdomain';
 import { APP_NAME } from '@/lib/appConfig';
 
-export default function WorkspaceNotFoundPage() {
+// Shown on a subdomain (or custom domain) that doesn't belong to any workspace.
+export default function WorkspaceNotFound() {
   return (
-    <div style={{
-      minHeight: '100vh',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-      padding: '2rem',
-    }}>
-      <div style={{
-        background: 'white',
-        borderRadius: '16px',
-        padding: '3rem',
-        textAlign: 'center',
-        maxWidth: '420px',
-      }}>
-        <h2 style={{ color: '#1e293b', marginTop: '1rem', fontSize: '1.5rem', fontWeight: 700 }}>
-          Workspace not found
-        </h2>
-        <p style={{ color: '#64748b', marginTop: '0.5rem' }}>
-          There&apos;s no organization at this address. Double-check the link,
-          or head back to the main site.
-        </p>
-        <a
-          href={buildRootUrl()}
-          style={{
-            display: 'inline-block',
-            marginTop: '1.5rem',
-            padding: '0.75rem 1.5rem',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            textDecoration: 'none',
-            borderRadius: '8px',
-            fontWeight: 500,
-          }}
-        >
-          Go to {APP_NAME}
-        </a>
+    <main className="not-found">
+      <div>
+        <p className="not-found-code">?</p>
+        <h1>There’s no workspace at this address</h1>
+        <p>Check the link for typos. If your organization changed its address recently, ask your admin for the new one.</p>
+        <div className="not-found-actions">
+          <a className="btn btn-primary" href={buildRootUrl('/login')}>Find my workspace</a>
+          <a className="btn btn-secondary" href={buildRootUrl('/')}>Go to {APP_NAME}</a>
+        </div>
       </div>
-    </div>
+    </main>
   );
 }

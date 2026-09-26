@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { listSmsProviders, upsertSmsProvider, testSmsProvider } from '../controllers/smsProvider.controller';
 import { authenticate, authorize } from '../middleware/auth.middleware';
 import {
   listOrganizations,
@@ -57,6 +58,9 @@ router.get('/addon-pricing', listAddOnPricing);
 router.put('/addon-pricing/:resourceType', updateAddOnPricing);
 
 // File storage provider configuration
+router.get('/sms-providers', listSmsProviders);
+router.put('/sms-providers/:provider', upsertSmsProvider);
+router.post('/sms-providers/:provider/test', testSmsProvider);
 router.get('/file-storage', listFileStorageProviders);
 router.put('/file-storage/:provider', upsertFileStorageProvider);
 router.post('/file-storage/:provider/test', testFileStorageProvider);

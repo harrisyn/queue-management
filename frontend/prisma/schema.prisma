@@ -621,6 +621,19 @@ model FileStorageProviderConfig {
   @@unique([provider])
 }
 
+// Text message delivery for "you're nearly up" and reminders. One active at
+// a time; env TWILIO_* is the fallback when none is configured here.
+model SmsProviderConfig {
+  id         String   @id @default(uuid())
+  provider   String   @unique // "twilio" | "africastalking"
+  isActive   Boolean  @default(false)
+  accountId  String   // Twilio account SID, Africa's Talking username
+  secret     String   // encrypted at rest: Twilio auth token, AT API key
+  senderId   String?  // from number or approved sender name
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
 model ProcessedWebhookEvent {
   id          String   @id @default(uuid())
   provider    String   // "stripe" | "paystack"

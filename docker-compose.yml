@@ -1,6 +1,10 @@
 # Local development: the Next.js app (web + API in one process), Soketi for
 # real-time updates (Pusher protocol - Pusher/Ably in production), and
-# Mailpit to catch outgoing email. Postgres runs on the host by default.
+# Mailpit to catch outgoing email. Postgres runs on the host by default;
+# for a self-contained stack (faster than host.docker.internal on some
+# machines) start the optional database too:
+#   docker compose --profile localdb up -d
+# and set DATABASE_URL=postgresql://postgres:postgres@db:5432/qms_db in .env.
 services:
   app:
     build:
@@ -96,10 +100,33 @@ services:
     networks:
       - qms-network
 
+  # Optional: only starts with `--profile localdb`.
+  db:
+    image: postgres:16-alpine
+    container_name: qms-db
+    profiles: ["localdb"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qms_db
+    ports:
+      - "5433:5432" # host port 5433 so it doesn't clash with a host Postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d qms_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - qms-network
+
 networks:
   qms-network:
     driver: bridge
 
 volumes:
   mailpit_data:
+    driver: local
+  db_data:
     driver: local

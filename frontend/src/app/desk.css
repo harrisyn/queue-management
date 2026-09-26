@@ -323,3 +323,12 @@ kbd {
 .toast button { display: flex; padding: 4px; border: 0; border-radius: 6px; background: transparent; color: rgba(255, 255, 255, 0.75); cursor: pointer; }
 @keyframes toast-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* ---- text message providers ---- */
+.sms-grid { display: grid; gap: 1.5rem; }
+.sms-card[data-active="true"] { border-color: var(--primary-500); }
+.sms-card h2 { margin: 0; }
+.sms-live { padding: 0.2rem 0.6rem; border-radius: 999px; background: var(--primary-50); color: var(--primary-800); font-size: 0.8125rem; font-weight: 600; }
+.sms-actions { display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap; margin-top: 1.25rem; }
+.sms-test { display: flex; gap: 0.5rem; }
+.sms-test input { width: 200px; }

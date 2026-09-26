@@ -11,6 +11,8 @@ import {
   updateDisplayMedia,
   reorderDisplayMedia,
   deleteDisplayMedia,
+  getUploadConfig,
+  registerDirectUpload,
 } from '../controllers/display.controller';
 
 const router = Router();
@@ -25,6 +27,8 @@ router.get('/media', admins, listDisplayMedia);
 router.post('/media', admins, scope(location('body.locationId')), createDisplayMedia);
 // multer runs first so the multipart fields (locationId) exist for scope().
 router.post('/media/upload', admins, mediaUploadMiddleware, scope(location('body.locationId')), uploadDisplayMedia);
+router.get('/upload-config', admins, getUploadConfig);
+router.post('/media/direct', admins, scope(location('body.locationId')), registerDirectUpload);
 router.put('/media/order', admins, scope(each('items', 'id', displayMedia)), reorderDisplayMedia);
 router.patch('/media/:id', admins, scope(displayMedia('params.id'), location('body.locationId')), updateDisplayMedia);
 router.delete('/media/:id', admins, scope(displayMedia('params.id')), deleteDisplayMedia);
