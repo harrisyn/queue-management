@@ -49,6 +49,7 @@ model Organization {
   auditLogs             AuditLog[]
   webhookEndpoints      WebhookEndpoint[]
   aiInsights            AiInsight[]
+  displayMedia          DisplayMedia[]
 }
 
 enum OrganizationStatus {
@@ -104,6 +105,12 @@ model Location {
   organization      Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   services          Service[]
   publicCode        String?        @unique
+  // Lobby screen: ticker + media rotation. See DisplayMedia.
+  // {"ticker":{"enabled":true,"messages":["..."],"speed":"normal"},
+  //  "media":{"enabled":true,"mode":"interstitial"|"split","everySeconds":90},
+  //  "callFlash":true}
+  displayConfig     Json?
+  displayMedia      DisplayMedia[]
 }
 
 enum ServicePointType {
@@ -835,4 +842,27 @@ model AiInsight {
   createdAt      DateTime     @default(now())
 
   @@index([organizationId, kind, createdAt])
+}
+
+// Adverts, announcements and videos played on lobby screens between calls.
+// locationId null = shown at every location in the organization.
+model DisplayMedia {
+  id              String       @id @default(uuid())
+  organizationId  String
+  organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  locationId      String?
+  location        Location?    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  kind            String       // IMAGE | VIDEO
+  url             String
+  fileId          String?      // file storage id when uploaded through us
+  title           String
+  durationSeconds Int          @default(12) // images; videos play to the end (capped)
+  sortOrder       Int          @default(0)
+  isActive        Boolean      @default(true)
+  startsAt        DateTime?
+  endsAt          DateTime?
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  @@index([organizationId, locationId, sortOrder])
 }

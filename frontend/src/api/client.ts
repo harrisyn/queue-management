@@ -3,6 +3,25 @@ import type { Service } from '@/types';
 
 import { API_BASE as API_BASE_URL } from '@/lib/apiBase';
 
+export interface DisplayConfig {
+  ticker: { enabled: boolean; messages: string[]; speed: 'slow' | 'normal' | 'fast' };
+  media: { enabled: boolean; mode: 'interstitial' | 'split'; everySeconds: number };
+  callFlash: boolean;
+}
+
+export interface DisplayMediaItem {
+  id: string;
+  kind: 'IMAGE' | 'VIDEO';
+  url: string;
+  title: string;
+  durationSeconds: number;
+  locationId?: string | null;
+  isActive?: boolean;
+  sortOrder?: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}
+
 export interface AvailableSlot {
   id: string;
   startTime: string;
@@ -593,6 +612,54 @@ class ApiClient {
   async getDisplayData(locationId: string) {
     const { data } = await this.client.get(`/public/display/${locationId}`);
     return data;
+  }
+
+  async getDisplayContent(locationId: string) {
+    const { data } = await this.client.get(`/public/display/${locationId}/content`);
+    return data as { config: DisplayConfig; media: DisplayMediaItem[] };
+  }
+
+  async getDisplayConfig(locationId: string) {
+    const { data } = await this.client.get(`/display/locations/${locationId}/config`);
+    return data as DisplayConfig;
+  }
+
+  async updateDisplayConfig(locationId: string, config: DisplayConfig) {
+    const { data } = await this.client.put(`/display/locations/${locationId}/config`, config);
+    return data as DisplayConfig;
+  }
+
+  async listDisplayMedia() {
+    const { data } = await this.client.get('/display/media');
+    return data as DisplayMediaItem[];
+  }
+
+  async createDisplayMedia(item: Partial<DisplayMediaItem>) {
+    const { data } = await this.client.post('/display/media', item);
+    return data as DisplayMediaItem;
+  }
+
+  async uploadDisplayMedia(file: File, fields: { title?: string; durationSeconds?: number; locationId?: string | null }) {
+    const form = new FormData();
+    if (fields.locationId) form.append('locationId', fields.locationId);
+    if (fields.title) form.append('title', fields.title);
+    if (fields.durationSeconds) form.append('durationSeconds', String(fields.durationSeconds));
+    form.append('file', file);
+    const { data } = await this.client.post('/display/media/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return data as DisplayMediaItem;
+  }
+
+  async updateDisplayMedia(id: string, patch: Partial<DisplayMediaItem>) {
+    const { data } = await this.client.patch(`/display/media/${id}`, patch);
+    return data as DisplayMediaItem;
+  }
+
+  async reorderDisplayMedia(ids: string[]) {
+    await this.client.put('/display/media/order', { items: ids.map((id) => ({ id })) });
+  }
+
+  async deleteDisplayMedia(id: string) {
+    await this.client.delete(`/display/media/${id}`);
   }
 
   // Get queue swimlanes for a location (for display boards)

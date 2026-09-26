@@ -18,7 +18,7 @@ import type { Channel } from 'pusher-js';
 const KEY = process.env.NEXT_PUBLIC_REALTIME_KEY;
 const POLL_MS = 15000;
 
-const EVENTS = ['queue.updated', 'entry.status_changed', 'notification.sent', 'serviceflow.transition', 'slot.released'] as const;
+const EVENTS = ['queue.updated', 'entry.status_changed', 'notification.sent', 'serviceflow.transition', 'slot.released', 'location.updated'] as const;
 type EventName = (typeof EVENTS)[number];
 type Handler = (data: any) => void;
 
@@ -124,6 +124,7 @@ export const useSocket = () => {
     [on]
   );
   const onServiceFlowTransition = useCallback((callback: (data: unknown) => void) => on('serviceflow.transition', callback), [on]);
+  const onLocationUpdated = useCallback((callback: (data: { locationId?: string; type?: string }) => void) => on('location.updated', callback), [on]);
 
   return {
     joinQueue,
@@ -135,6 +136,7 @@ export const useSocket = () => {
     onEntryStatusChanged,
     onNotification,
     onServiceFlowTransition,
+    onLocationUpdated,
   };
 };
 

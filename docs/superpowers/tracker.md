@@ -98,9 +98,29 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [x] Settings tabs wrapped onto two lines at laptop widths
 - [x] Settings save failed for every org without the customBranding feature (always sent branding fields)
 - [x] Analytics: removed a hardcoded "+12%" trend badge (fabricated number)
-- [ ] Sidebar: Services and Settings share the same gear icon
-- [ ] Sidebar now has 15 items — group into sections (Operations / Setup / Admin)
+- [x] Sidebar: Services and Settings share the same gear icon (new shell uses distinct Lucide icons)
+- [x] Sidebar grouped into Today / Insights / Setup / Organization / Platform
 - [ ] Shared `RequireRole` guard exists; ~15 older page wrappers still copy the guard logic
+
+## UI revamp
+
+- [x] Landing page: animated lobby scene (door → kiosk → queue → desk), journey, audience rows, TV section, closing CTA
+- [x] Login redesign on a split `AuthLayout` (tenant logo/colour applied); workspace finder kept
+- [x] Sign-up cut to one step + emailed code (auto-submits), live address check, lands signed in on the new subdomain
+- [x] `/welcome` quick setup: location + service chips + hours → location, queues, a desk per service, "You're live" with QR. Respects plan service limits
+- [x] App shell: ink sidebar in groups, mobile drawer, quiet page headers, new tokens (teal/amber/ink/paper), visible focus ring
+- [x] Settings rebuilt: section nav, reorderable patient fields with required switches, screen-privacy picked from previews, sticky save bar with unsaved-changes warning
+- [x] Settings showed "No organization" while the signed-in user was still loading
+- [x] Join page follows the field order chosen in Settings
+- [x] **Public display endpoints sent every patient's full name** even in "ticket number only" mode (hidden only in the browser). Now redacted server-side (`lib/screenName.ts`): none / "Kofi B." / full name
+- [x] Lobby screen rebuilt: services view (one service gets the whole screen), desks view, full-screen call flash (+ spoken call when sound is on), "scan to join" QR, auto-hiding controls, light/dark
+- [x] Display media: `DisplayMedia` playlist (image/video, upload ≤4MB or link, per-location or all, order, pause, date window) + per-location `displayConfig` (ticker messages/speed, media on/off, full-screen-when-quiet vs beside-the-queue, quiet interval, call flash). Admin at `/admin/displays`; screens refresh live on change. A new call always interrupts media
+- [ ] Videos over 4MB can only be added by link: direct browser → Uploadcare upload would lift that
+- [ ] Display media isn't plan-gated; decide whether adverts are a paid feature
+- [ ] QR codes (welcome, QR page, lobby screen) come from external api.qrserver.com; generate locally instead
+- [ ] Dashboard "finish setup" banner linking `/welcome` when `needsSetup`
+- [ ] Dev notes: test org "Ridgeway UI Test Clinic" (`ridgeway-ui-test-clinic`, location RIDGEWAYUI) exists in the dev DB with sample media pointing at localhost:8765 — delete when done
+- [x] Dev server served a stale route table (Express app cached on `globalThis`); no longer cached
 
 ## Improvements noticed (not yet scheduled)
 
@@ -121,7 +141,7 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [ ] README still documents `REGISTRATION_MODE`
 - [ ] Old plaintext data-source secrets get encrypted only on next save (no backfill script)
 
-- [ ] Slug change in Settings silently locks the admin out (no redirect to the new subdomain)
+- [x] Slug change in Settings silently locks the admin out — now warns, then redirects to the new address
 - [ ] "No organization" empty-state JSX duplicated across ~8 pages
 - [ ] Replace `alert()` error handling with inline/toast errors
 - [ ] Delete temp `superadmin@qms.local` dev account before any non-dev use
