@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
 
-const VALID_RESOURCE_TYPES = ['LOCATIONS', 'USERS'];
+const VALID_RESOURCE_TYPES = ['LOCATIONS', 'USERS', 'DISPLAY_MEDIA'];
 
 export const listAddOnPricing = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -33,7 +33,7 @@ export const updateAddOnPricing = async (req: Request, res: Response, next: Next
     }
 
     const updated = await prisma.addOnPricing.update({
-      where: { resourceType: resourceType as 'LOCATIONS' | 'USERS' },
+      where: { resourceType: resourceType as 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA' },
       data: {
         pricePerUnitMonthly,
         pricePerUnitOneOff,

@@ -4,6 +4,9 @@ import prisma from '../lib/prisma';
 import { listScopeOrgId, loadCaller } from '../middleware/tenantScope.middleware';
 import { getActiveFileStorageProvider } from '../services/fileStorage';
 import { emitToLocation, SOCKET_EVENTS } from '../lib/realtime';
+import { getDisplayEntitlement, assertCanAddMedia, DisplayMediaLimitError, SERVER_UPLOAD_BYTES } from '../services/displayEntitlement';
+import { playlistsOnNow } from '../services/displaySchedule';
+import { validTimeZone } from '../utils/date';
 
 /**
  * Lobby screens: the ticker and the media (adverts, announcements, videos)
@@ -49,7 +52,20 @@ export function normalizeDisplayConfig(raw: unknown): DisplayConfig {
   };
 }
 
-const KINDS = ['IMAGE', 'VIDEO'] as const;
+const KINDS = ['IMAGE', 'VIDEO', 'STREAM'] as const;
+
+/** YouTube, Vimeo or an HLS (.m3u8) stream: things that play but aren't files. */
+export function isStreamUrl(url: string) {
+  return /(^https?:\/\/)?(www\.|m\.)?(youtube\.com|youtu\.be|vimeo\.com|player\.vimeo\.com)\//i.test(url) || /\.m3u8(\?|#|$)/i.test(url);
+}
+
+function limitResponse(res: Response, err: unknown) {
+  if (err instanceof DisplayMediaLimitError) {
+    res.status(err.status).json({ error: err.message, upgradeRequired: true });
+    return true;
+  }
+  return false;
+}
 const IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/webp', 'image/gif'];
 const VIDEO_TYPES = ['video/mp4', 'video/webm'];
 // Serverless request bodies top out around 4.5MB; bigger videos go in by link.
@@ -94,7 +110,7 @@ async function notifyScreens(organizationId: string, locationId: string | null) 
 async function resolveLocation(idOrCode: string) {
   return prisma.location.findFirst({
     where: { OR: [{ id: idOrCode }, { publicCode: idOrCode }] },
-    select: { id: true, organizationId: true, displayConfig: true },
+    select: { id: true, organizationId: true, displayConfig: true, timezone: true },
   });
 }
 
@@ -109,20 +125,48 @@ export const getPublicDisplayContent = async (req: Request, res: Response, next:
     const location = await resolveLocation(req.params.locationId);
     if (!location) return res.status(404).json({ error: 'Not found' });
     const now = new Date();
-    const media = await prisma.displayMedia.findMany({
-      where: {
-        ...mediaFilter(location.organizationId, location.id),
-        isActive: true,
-        AND: [
-          { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
-          { OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
-        ],
-      },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      select: { id: true, kind: true, url: true, title: true, durationSeconds: true },
+    const liveMedia = {
+      isActive: true,
+      AND: [
+        { OR: [{ startsAt: null }, { startsAt: { lte: now } }] },
+        { OR: [{ endsAt: null }, { endsAt: { gt: now } }] },
+      ],
+    };
+    const mediaSelect = { id: true, kind: true, url: true, title: true, durationSeconds: true };
+
+    // Playlists decide what plays when; with none, the whole library plays.
+    const playlists = await prisma.displayPlaylist.findMany({
+      where: { organizationId: location.organizationId, OR: [{ locationId: null }, { locationId: location.id }] },
+      include: { items: { orderBy: { sortOrder: 'asc' }, include: { media: { select: { ...mediaSelect, isActive: true, startsAt: true, endsAt: true } } } } },
     });
+    let media: { id: string; kind: string; url: string; title: string; durationSeconds: number }[];
+    let playing: string[] = [];
+    if (playlists.length > 0) {
+      const on = playlistsOnNow(playlists, location.id, now, validTimeZone(location.timezone));
+      playing = on.map((p) => p.name);
+      const seen = new Set<string>();
+      media = on
+        .flatMap((p) => p.items.map((i) => i.media))
+        .filter((m) => m.isActive && (!m.startsAt || m.startsAt <= now) && (!m.endsAt || m.endsAt > now))
+        .filter((m) => (seen.has(m.id) ? false : (seen.add(m.id), true)))
+        .map(({ id, kind, url, title, durationSeconds }) => ({ id, kind, url, title, durationSeconds }));
+    } else {
+      media = await prisma.displayMedia.findMany({
+        where: { ...mediaFilter(location.organizationId, location.id), ...liveMedia },
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        select: mediaSelect,
+      });
+    }
+    // Only what the plan allows: nothing after a trial ends, streams only
+    // with a media pack, and no more items than the playlist limit.
+    const entitlement = await getDisplayEntitlement(location.organizationId);
+    const config = normalizeDisplayConfig(location.displayConfig);
+    const playable = entitlement.allowed
+      ? media.filter((m) => m.kind !== 'STREAM' || entitlement.streaming).slice(0, entitlement.maxItems)
+      : [];
+    if (!entitlement.allowed) config.media.enabled = false;
     res.set('Cache-Control', 'no-store');
-    res.json({ config: normalizeDisplayConfig(location.displayConfig), media });
+    res.json({ config, media: playable, playing });
   } catch (error) {
     next(error);
   }
@@ -188,10 +232,17 @@ export const createDisplayMedia = async (req: Request, res: Response, next: Next
     const { title, durationSeconds, locationId } = readFields(req.body);
     const kind = String(req.body?.kind || '').toUpperCase();
     const url = String(req.body?.url || '').trim();
-    if (!KINDS.includes(kind as any)) return res.status(400).json({ error: 'Choose an image or a video.' });
+    if (!KINDS.includes(kind as any)) return res.status(400).json({ error: 'Choose an image, a video or a stream.' });
     if (!isHttpUrl(url)) return res.status(400).json({ error: 'Enter a full link starting with https://' });
+    if (kind === 'STREAM' && !isStreamUrl(url)) return res.status(400).json({ error: 'Streams can be YouTube or Vimeo links, or an HLS (.m3u8) address.' });
     const organizationId = await callerOrgId(req, locationId);
     if (!organizationId) return res.status(400).json({ error: 'No organization for this media.' });
+    try {
+      await assertCanAddMedia(organizationId, { kind });
+    } catch (err) {
+      if (limitResponse(res, err)) return;
+      throw err;
+    }
 
     const last = await prisma.displayMedia.findFirst({ where: { organizationId }, orderBy: { sortOrder: 'desc' }, select: { sortOrder: true } });
     const media = await prisma.displayMedia.create({
@@ -227,6 +278,12 @@ export const uploadDisplayMedia = async (req: Request, res: Response, next: Next
     const { title, durationSeconds, locationId } = readFields(req.body);
     const organizationId = await callerOrgId(req, locationId);
     if (!organizationId) return res.status(400).json({ error: 'No organization for this media.' });
+    try {
+      await assertCanAddMedia(organizationId, { kind, bytes: file.size });
+    } catch (err) {
+      if (limitResponse(res, err)) return;
+      throw err;
+    }
 
     let uploaded;
     try {
@@ -256,12 +313,26 @@ export const uploadDisplayMedia = async (req: Request, res: Response, next: Next
   }
 };
 
-/** Whether the browser can upload big files straight to storage. */
-export const getUploadConfig = async (_req: Request, res: Response, next: NextFunction) => {
+export const getMediaEntitlement = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const provider = await getActiveFileStorageProvider().catch(() => null);
+    const organizationId = await callerOrgId(req, null);
+    if (!organizationId) return res.status(400).json({ error: 'No organization.' });
+    res.json(await getDisplayEntitlement(organizationId));
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Whether the browser can upload big files straight to storage. */
+export const getUploadConfig = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = await callerOrgId(req, null);
+    const entitlement = organizationId ? await getDisplayEntitlement(organizationId) : null;
+    // Large files are part of the media pack.
+    const bigAllowed = !!entitlement && entitlement.maxUploadBytes > SERVER_UPLOAD_BYTES;
+    const provider = bigAllowed ? await getActiveFileStorageProvider().catch(() => null) : null;
     const direct = provider?.directUploadConfig?.() ?? null;
-    res.json({ serverMaxBytes: MAX_UPLOAD_BYTES, direct: direct ? { ...direct, maxBytes: 500 * 1024 * 1024 } : null });
+    res.json({ serverMaxBytes: MAX_UPLOAD_BYTES, direct: direct ? { ...direct, maxBytes: entitlement!.maxUploadBytes } : null, largeFilesNeedPack: !bigAllowed });
   } catch (error) {
     next(error);
   }
@@ -274,6 +345,15 @@ export const registerDirectUpload = async (req: Request, res: Response, next: Ne
     if (!/^[0-9a-f-]{36}$/i.test(fileId)) return res.status(400).json({ error: 'That upload didn’t finish. Try again.' });
     const provider = await getActiveFileStorageProvider();
     if (!provider?.confirmDirectUpload) return res.status(400).json({ error: 'Direct uploads aren’t available.' });
+    const early = await callerOrgId(req, req.body?.locationId ? String(req.body.locationId) : null);
+    if (!early) return res.status(400).json({ error: 'No organization for this media.' });
+    try {
+      await assertCanAddMedia(early, { kind: String(req.body?.mimeType || '').startsWith('video/') ? 'VIDEO' : 'IMAGE', bytes: Number(req.body?.size) || null });
+    } catch (err) {
+      await provider.deleteFile(fileId).catch(() => {});
+      if (limitResponse(res, err)) return;
+      throw err;
+    }
 
     let confirmed;
     try {
@@ -360,6 +440,109 @@ export const deleteDisplayMedia = async (req: Request, res: Response, next: Next
     }
     await notifyScreens(existing.organizationId, existing.locationId);
     res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+// ---- Playlists ----
+
+const TIME = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+function readPlaylist(body: any) {
+  const out: Record<string, unknown> = {};
+  if (body?.name !== undefined) out.name = String(body.name).trim().slice(0, 80) || 'Playlist';
+  if (body?.locationId !== undefined) out.locationId = body.locationId || null;
+  if (body?.days !== undefined) {
+    const days = [...new Set(String(body.days).split(',').map((d) => Number(d)).filter((d) => d >= 0 && d <= 6))].sort();
+    out.days = days.join(',');
+  }
+  for (const key of ['startTime', 'endTime'] as const) {
+    if (body?.[key] !== undefined) out[key] = body[key] && TIME.test(String(body[key])) ? String(body[key]) : null;
+  }
+  if (body?.priority !== undefined) out.priority = [1, 2, 3].includes(Number(body.priority)) ? Number(body.priority) : 2;
+  if (typeof body?.isActive === 'boolean') out.isActive = body.isActive;
+  const starts = parseDate(body?.startsAt);
+  const ends = parseDate(body?.endsAt);
+  if (starts !== undefined) out.startsAt = starts;
+  if (ends !== undefined) out.endsAt = ends;
+  return out;
+}
+
+const playlistInclude = { items: { orderBy: { sortOrder: 'asc' as const }, select: { mediaId: true, sortOrder: true } } };
+
+export const listPlaylists = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const organizationId = await listScopeOrgId(req, req.query.organizationId as string | undefined);
+    if (!organizationId) return res.status(400).json({ error: 'organizationId is required' });
+    const playlists = await prisma.displayPlaylist.findMany({
+      where: { organizationId },
+      orderBy: [{ priority: 'asc' }, { createdAt: 'asc' }],
+      include: playlistInclude,
+    });
+    res.json(playlists);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const createPlaylist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const data = readPlaylist({ name: 'New playlist', ...req.body });
+    const organizationId = await callerOrgId(req, (data.locationId as string) || null);
+    if (!organizationId) return res.status(400).json({ error: 'No organization.' });
+    if (data.days === '') return res.status(400).json({ error: 'Pick at least one day.' });
+    const playlist = await prisma.displayPlaylist.create({
+      data: { ...(data as any), organizationId },
+      include: playlistInclude,
+    });
+    await notifyScreens(organizationId, playlist.locationId);
+    res.status(201).json(playlist);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updatePlaylist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const existing = await prisma.displayPlaylist.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    const data = readPlaylist(req.body);
+    if (data.days === '') return res.status(400).json({ error: 'Pick at least one day.' });
+    const playlist = await prisma.displayPlaylist.update({ where: { id: existing.id }, data: data as any, include: playlistInclude });
+    await notifyScreens(existing.organizationId, null);
+    res.json(playlist);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deletePlaylist = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const existing = await prisma.displayPlaylist.findUnique({ where: { id: req.params.id } });
+    if (!existing) return res.status(404).json({ error: 'Not found' });
+    await prisma.displayPlaylist.delete({ where: { id: existing.id } });
+    await notifyScreens(existing.organizationId, null);
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+};
+
+/** Replaces a playlist's items with the given media, in that order. */
+export const setPlaylistItems = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const playlist = await prisma.displayPlaylist.findUnique({ where: { id: req.params.id } });
+    if (!playlist) return res.status(404).json({ error: 'Not found' });
+    const ids: string[] = Array.isArray(req.body?.mediaIds) ? [...new Set<string>(req.body.mediaIds.map(String))] : [];
+    const owned = await prisma.displayMedia.count({ where: { id: { in: ids }, organizationId: playlist.organizationId } });
+    if (owned !== ids.length) return res.status(404).json({ error: 'Not found' });
+    await prisma.$transaction([
+      prisma.displayPlaylistItem.deleteMany({ where: { playlistId: playlist.id } }),
+      prisma.displayPlaylistItem.createMany({ data: ids.map((mediaId, sortOrder) => ({ playlistId: playlist.id, mediaId, sortOrder })) }),
+    ]);
+    await notifyScreens(playlist.organizationId, null);
+    res.json(await prisma.displayPlaylist.findUnique({ where: { id: playlist.id }, include: playlistInclude }));
   } catch (error) {
     next(error);
   }

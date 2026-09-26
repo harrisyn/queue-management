@@ -16,7 +16,15 @@ export interface CheckoutResult {
   redirectUrl: string;
 }
 
-export type AddOnResourceType = 'LOCATIONS' | 'USERS';
+export type AddOnResourceType = 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA';
+export const ADDON_RESOURCE_TYPES: AddOnResourceType[] = ['LOCATIONS', 'USERS', 'DISPLAY_MEDIA'];
+
+/** How an add-on is named on invoices and checkout pages. */
+export function addOnProductName(resourceType: AddOnResourceType, quantity: number): string {
+  if (resourceType === 'DISPLAY_MEDIA') return `${quantity}x lobby media pack`;
+  const label = resourceType === 'LOCATIONS' ? 'location' : 'user';
+  return `${quantity}x extra ${label}${quantity > 1 ? 's' : ''}`;
+}
 export type AddOnBillingMode = 'recurring' | 'one_off';
 
 export interface CreateAddOnCheckoutParams {

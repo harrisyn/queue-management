@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { ADDON_RESOURCE_TYPES } from '../services/payments/types';
 import prisma from '../lib/prisma';
 import { getProvider, ProviderNotActiveError } from '../services/payments';
 import { ProviderName, AddOnResourceType, AddOnBillingMode } from '../services/payments/types';
@@ -46,8 +47,8 @@ export const createAddOnCheckout = async (req: Request, res: Response, next: Nex
       provider: ProviderName;
     };
 
-    if (resourceType !== 'LOCATIONS' && resourceType !== 'USERS') {
-      return res.status(400).json({ error: 'resourceType must be LOCATIONS or USERS' });
+    if (!ADDON_RESOURCE_TYPES.includes(resourceType)) {
+      return res.status(400).json({ error: 'Unknown add-on' });
     }
     if (!Number.isInteger(quantity) || quantity < 1) {
       return res.status(400).json({ error: 'quantity must be a positive integer' });

@@ -412,7 +412,7 @@ export const listPlans = async (req: Request, res: Response, next: NextFunction)
 
 // Create subscription plan
 const CREDIT_TYPES = ['AI', 'EMAIL', 'SMS'] as const;
-const ADDON_RESOURCE_TYPES = ['LOCATIONS', 'USERS'] as const;
+const ADDON_RESOURCE_TYPES = ['LOCATIONS', 'USERS', 'DISPLAY_MEDIA'] as const;
 
 // Upserts (or clears) a plan's add-on price overrides. A null/undefined
 // value for a resourceType clears any existing override for that type,

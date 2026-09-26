@@ -60,7 +60,7 @@ const DEFAULT_CONFIG: DisplayConfig = {
 };
 const FLASH_MS = 9000;
 const VIDEO_CAP_MS = 5 * 60 * 1000;
-const CONTENT_REFRESH_MS = 5 * 60 * 1000; // picks up scheduled start/end times
+const CONTENT_REFRESH_MS = 60 * 1000; // picks up playlist start/end times
 const TICKER_SECONDS_PER_CHAR = { slow: 0.32, normal: 0.22, fast: 0.15 };
 
 const formatWait = (minutes: number) => {
@@ -71,16 +71,62 @@ const formatWait = (minutes: number) => {
   return m ? `about ${h}h ${m}m` : `about ${h}h`;
 };
 
-/** Plays one image or video, then calls onDone. */
+/** YouTube or Vimeo links as an autoplaying, muted, chrome-less embed. */
+function embedUrl(url: string, muted: boolean): string | null {
+  const yt = url.match(/(?:youtube\.com\/(?:watch\?v=|live\/|shorts\/|embed\/)|youtu\.be\/)([\w-]{6,})/i);
+  if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1&mute=${muted ? 1 : 0}&controls=0&loop=1&playlist=${yt[1]}&playsinline=1&rel=0&modestbranding=1`;
+  const vimeo = url.match(/vimeo\.com\/(?:video\/)?(\d+)/i);
+  if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1&muted=${muted ? 1 : 0}&background=1&loop=1`;
+  return null;
+}
+
+/** An HLS (.m3u8) live stream: native in Safari, hls.js elsewhere. */
+function HlsVideo({ url, muted, fit, onError }: { url: string; muted: boolean; fit: 'cover' | 'contain'; onError: () => void }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const failed = useRef(onError);
+  failed.current = onError;
+  useEffect(() => {
+    const onError = () => failed.current();
+    const video = ref.current;
+    if (!video) return;
+    if (video.canPlayType('application/vnd.apple.mpegurl')) {
+      video.src = url;
+      return;
+    }
+    let hls: { destroy(): void } | null = null;
+    let cancelled = false;
+    import('hls.js').then(({ default: Hls }) => {
+      if (cancelled) return;
+      if (!Hls.isSupported()) { onError(); return; }
+      const h = new Hls({ lowLatencyMode: true });
+      h.on(Hls.Events.ERROR, (_e, data) => { if (data.fatal) onError(); });
+      h.loadSource(url);
+      h.attachMedia(video);
+      hls = h;
+    }).catch(onError);
+    return () => { cancelled = true; hls?.destroy(); };
+  }, [url]);
+  return <video ref={ref} className={styles.mediaEl} style={{ objectFit: fit }} autoPlay muted={muted} playsInline />;
+}
+
+/** Plays one image, video or stream, then calls onDone. */
 function MediaPlayer({ item, muted, onDone, fit }: { item: DisplayMediaItem; muted: boolean; onDone: () => void; fit: 'cover' | 'contain' }) {
   const done = useRef(onDone);
   done.current = onDone;
   useEffect(() => {
-    const ms = item.kind === 'IMAGE' ? Math.max(3, item.durationSeconds) * 1000 : VIDEO_CAP_MS;
+    // Streams never end by themselves: show them for their set time.
+    const ms = item.kind === 'VIDEO' ? VIDEO_CAP_MS : Math.max(3, item.durationSeconds) * 1000;
     const t = setTimeout(() => done.current(), ms);
     return () => clearTimeout(t);
   }, [item]);
 
+  if (item.kind === 'STREAM') {
+    const embed = embedUrl(item.url, muted);
+    if (embed) {
+      return <iframe className={styles.mediaEl} src={embed} title={item.title} allow="autoplay; encrypted-media; picture-in-picture" style={{ border: 0 }} />;
+    }
+    return <HlsVideo url={item.url} muted={muted} fit={fit} onError={() => done.current()} />;
+  }
   if (item.kind === 'VIDEO') {
     return (
       <video

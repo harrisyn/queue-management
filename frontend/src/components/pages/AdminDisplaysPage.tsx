@@ -3,13 +3,14 @@
 import { localDay } from '@/lib/localDate';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  ArrowUp, ArrowDown, ExternalLink, Film, Image as ImageIcon, Link2, Trash2, Upload, Plus, X, CalendarRange,
+  ArrowUp, ArrowDown, ExternalLink, Film, Radio, Image as ImageIcon, Link2, Trash2, Upload, Plus, X, CalendarRange,
 } from 'lucide-react';
 import api from '@/api/client';
-import type { DisplayConfig, DisplayMediaItem } from '@/api/client';
+import type { DisplayConfig, DisplayMediaItem, DisplayEntitlement } from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import Layout from '@/components/Layout';
 import { PageHeader, Button, Switch } from '@/components/ui';
+import PlaylistsPanel from '@/components/displays/PlaylistsPanel';
 
 interface LocationRow { id: string; name: string; publicCode?: string | null }
 
@@ -29,6 +30,20 @@ const EVERY = [
 ];
 
 const VIDEO_EXT = /\.(mp4|webm|mov|m4v)(\?|#|$)/i;
+const STREAM_URL = /(youtube\.com|youtu\.be|vimeo\.com)\/|\.m3u8(\?|#|$)/i;
+const kindForLink = (url: string): DisplayMediaItem['kind'] => (STREAM_URL.test(url) ? 'STREAM' : VIDEO_EXT.test(url) ? 'VIDEO' : 'IMAGE');
+
+const daysLeft = (iso: string | null) => (iso ? Math.max(0, Math.ceil((new Date(iso).getTime() - Date.now()) / 86400000)) : 0);
+
+/** Where this organization stands on lobby adverts, and how to get more. */
+function PlanNote({ e }: { e: DisplayEntitlement }) {
+  const used = `${e.itemsUsed} of ${e.maxItems} playlist items used`;
+  if (e.status === 'trial_available') return <p className="displays-plan">Try adverts free for {e.trialDays} days, with up to {e.maxItems} items. The trial starts when you add the first one.</p>;
+  if (e.status === 'trial') return <p className="displays-plan">Free trial: {daysLeft(e.trialEndsAt)} {daysLeft(e.trialEndsAt) === 1 ? 'day' : 'days'} left · {used}. <a href="/admin/billing">Keep adverts after the trial</a></p>;
+  if (e.status === 'trial_ended') return <p className="displays-plan" data-tone="bad">Your free trial has ended, so screens aren’t playing media (the ticker still runs). <a href="/admin/billing">Upgrade or get a lobby media pack</a></p>;
+  if (e.status === 'included') return <p className="displays-plan">{used}. Files up to 4MB. <a href="/admin/billing">A lobby media pack</a> adds big videos, live streams and 25 more items.</p>;
+  return <p className="displays-plan">Lobby media pack: {used}. Large videos and streams included.</p>;
+}
 
 /** Uploads straight from the browser to Uploadcare, reporting progress. */
 function uploadDirect(file: File, publicKey: string, onProgress: (pct: number) => void): Promise<string> {
@@ -83,8 +98,11 @@ export default function AdminDisplaysPage() {
   const [everywhere, setEverywhere] = useState(true);
   const [adding, setAdding] = useState(false);
   const [progress, setProgress] = useState<number | null>(null);
+  const [entitlement, setEntitlement] = useState<DisplayEntitlement | null>(null);
+  const refreshEntitlement = () => api.getDisplayEntitlement().then(setEntitlement).catch(() => {});
   const [addError, setAddError] = useState('');
   const [scheduling, setScheduling] = useState<string | null>(null);
+  const [tab, setTab] = useState<'screen' | 'playlists' | 'library'>('screen');
 
   const location = locations.find((l) => l.id === locationId);
   const dirty = saved !== '' && JSON.stringify(config) !== saved;
@@ -92,6 +110,7 @@ export default function AdminDisplaysPage() {
   useEffect(() => {
     if (authLoading) return;
     if (!user?.organizationId) { setLoading(false); return; }
+    refreshEntitlement();
     Promise.all([api.getLocations(user.organizationId), api.listDisplayMedia()])
       .then(([locs, items]) => {
         setLocations(locs);
@@ -155,15 +174,16 @@ export default function AdminDisplaysPage() {
           // Too big to pass through our server: send it straight to storage.
           setProgress(0);
           const fileId = await uploadDirect(file, config.direct.publicKey, setProgress);
-          item = await api.registerDirectUpload({ fileId, mimeType: file.type, ...fields });
+          item = await api.registerDirectUpload({ fileId, mimeType: file.type, size: file.size, ...fields } as Parameters<typeof api.registerDirectUpload>[0]);
         } else {
-          throw new Error(config.direct ? 'That file is over 500MB. Use a shorter video, or add it by link.' : 'That file is over 4MB. Add it by link instead, or ask your platform admin to set up file storage.');
+          throw new Error(config.direct ? 'That file is over 500MB. Use a shorter video, or add it by link.' : config.largeFilesNeedPack ? 'Files over 4MB come with a lobby media pack (see Billing). Or add the video by link.' : 'That file is over 4MB. Add it by link instead, or ask your platform admin to set up file storage.');
         }
       } else {
-        item = await api.createDisplayMedia({ ...fields, url: link.trim(), kind: VIDEO_EXT.test(link) ? 'VIDEO' : 'IMAGE' });
+        item = await api.createDisplayMedia({ ...fields, url: link.trim(), kind: kindForLink(link.trim()) });
       }
       setMedia((list) => [...list, item]);
       setFile(null); setLink(''); setTitle('');
+      refreshEntitlement();
     } catch (err: any) {
       setAddError(err.response?.data?.error || err.message || 'Couldn’t add that. Try again.');
     } finally {
@@ -186,7 +206,7 @@ export default function AdminDisplaysPage() {
     if (!window.confirm(`Remove “${item.title}” from every screen?`)) return;
     const before = media;
     setMedia((list) => list.filter((m) => m.id !== item.id));
-    try { await api.deleteDisplayMedia(item.id); } catch {
+    try { await api.deleteDisplayMedia(item.id); refreshEntitlement(); } catch {
       setMedia(before);
       setMessage({ type: 'error', text: 'Couldn’t remove it. Try again.' });
     }
@@ -241,11 +261,19 @@ export default function AdminDisplaysPage() {
         </div>
       )}
 
-      {loading ? (
+      <div className="tabs displays-page-tabs" role="tablist">
+        {([['screen', 'Screen'], ['playlists', 'Playlists'], ['library', 'Media library']] as const).map(([id, label]) => (
+          <button key={id} type="button" role="tab" className="tab" aria-selected={tab === id} onClick={() => setTab(id)}>{label}</button>
+        ))}
+      </div>
+
+      {tab === 'playlists' ? (
+        <PlaylistsPanel media={media} locations={locations} />
+      ) : loading ? (
         <div style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" /></div>
       ) : (
-        <div className="displays">
-          <section className="settings-panel">
+        <div className="displays" data-tab={tab}>
+          {tab === 'screen' && <section className="settings-panel">
             <h2>Between calls</h2>
             <p className="settings-lede">A new call always takes over the screen, so nobody misses their turn while something is playing.</p>
             <Switch
@@ -356,13 +384,14 @@ export default function AdminDisplaysPage() {
               </span>
               <Button type="button" onClick={save} disabled={saving || !dirty}>{saving ? 'Saving…' : 'Save changes'}</Button>
             </div>
-          </section>
+          </section>}
 
-          <section className="settings-panel">
-            <h2>Playlist</h2>
+          {tab === 'library' && <section className="settings-panel">
+            <h2>Media library</h2>
             <p className="settings-lede">
-              Plays in this order. Images stay up for the time you set; videos play to the end with the sound off unless the screen’s sound is on.
+              Everything you can show on screens. Playlists decide when each item plays; with no playlists, the whole library plays in this order. Images and streams stay up for the time you set; videos play to the end.
             </p>
+            {entitlement && <PlanNote e={entitlement} />}
 
             {!config.media.enabled && playlist.length > 0 && (
               <p className="settings-warn">This screen isn’t playing media. Turn on “Play adverts and videos” and save.</p>
@@ -385,8 +414,10 @@ export default function AdminDisplaysPage() {
                       <div className="displays-preview">
                         {item.kind === 'VIDEO'
                           ? <video src={item.url} muted preload="metadata" />
-                          // eslint-disable-next-line @next/next/no-img-element
-                          : <img src={item.url} alt="" />}
+                          : item.kind === 'STREAM'
+                            ? <span className="displays-stream"><Radio size={20} /> Stream</span>
+                            // eslint-disable-next-line @next/next/no-img-element
+                            : <img src={item.url} alt="" />}
                         {item.kind === 'VIDEO' && <Film size={14} className="displays-kind" />}
                       </div>
                       <div className="displays-meta">
@@ -398,7 +429,7 @@ export default function AdminDisplaysPage() {
                         />
                         <div className="displays-tags">
                           <span>{item.locationId ? 'This location only' : 'All locations'}</span>
-                          {item.kind === 'IMAGE' ? (
+                          {item.kind !== 'VIDEO' ? (
                             <label className="displays-duration">
                               <input
                                 type="number"
@@ -450,9 +481,9 @@ export default function AdminDisplaysPage() {
                 </label>
               ) : (
                 <label className="settings-field">
-                  <span>Link to an image or video file</span>
+                  <span>Link to an image, video or stream</span>
                   <input type="url" value={link} onChange={(e) => setLink(e.target.value)} placeholder="https://…/spring-promo.mp4" />
-                  <small>A direct link to the file. Links ending in .mp4 or .webm play as video.</small>
+                  <small>A direct link to an image or .mp4/.webm file. YouTube, Vimeo and live (.m3u8) streams need a lobby media pack.</small>
                 </label>
               )}
               <div className="settings-grid">
@@ -467,11 +498,11 @@ export default function AdminDisplaysPage() {
                 </fieldset>
               </div>
               {addError && <div className="inline-alert inline-alert-error" role="alert">{addError}</div>}
-              <Button type="submit" disabled={adding || (addMode === 'upload' ? !file : !link.trim())}>
-                {progress !== null ? `Uploading ${progress}%` : adding ? 'Adding…' : 'Add to playlist'}
+              <Button type="submit" disabled={adding || !!(entitlement && (!entitlement.allowed || entitlement.itemsUsed >= entitlement.maxItems)) || (addMode === 'upload' ? !file : !link.trim())}>
+                {progress !== null ? `Uploading ${progress}%` : adding ? 'Adding…' : 'Add to library'}
               </Button>
             </form>
-          </section>
+          </section>}
         </div>
       )}
     </Layout>

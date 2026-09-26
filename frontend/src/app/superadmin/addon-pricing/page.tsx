@@ -7,15 +7,16 @@ import api from '@/api/client';
 import { PageHeader, Card, Button, Input } from '@/components/ui';
 
 interface AddOnPricingRow {
-  resourceType: 'LOCATIONS' | 'USERS';
+  resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA';
   pricePerUnitMonthly: string;
   pricePerUnitOneOff: string;
   currency: string;
 }
 
 const RESOURCE_LABELS: Record<string, string> = {
-  LOCATIONS: 'Extra Location',
-  USERS: 'Extra User',
+  LOCATIONS: 'Extra location',
+  USERS: 'Extra staff seat',
+  DISPLAY_MEDIA: 'Lobby media pack (large uploads, streams, +25 items)',
 };
 
 export default function AddOnPricingPage() {
@@ -49,7 +50,7 @@ export default function AddOnPricingPage() {
     }
   };
 
-  const handleSave = async (resourceType: 'LOCATIONS' | 'USERS') => {
+  const handleSave = async (resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA') => {
     const form = forms[resourceType];
     setSaving(resourceType);
     try {

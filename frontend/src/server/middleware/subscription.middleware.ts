@@ -234,7 +234,7 @@ export const requireFeature = (feature: FeatureKey) => {
 // Sum of quantity across an organization's ACTIVE add-ons for one resource
 // type. Add-ons raise the effective limit on top of the plan's own limit
 // for that resource - see docs/superpowers/specs/2026-08-25-addon-billing-design.md.
-async function addOnBoost(organizationId: string, resourceType: 'LOCATIONS' | 'USERS'): Promise<number> {
+export async function addOnBoost(organizationId: string, resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA'): Promise<number> {
   const result = await prisma.organizationAddOn.aggregate({
     where: { organizationId, resourceType, status: 'ACTIVE' },
     _sum: { quantity: true },

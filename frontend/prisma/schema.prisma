@@ -24,6 +24,8 @@ model Organization {
   industry              String?                  // HEALTHCARE, RESTAURANT, RETAIL, BANKING, GOVERNMENT, EDUCATION, SALON, OTHER
   customerLabel         String?
   customerLabelPlural   String?
+  // When a plan without lobby adverts first added media (starts the trial)
+  displayMediaTrialStartedAt DateTime?
   // Subscription
   subscriptionId        String?                  @unique
   // White-labeling (gated behind the plan's customBranding feature)
@@ -55,6 +57,7 @@ model Organization {
   webhookEndpoints      WebhookEndpoint[]
   aiInsights            AiInsight[]
   displayMedia          DisplayMedia[]
+  displayPlaylists      DisplayPlaylist[]
 }
 
 enum OrganizationStatus {
@@ -116,6 +119,7 @@ model Location {
   //  "callFlash":true}
   displayConfig     Json?
   displayMedia      DisplayMedia[]
+  displayPlaylists  DisplayPlaylist[]
 }
 
 enum ServicePointType {
@@ -646,6 +650,7 @@ model ProcessedWebhookEvent {
 enum AddOnResourceType {
   LOCATIONS
   USERS
+  DISPLAY_MEDIA // lobby media pack: large uploads, streams, more playlist items
 }
 
 enum AddOnBillingMode {
@@ -871,7 +876,7 @@ model DisplayMedia {
   organization    Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   locationId      String?
   location        Location?    @relation(fields: [locationId], references: [id], onDelete: Cascade)
-  kind            String       // IMAGE | VIDEO
+  kind            String       // IMAGE | VIDEO | STREAM (YouTube, Vimeo, HLS live)
   url             String
   fileId          String?      // file storage id when uploaded through us
   title           String
@@ -882,6 +887,43 @@ model DisplayMedia {
   endsAt          DateTime?
   createdAt       DateTime     @default(now())
   updatedAt       DateTime     @updatedAt
+  playlistItems   DisplayPlaylistItem[]
 
   @@index([organizationId, locationId, sortOrder])
+}
+
+// A named, scheduled set of media from the library ("Weekday mornings",
+// "Flu season"). Days and times are the location's local time. When several
+// playlists are on at once, only the highest priority plays (1 = takes over,
+// 2 = normal, 3 = filler). With no playlists, the whole library plays.
+model DisplayPlaylist {
+  id             String       @id @default(uuid())
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  locationId     String?      // null = every location
+  location       Location?    @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  name           String
+  days           String       @default("0,1,2,3,4,5,6") // 0 = Sunday
+  startTime      String?      // "HH:MM" local; null = from opening
+  endTime        String?      // "HH:MM" local; null = until closing
+  priority       Int          @default(2)
+  isActive       Boolean      @default(true)
+  startsAt       DateTime?
+  endsAt         DateTime?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  items          DisplayPlaylistItem[]
+
+  @@index([organizationId, locationId])
+}
+
+model DisplayPlaylistItem {
+  id         String          @id @default(uuid())
+  playlistId String
+  playlist   DisplayPlaylist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  mediaId    String
+  media      DisplayMedia    @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  sortOrder  Int             @default(0)
+
+  @@unique([playlistId, mediaId])
 }

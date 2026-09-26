@@ -1,4 +1,5 @@
 import crypto from 'crypto';
+import { addOnProductName } from './types';
 import { PaymentProvider, CreateCheckoutParams, CreateAddOnCheckoutParams, CheckoutResult, PaymentWebhookEvent } from './types';
 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
@@ -66,11 +67,10 @@ export class PaystackProvider implements PaymentProvider {
     // transaction is initialized against it to start the subscription.
     let planCode: string | undefined;
     if (params.billingMode === 'recurring') {
-      const resourceLabel = params.resourceType === 'LOCATIONS' ? 'location' : 'user';
       const plan = await this.request<{ plan_code: string }>('/plan', {
         method: 'POST',
         body: JSON.stringify({
-          name: `${params.quantity}x extra ${resourceLabel} add-on`,
+          name: `${addOnProductName(params.resourceType, params.quantity)} add-on`,
           amount: amountMinorUnits,
           interval: 'monthly',
           currency: params.currency.toUpperCase(),
@@ -131,7 +131,7 @@ export class PaystackProvider implements PaymentProvider {
             planId: null,
             billingCycle: null,
             kind: 'addon',
-            addOn: (resourceType === 'LOCATIONS' || resourceType === 'USERS') && (billingMode === 'recurring' || billingMode === 'one_off')
+            addOn: (resourceType === 'LOCATIONS' || resourceType === 'USERS' || resourceType === 'DISPLAY_MEDIA') && (billingMode === 'recurring' || billingMode === 'one_off')
               ? { resourceType, quantity, billingMode }
               : undefined,
           };

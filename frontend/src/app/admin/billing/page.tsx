@@ -65,7 +65,7 @@ const CREDIT_LABELS: Record<'AI' | 'EMAIL' | 'SMS', string> = {
 };
 
 interface AddOnPricingRow {
-  resourceType: 'LOCATIONS' | 'USERS';
+  resourceType: AddOnKind;
   pricePerUnitMonthly: string;
   pricePerUnitOneOff: string;
   currency: string;
@@ -73,16 +73,22 @@ interface AddOnPricingRow {
 
 interface OrganizationAddOn {
   id: string;
-  resourceType: 'LOCATIONS' | 'USERS';
+  resourceType: AddOnKind;
   quantity: number;
   billingMode: 'RECURRING' | 'ONE_OFF';
   status: 'ACTIVE' | 'CANCELLED';
   currentPeriodEnd: string | null;
 }
 
-const ADDON_LABELS: Record<'LOCATIONS' | 'USERS', string> = {
-  LOCATIONS: 'Extra Locations',
-  USERS: 'Extra Users',
+type AddOnKind = 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA';
+
+const ADDON_LABELS: Record<AddOnKind, string> = {
+  LOCATIONS: 'Extra locations',
+  USERS: 'Extra staff',
+  DISPLAY_MEDIA: 'Lobby media pack',
+};
+const ADDON_NOTES: Partial<Record<AddOnKind, string>> = {
+  DISPLAY_MEDIA: 'Large videos (up to 500MB), YouTube, Vimeo and live streams on your lobby screens, and 25 more playlist items per pack.',
 };
 
 type BillingCycle = 'monthly' | 'quarterly' | 'yearly';
@@ -100,6 +106,7 @@ const FEATURE_LABELS: Record<string, string> = {
   customBranding: 'Own logo and colour',
   customDomain: 'Custom domain',
   apiAccess: 'API and integrations',
+  displayMedia: 'Adverts on lobby screens',
   // legacy keys from the old plan editor
   multipleLocations: 'More than one location',
   whiteLabel: 'Own logo and colour',
@@ -129,11 +136,12 @@ export default function BillingPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
   const [addOnPricing, setAddOnPricing] = useState<AddOnPricingRow[]>([]);
   const [myAddOns, setMyAddOns] = useState<OrganizationAddOn[]>([]);
-  const [addOnForms, setAddOnForms] = useState<Record<'LOCATIONS' | 'USERS', { quantity: number; billingMode: 'recurring' | 'one_off' }>>({
+  const [addOnForms, setAddOnForms] = useState<Record<AddOnKind, { quantity: number; billingMode: 'recurring' | 'one_off' }>>({
     LOCATIONS: { quantity: 1, billingMode: 'recurring' },
     USERS: { quantity: 1, billingMode: 'recurring' },
+    DISPLAY_MEDIA: { quantity: 1, billingMode: 'one_off' },
   });
-  const [addOnCheckoutPending, setAddOnCheckoutPending] = useState<'LOCATIONS' | 'USERS' | null>(null);
+  const [addOnCheckoutPending, setAddOnCheckoutPending] = useState<AddOnKind | null>(null);
 
   useEffect(() => {
     load();
@@ -159,11 +167,11 @@ export default function BillingPage() {
     }
   };
 
-  const handlePurchaseAddOn = (resourceType: 'LOCATIONS' | 'USERS') => {
+  const handlePurchaseAddOn = (resourceType: AddOnKind) => {
     setAddOnCheckoutPending(resourceType);
   };
 
-  const handleAddOnCheckout = async (resourceType: 'LOCATIONS' | 'USERS', provider: 'stripe' | 'paystack') => {
+  const handleAddOnCheckout = async (resourceType: AddOnKind, provider: 'stripe' | 'paystack') => {
     const form = addOnForms[resourceType];
     try {
       const { redirectUrl } = await api.createAddOnCheckout({
@@ -270,7 +278,7 @@ export default function BillingPage() {
             <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--gray-900)' }}>Add-Ons</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: myAddOns.length > 0 ? '1.25rem' : 0 }}>
               {addOnPricing.map(pricing => {
-                const form = addOnForms[pricing.resourceType];
+                const form = addOnForms[pricing.resourceType] || { quantity: 1, billingMode: 'one_off' as const };
                 const unitPrice = form.billingMode === 'recurring' ? Number(pricing.pricePerUnitMonthly) : Number(pricing.pricePerUnitOneOff);
                 const total = unitPrice * form.quantity;
                 return (
@@ -278,6 +286,9 @@ export default function BillingPage() {
                     <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--gray-900)' }}>
                       {ADDON_LABELS[pricing.resourceType]}
                     </h4>
+                    {ADDON_NOTES[pricing.resourceType] && (
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--gray-600)', margin: '-0.375rem 0 0.75rem', lineHeight: 1.5 }}>{ADDON_NOTES[pricing.resourceType]}</p>
+                    )}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
                       <Input
                         label="Quantity"

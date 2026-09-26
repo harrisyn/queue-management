@@ -9,9 +9,35 @@ export interface DisplayConfig {
   callFlash: boolean;
 }
 
+export interface DisplayPlaylist {
+  id: string;
+  name: string;
+  locationId: string | null;
+  days: string;
+  startTime: string | null;
+  endTime: string | null;
+  priority: number;
+  isActive: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  items: { mediaId: string; sortOrder: number }[];
+}
+
+export interface DisplayEntitlement {
+  status: 'pack' | 'included' | 'trial' | 'trial_available' | 'trial_ended';
+  allowed: boolean;
+  maxItems: number;
+  maxUploadBytes: number;
+  streaming: boolean;
+  packs: number;
+  trialDays: number;
+  trialEndsAt: string | null;
+  itemsUsed: number;
+}
+
 export interface DisplayMediaItem {
   id: string;
-  kind: 'IMAGE' | 'VIDEO';
+  kind: 'IMAGE' | 'VIDEO' | 'STREAM';
   url: string;
   title: string;
   durationSeconds: number;
@@ -417,7 +443,7 @@ class ApiClient {
     return data;
   }
 
-  async createAddOnCheckout(payload: { resourceType: 'LOCATIONS' | 'USERS'; quantity: number; billingMode: 'recurring' | 'one_off'; provider: 'stripe' | 'paystack' }) {
+  async createAddOnCheckout(payload: { resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA'; quantity: number; billingMode: 'recurring' | 'one_off'; provider: 'stripe' | 'paystack' }) {
     const { data } = await this.client.post('/tenant/addons/checkout', payload);
     return data;
   }
@@ -437,7 +463,7 @@ class ApiClient {
     return data;
   }
 
-  async updateAddOnPricing(resourceType: 'LOCATIONS' | 'USERS', payload: { pricePerUnitMonthly: number; pricePerUnitOneOff: number; currency?: string }) {
+  async updateAddOnPricing(resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA', payload: { pricePerUnitMonthly: number; pricePerUnitOneOff: number; currency?: string }) {
     const { data } = await this.client.put(`/superadmin/addon-pricing/${resourceType}`, payload);
     return data;
   }
@@ -664,12 +690,41 @@ class ApiClient {
     return data as DisplayMediaItem;
   }
 
-  async getDisplayUploadConfig() {
-    const { data } = await this.client.get('/display/upload-config');
-    return data as { serverMaxBytes: number; direct: { provider: 'uploadcare'; publicKey: string; maxBytes: number } | null };
+  async listDisplayPlaylists() {
+    const { data } = await this.client.get('/display/playlists');
+    return data as DisplayPlaylist[];
   }
 
-  async registerDirectUpload(body: { fileId: string; mimeType?: string; title?: string; durationSeconds?: number; locationId?: string | null }) {
+  async createDisplayPlaylist(body: Partial<DisplayPlaylist>) {
+    const { data } = await this.client.post('/display/playlists', body);
+    return data as DisplayPlaylist;
+  }
+
+  async updateDisplayPlaylist(id: string, body: Partial<DisplayPlaylist>) {
+    const { data } = await this.client.patch(`/display/playlists/${id}`, body);
+    return data as DisplayPlaylist;
+  }
+
+  async deleteDisplayPlaylist(id: string) {
+    await this.client.delete(`/display/playlists/${id}`);
+  }
+
+  async setDisplayPlaylistItems(id: string, mediaIds: string[]) {
+    const { data } = await this.client.put(`/display/playlists/${id}/items`, { mediaIds });
+    return data as DisplayPlaylist;
+  }
+
+  async getDisplayEntitlement() {
+    const { data } = await this.client.get('/display/entitlement');
+    return data as DisplayEntitlement;
+  }
+
+  async getDisplayUploadConfig() {
+    const { data } = await this.client.get('/display/upload-config');
+    return data as { serverMaxBytes: number; direct: { provider: 'uploadcare'; publicKey: string; maxBytes: number } | null; largeFilesNeedPack?: boolean };
+  }
+
+  async registerDirectUpload(body: { fileId: string; mimeType?: string; size?: number; title?: string; durationSeconds?: number; locationId?: string | null }) {
     const { data } = await this.client.post('/display/media/direct', body);
     return data as DisplayMediaItem;
   }
@@ -1253,7 +1308,7 @@ class ApiClient {
     maxServicesPerLoc?: number | null;
     maxUsersPerOrg?: number | null;
     maxQueueEntriesPerDay?: number | null;
-    features?: Record<string, boolean>;
+    features?: Record<string, boolean | number>;
     displayOrder?: number;
     tierRank?: number;
     isDefault?: boolean;
@@ -1279,7 +1334,7 @@ class ApiClient {
     maxServicesPerLoc?: number | null;
     maxUsersPerOrg?: number | null;
     maxQueueEntriesPerDay?: number | null;
-    features?: Record<string, boolean>;
+    features?: Record<string, boolean | number>;
     displayOrder?: number;
     tierRank?: number;
     isActive?: boolean;

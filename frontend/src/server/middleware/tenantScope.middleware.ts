@@ -132,6 +132,8 @@ export const webhookEndpoint = resolver(async (id) =>
 
 export const displayMedia = resolver(async (id) =>
   (await prisma.displayMedia.findUnique({ where: { id }, select: { organizationId: true } }))?.organizationId);
+export const displayPlaylist = resolver(async (id) =>
+  (await prisma.displayPlaylist.findUnique({ where: { id }, select: { organizationId: true } }))?.organizationId);
 export const notification = resolver(async (id) =>
   (await prisma.notification.findUnique({
     where: { id },

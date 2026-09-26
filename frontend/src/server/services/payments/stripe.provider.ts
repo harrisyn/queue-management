@@ -1,4 +1,5 @@
 import Stripe from 'stripe';
+import { addOnProductName } from './types';
 import { PaymentProvider, CreateCheckoutParams, CreateAddOnCheckoutParams, CheckoutResult, PaymentWebhookEvent } from './types';
 
 // Stripe's `recurring.interval` has no native "quarter" value - quarterly
@@ -60,8 +61,7 @@ export class StripeProvider implements PaymentProvider {
   }
 
   async createAddOnCheckoutSession(params: CreateAddOnCheckoutParams): Promise<CheckoutResult> {
-    const resourceLabel = params.resourceType === 'LOCATIONS' ? 'location' : 'user';
-    const productName = `${params.quantity}x extra ${resourceLabel}${params.quantity > 1 ? 's' : ''}`;
+    const productName = addOnProductName(params.resourceType, params.quantity);
     const metadata = {
       kind: 'addon',
       organizationId: params.organizationId,
@@ -126,7 +126,7 @@ export class StripeProvider implements PaymentProvider {
             planId: null,
             billingCycle: null,
             kind: 'addon',
-            addOn: (resourceType === 'LOCATIONS' || resourceType === 'USERS') && (billingMode === 'recurring' || billingMode === 'one_off')
+            addOn: (resourceType === 'LOCATIONS' || resourceType === 'USERS' || resourceType === 'DISPLAY_MEDIA') && (billingMode === 'recurring' || billingMode === 'one_off')
               ? { resourceType, quantity, billingMode }
               : undefined,
           };
