@@ -11,7 +11,7 @@ vi.mock('../../middleware/subscription.middleware', () => ({
   checkLimit: vi.fn(),
 }));
 
-vi.mock('../../lib/socket', () => ({
+vi.mock('../../lib/realtime', () => ({
   emitToQueue: vi.fn(),
   emitToService: vi.fn(),
   emitToLocation: vi.fn(),
@@ -23,6 +23,24 @@ vi.mock('../../utils/ticket', () => ({
   generateTicketNumber: vi.fn(() => 'A-001'),
   getNextSequence: vi.fn(async () => 1),
   generateQRData: vi.fn(() => 'qr-data'),
+}));
+
+// Post-join side effects (audit, webhooks, journeys, notifications) are
+// covered separately - stub them here.
+vi.mock('../../services/queueEvents.service', () => ({
+  recordQueueEvent: vi.fn(),
+  startJourney: vi.fn(),
+  closeJourneyIfDone: vi.fn(),
+  afterQueueChange: vi.fn(),
+  afterEntryCalled: vi.fn(),
+  transferEntryToService: vi.fn(),
+  TransferError: class extends Error {},
+}));
+
+vi.mock('../../services/notifications.service', () => ({
+  WAITING_ORDER: [],
+  computePosition: vi.fn(async () => 1),
+  notifyEntry: vi.fn(async () => {}),
 }));
 
 import prisma from '../../lib/prisma';

@@ -1,10 +1,24 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
-import { emitToQueue, emitToService, emitToLocation, emitToQueueAndLocation, SOCKET_EVENTS } from '../lib/socket';
+import { emitToQueue, emitToService, emitToLocation, emitToQueueAndLocation, SOCKET_EVENTS } from '../lib/realtime';
 import { generateTicketNumber, getNextSequence, generateQRData } from '../utils/ticket';
 import { getStartOfDay, generateTimeSlots } from '../utils/date';
 import { v4 as uuidv4 } from 'uuid';
 import { checkLimit } from '../middleware/subscription.middleware';
+import { WAITING_ORDER, computePosition, notifyEntry } from '../services/notifications.service';
+import {
+  recordQueueEvent,
+  startJourney,
+  closeJourneyIfDone,
+  afterQueueChange,
+  afterEntryCalled,
+  transferEntryToService,
+  TransferError,
+} from '../services/queueEvents.service';
+
+const actorId = (req: Request) => req.user?.userId ?? null;
+const minutesSince = (from: Date | null | undefined) =>
+  from ? Math.max(0, Math.round((Date.now() - new Date(from).getTime()) / 60000)) : undefined;
 
 // Helper to get locationId from a queue
 const getLocationIdFromQueue = async (queueId: string): Promise<string | null> => {
@@ -226,17 +240,8 @@ export const joinQueue = async (req: Request, res: Response, next: NextFunction)
       },
     });
 
-    // Calculate position
-    const position = await prisma.queueEntry.count({
-      where: {
-        queueId: id,
-        status: 'WAITING',
-        OR: [
-          { priority: { gt: entry.priority } },
-          { priority: entry.priority, joinedAt: { lt: entry.joinedAt } },
-        ],
-      },
-    });
+    // Position in the same order staff call people (0-based here, +1 below)
+    const position = Math.max(0, (await computePosition(id, entry.id)) - 1);
 
     // Emit real-time update to both queue and location rooms
     const updateData = {
@@ -246,6 +251,10 @@ export const joinQueue = async (req: Request, res: Response, next: NextFunction)
     };
     emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
     emitToLocation(queue.service.location.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+
+    await startJourney(entry.id);
+    await recordQueueEvent({ action: 'entry.joined', actorUserId: actorId(req), queueId: id, entryId: entry.id });
+    await afterQueueChange(id);
 
     res.status(201).json({
       ...entry,
@@ -268,7 +277,7 @@ export const callNext = async (req: Request, res: Response, next: NextFunction) 
         queueId: id,
         status: 'WAITING',
       },
-      orderBy: [{ priority: 'desc' }, { joinedAt: 'asc' }],
+      orderBy: WAITING_ORDER,
     });
 
     if (!nextEntry) {
@@ -281,6 +290,7 @@ export const callNext = async (req: Request, res: Response, next: NextFunction) 
       data: {
         status: 'SERVING',
         calledAt: new Date(),
+        waitDuration: minutesSince(nextEntry.joinedAt),
       },
       include: {
         user: {
@@ -297,6 +307,10 @@ export const callNext = async (req: Request, res: Response, next: NextFunction) 
       status: 'SERVING',
       entry,
     });
+
+    await recordQueueEvent({ action: 'entry.called', actorUserId: actorId(req), queueId: id, entryId: entry.id });
+    await afterEntryCalled(entry.id);
+    await afterQueueChange(id);
 
     res.json(entry);
   } catch (error) {
@@ -349,53 +363,23 @@ export const markServed = async (req: Request, res: Response, next: NextFunction
       entry,
     });
 
-    // Check for auto-transfer to next service
+    await recordQueueEvent({ action: 'entry.served', actorUserId: actorId(req), queueId: id, entryId: entry.id });
+
+    // Auto-transfer to the next service if a flow says so
     const serviceFlow = await prisma.serviceFlow.findFirst({
-      where: {
-        fromServiceId: entry.queue.serviceId,
-        autoTransfer: true,
-      },
-      include: { toService: true },
+      where: { fromServiceId: entry.queue.serviceId, autoTransfer: true },
+      orderBy: { priority: 'asc' },
     });
-
     if (serviceFlow) {
-      // Get or create queue for next service
-      const today = getStartOfDay();
-      let nextQueue = await prisma.queue.findFirst({
-        where: {
-          serviceId: serviceFlow.toServiceId,
-          date: today,
-        },
-      });
-
-      if (nextQueue && nextQueue.status === 'ACTIVE') {
-        // Auto-add to next queue
-        const sequence = await getNextSequence(prisma, nextQueue.id);
-        const servicePrefix = serviceFlow.toService.name.charAt(0).toUpperCase();
-        const ticketNumber = generateTicketNumber(servicePrefix, sequence);
-
-        const newEntry = await prisma.queueEntry.create({
-          data: {
-            queueId: nextQueue.id,
-            userId: entry.userId,
-            ticketNumber,
-            notes: `Transferred from ${entry.queue.service.name}`,
-          },
-        });
-
-        // Emit to both queue and location rooms
-        const nextLocationId = await getLocationIdFromQueue(nextQueue.id);
-        const transitionData = {
-          fromQueueId: id,
-          toQueueId: nextQueue.id,
-          entry: newEntry,
-        };
-        emitToQueue(nextQueue.id, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
-        if (nextLocationId) {
-          emitToLocation(nextLocationId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
-        }
+      try {
+        await transferEntryToService(entry.id, serviceFlow.toServiceId, { actorUserId: actorId(req) });
+      } catch (err) {
+        if (!(err instanceof TransferError)) throw err;
+        // Target queue closed/inactive: the patient is still served here.
       }
     }
+    await closeJourneyIfDone(entry.id);
+    await afterQueueChange(id);
 
     res.json(entry);
   } catch (error) {
@@ -433,6 +417,10 @@ export const cancelEntry = async (req: Request, res: Response, next: NextFunctio
       emitToLocation(queue.service.locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
     }
 
+    await recordQueueEvent({ action: 'entry.cancelled', actorUserId: actorId(req), queueId: id, entryId: entry.id });
+    await closeJourneyIfDone(entry.id);
+    await afterQueueChange(id);
+
     res.json(entry);
   } catch (error) {
     next(error);
@@ -469,6 +457,10 @@ export const markNoShow = async (req: Request, res: Response, next: NextFunction
       emitToLocation(queue.service.locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
     }
 
+    await recordQueueEvent({ action: 'entry.no_show', actorUserId: actorId(req), queueId: id, entryId: entry.id });
+    await closeJourneyIfDone(entry.id);
+    await afterQueueChange(id);
+
     res.json(entry);
   } catch (error) {
     next(error);
@@ -478,82 +470,45 @@ export const markNoShow = async (req: Request, res: Response, next: NextFunction
 // Move entry to different queue (manual transfer)
 export const moveEntry = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { id } = req.params;
     const { entryId, targetQueueId, priority } = req.body;
 
-    // Get original entry
-    const originalEntry = await prisma.queueEntry.findUnique({
-      where: { id: entryId },
-      include: { queue: { include: { service: { include: { location: true } } } } },
-    });
-
-    if (!originalEntry) {
-      return res.status(404).json({ error: 'Entry not found' });
-    }
-
-    // Get target queue
-    const targetQueue = await prisma.queue.findUnique({
-      where: { id: targetQueueId },
-      include: { service: { include: { location: true } } },
-    });
-
+    const targetQueue = await prisma.queue.findUnique({ where: { id: targetQueueId }, select: { serviceId: true } });
     if (!targetQueue) {
       return res.status(404).json({ error: 'Target queue not found' });
     }
 
-    // Mark original as served with transfer note
-    await prisma.queueEntry.update({
-      where: { id: entryId },
-      data: {
-        status: 'SERVED',
-        completedAt: new Date(),
-        notes: `Transferred to ${targetQueue.service.name}`,
-      },
+    const { entry } = await transferEntryToService(entryId, targetQueue.serviceId, {
+      actorUserId: actorId(req),
+      priority,
+      completeSource: true,
     });
-
-    // Create new entry in target queue
-    const sequence = await getNextSequence(prisma, targetQueueId);
-    const servicePrefix = targetQueue.service.name.charAt(0).toUpperCase();
-    const ticketNumber = generateTicketNumber(servicePrefix, sequence);
-
-    const newEntry = await prisma.queueEntry.create({
-      data: {
-        queueId: targetQueueId,
-        userId: originalEntry.userId,
-        ticketNumber,
-        priority: priority || originalEntry.priority,
-        notes: `Transferred from ${originalEntry.queue.service.name}`,
-      },
-      include: {
-        user: {
-          select: { id: true, firstName: true, lastName: true },
-        },
-      },
-    });
-
-    // Emit events to source queue and its location
-    const sourceLocationId = originalEntry.queue.service.location.id;
-    const sourceUpdateData = {
-      queueId: id,
-      entryId,
-      status: 'SERVED',
-      action: 'transferred',
-    };
-    emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, sourceUpdateData);
-    emitToLocation(sourceLocationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, sourceUpdateData);
-
-    // Emit events to target queue and its location
-    const targetLocationId = targetQueue.service.location.id;
-    const targetUpdateData = {
-      fromQueueId: id,
-      toQueueId: targetQueueId,
-      entry: newEntry,
-    };
-    emitToQueue(targetQueueId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, targetUpdateData);
-    emitToLocation(targetLocationId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, targetUpdateData);
-
-    res.json(newEntry);
+    res.json(entry);
   } catch (error) {
+    if (error instanceof TransferError) return res.status(error.status).json({ error: error.message });
+    next(error);
+  }
+};
+
+// Send an entry (typically one just served) on to another service.
+export const transferEntry = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { entryId } = req.params;
+    const { serviceId, priority } = req.body;
+    if (!serviceId) return res.status(400).json({ error: 'serviceId is required' });
+
+    const result = await transferEntryToService(entryId, serviceId, {
+      actorUserId: actorId(req),
+      priority,
+      completeSource: true,
+    });
+    res.status(201).json({
+      entry: result.entry,
+      ticketNumber: result.entry.ticketNumber,
+      serviceName: result.service.name,
+      queueId: result.queue.id,
+    });
+  } catch (error) {
+    if (error instanceof TransferError) return res.status(error.status).json({ error: error.message });
     next(error);
   }
 };
@@ -601,6 +556,9 @@ export const updateQueueStatus = async (req: Request, res: Response, next: NextF
   try {
     const { id } = req.params;
     const { status } = req.body;
+    if (!['ACTIVE', 'PAUSED', 'CLOSED'].includes(status)) {
+      return res.status(400).json({ error: 'status must be ACTIVE, PAUSED or CLOSED' });
+    }
 
     const queue = await prisma.queue.update({
       where: { id },
@@ -616,6 +574,7 @@ export const updateQueueStatus = async (req: Request, res: Response, next: NextF
     };
     emitToQueue(id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
     emitToLocation(queue.service.locationId, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+    await recordQueueEvent({ action: 'queue.status_changed', actorUserId: actorId(req), queueId: id, data: { status } });
 
     res.json(queue);
   } catch (error) {
@@ -721,14 +680,8 @@ export const publicJoinQueue = async (req: Request, res: Response, next: NextFun
       },
     });
 
-    // Calculate position
-    const position = await prisma.queueEntry.count({
-      where: {
-        queueId: queue.id,
-        status: 'WAITING',
-        joinedAt: { lt: entry.joinedAt },
-      },
-    });
+    // Position in the same order staff call people (0-based here, +1 below)
+    const position = Math.max(0, (await computePosition(queue.id, entry.id)) - 1);
 
     // Estimate wait time (rough: position * average slot duration)
     const estimatedWait = (position + 1) * service.slotDuration;
@@ -741,6 +694,11 @@ export const publicJoinQueue = async (req: Request, res: Response, next: NextFun
     };
     emitToQueue(queue.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
     emitToLocation(service.location.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+
+    await startJourney(entry.id);
+    await recordQueueEvent({ action: 'entry.joined', queueId: queue.id, entryId: entry.id, data: { source: 'public' } });
+    await notifyEntry(entry.id, 'QUEUE_JOINED').catch((e) => console.error('join notification failed:', e));
+    await afterQueueChange(queue.id);
 
     res.status(201).json({
       ticketNumber: entry.ticketNumber,
@@ -783,17 +741,8 @@ export const generateTicket = async (req: Request, res: Response, next: NextFunc
       return res.status(404).json({ error: 'Entry not found' });
     }
 
-    // Calculate position
-    const position = await prisma.queueEntry.count({
-      where: {
-        queueId: id,
-        status: 'WAITING',
-        OR: [
-          { priority: { gt: entry.priority } },
-          { priority: entry.priority, joinedAt: { lt: entry.joinedAt } },
-        ],
-      },
-    });
+    // Position in the same order staff call people (0-based here, +1 below)
+    const position = Math.max(0, (await computePosition(id, entry.id)) - 1);
 
     res.json({
       ticketNumber: entry.ticketNumber,
@@ -949,6 +898,8 @@ export const reorderEntries = async (req: Request, res: Response, next: NextFunc
     if (queue?.service?.locationId) {
       emitToLocation(queue.service.locationId, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
     }
+    await recordQueueEvent({ action: 'entry.reordered', actorUserId: actorId(req), queueId: id, data: { entries } });
+    await afterQueueChange(id);
 
     res.json({ success: true });
   } catch (error) {
@@ -995,11 +946,7 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
         queueId: id,
         status: 'WAITING',
       },
-      orderBy: [
-        { priority: 'desc' },
-        { sortOrder: 'asc' },
-        { joinedAt: 'asc' }
-      ],
+      orderBy: WAITING_ORDER,
     });
 
     if (!nextEntry) {
@@ -1011,6 +958,7 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
       data: {
         status: 'SERVING',
         calledAt: new Date(),
+        waitDuration: minutesSince(nextEntry.joinedAt),
         servicePointInstanceId: servicePointInstanceId || null,
       },
       include: {
@@ -1034,6 +982,24 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
       servicePoint: servicePointForPayload,
       servicePointInstance: entry.servicePointInstance,
     });
+
+    await recordQueueEvent({
+      action: 'entry.called',
+      actorUserId: actorId(req),
+      queueId: id,
+      entryId: entry.id,
+      data: { servicePointId: servicePointForPayload?.id ?? null, servicePointInstanceId: servicePointInstanceId || null },
+    });
+    await afterEntryCalled(
+      entry.id,
+      entry.servicePointInstance?.displayName ||
+        (servicePointForPayload
+          ? [servicePointForPayload.displayName || servicePointForPayload.name, entry.servicePointInstance?.instanceNumber]
+              .filter(Boolean)
+              .join(' ')
+          : null)
+    );
+    await afterQueueChange(id);
 
     res.json({ ...entry, servicePoint: servicePointForPayload });
   } catch (error) {
@@ -1241,20 +1207,8 @@ export const publicJoinQueueWithSession = async (req: Request, res: Response, ne
       },
     });
 
-    // Calculate position
-    const position = await prisma.queueEntry.count({
-      where: {
-        queueId: queue.id,
-        status: 'WAITING',
-        OR: [
-          { sortOrder: { lt: entry.sortOrder } },
-          { 
-            sortOrder: entry.sortOrder, 
-            joinedAt: { lt: entry.joinedAt } 
-          },
-        ],
-      },
-    });
+    // Position in the same order staff call people (0-based here, +1 below)
+    const position = Math.max(0, (await computePosition(queue.id, entry.id)) - 1);
 
     // Estimate wait time (rough: position * average slot duration)
     const estimatedWait = (position + 1) * service.slotDuration;
@@ -1267,6 +1221,11 @@ export const publicJoinQueueWithSession = async (req: Request, res: Response, ne
     };
     emitToQueue(queue.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
     emitToLocation(service.location.id, SOCKET_EVENTS.QUEUE_UPDATED, updateData);
+
+    await startJourney(entry.id);
+    await recordQueueEvent({ action: 'entry.joined', queueId: queue.id, entryId: entry.id, data: { source: 'public' } });
+    await notifyEntry(entry.id, 'QUEUE_JOINED').catch((e) => console.error('join notification failed:', e));
+    await afterQueueChange(queue.id);
 
     res.status(201).json({
       ticketNumber: entry.ticketNumber,
@@ -1355,12 +1314,14 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
   try {
     const { id, entryId } = req.params;
 
+    const existing = await prisma.queueEntry.findUnique({ where: { id: entryId }, select: { calledAt: true } });
     const entry = await prisma.queueEntry.update({
       where: { id: entryId },
       data: {
         status: 'SERVED',
         servedAt: new Date(),
         completedAt: new Date(),
+        serviceDuration: minutesSince(existing?.calledAt),
       },
       include: {
         user: {
@@ -1411,55 +1372,30 @@ export const completeWithNextSuggestions = async (req: Request, res: Response, n
     };
     emitToQueue(id, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
     emitToLocation(locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, updateData);
+    await recordQueueEvent({ action: 'entry.served', actorUserId: actorId(req), queueId: id, entryId: entry.id });
+    await afterQueueChange(id);
 
     // Check for auto-transfer
     const autoTransferFlow = entry.queue.service.flowsFrom.find(f => f.autoTransfer);
     if (autoTransferFlow) {
-      const nextQueue = autoTransferFlow.toService.queues[0];
-      if (nextQueue) {
-        // Auto-add to next queue
-        const sequence = await getNextSequence(prisma, nextQueue.id);
-        const servicePrefix = autoTransferFlow.toService.name.charAt(0).toUpperCase();
-        const ticketNumber = generateTicketNumber(servicePrefix, sequence);
-
-        const lastEntry = await prisma.queueEntry.findFirst({
-          where: { queueId: nextQueue.id },
-          orderBy: { sortOrder: 'desc' },
-        });
-
-        const newEntry = await prisma.queueEntry.create({
-          data: {
-            queueId: nextQueue.id,
-            userId: entry.userId,
-            ticketNumber,
-            sortOrder: (lastEntry?.sortOrder || 0) + 1,
-            sessionId: entry.sessionId,
-            notes: `Transferred from ${entry.queue.service.name}`,
-          },
-        });
-
-        // Emit to next queue and its location
-        const nextLocationId = autoTransferFlow.toService.location.id;
-        const transitionData = {
-          fromQueueId: id,
-          toQueueId: nextQueue.id,
-          entry: newEntry,
-        };
-        emitToQueue(nextQueue.id, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
-        emitToLocation(nextLocationId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
-
+      try {
+        const result = await transferEntryToService(entry.id, autoTransferFlow.toServiceId, { actorUserId: actorId(req) });
         return res.json({
           entry,
           autoTransferred: true,
           nextTicket: {
-            ticketNumber: newEntry.ticketNumber,
-            serviceName: autoTransferFlow.toService.name,
-            queueId: nextQueue.id,
-            entryId: newEntry.id,
+            ticketNumber: result.entry.ticketNumber,
+            serviceName: result.service.name,
+            queueId: result.queue.id,
+            entryId: result.entry.id,
           },
         });
+      } catch (err) {
+        if (!(err instanceof TransferError)) throw err;
+        // Target not accepting patients - fall through to manual suggestions.
       }
     }
+    await closeJourneyIfDone(entry.id);
 
     // Build next service suggestions
     const nextServices = entry.queue.service.flowsFrom.map(flow => ({

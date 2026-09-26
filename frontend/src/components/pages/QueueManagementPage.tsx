@@ -8,6 +8,7 @@ import { PageHeader } from '@/components/ui';
 import { useSocket } from '@/hooks/useSocket';
 import { useAuthContext } from '@/contexts/AuthContext';
 import type { Queue, Service, QueueEntry, Location } from '@/types';
+import WaitAlerts from '@/components/ai/WaitAlerts';
 
 // localStorage keys for persistence
 const STORAGE_KEYS = {
@@ -91,6 +92,8 @@ const QueueManagementPage: React.FC = () => {
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [completedEntry, setCompletedEntry] = useState<QueueEntry | null>(null);
   const [nextServiceSuggestions, setNextServiceSuggestions] = useState<any[]>([]);
+  const [transferringTo, setTransferringTo] = useState<string | null>(null);
+  const [notice, setNotice] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
   
   // Legacy - keep for backward compatibility during transition
@@ -447,8 +450,7 @@ const QueueManagementPage: React.FC = () => {
       const result = await api.completeEntryWithSuggestions(operatorData.queue.id, entry.id);
       
       if (result.autoTransferred) {
-        // Show notification that patient was auto-transferred
-        alert(`Patient transferred to ${result.nextTicket?.serviceName} - New ticket: ${result.nextTicket?.ticketNumber}`);
+        setNotice(`${entry.user?.firstName || entry.ticketNumber} was sent on to ${result.nextTicket?.serviceName} with ticket ${result.nextTicket?.ticketNumber}.`);
       } else if (result.nextServices && result.nextServices.length > 0) {
         // Show modal with next service suggestions
         setCompletedEntry(entry);
@@ -460,6 +462,23 @@ const QueueManagementPage: React.FC = () => {
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       setError(error.response?.data?.error || 'Failed to complete entry');
+    }
+  };
+
+  const handleSendToService = async (serviceId: string, serviceName: string) => {
+    if (!operatorData?.queue?.id || !completedEntry) return;
+    setTransferringTo(serviceId);
+    try {
+      const result = await api.transferEntry(operatorData.queue.id, completedEntry.id, serviceId);
+      setNotice(`${completedEntry.user?.firstName || completedEntry.ticketNumber} was sent to ${result.serviceName || serviceName} with ticket ${result.ticketNumber}.`);
+      setShowCompleteModal(false);
+      await refreshQueue();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setError(error.response?.data?.error || `Could not send them to ${serviceName}`);
+      setShowCompleteModal(false);
+    } finally {
+      setTransferringTo(null);
     }
   };
 
@@ -762,6 +781,15 @@ const QueueManagementPage: React.FC = () => {
           </div>
         )}
 
+        {selectedLocation && <WaitAlerts locationId={selectedLocation} />}
+
+        {notice && (
+          <div className="inline-alert inline-alert-success" role="status" style={{ marginBottom: '1rem' }}>
+            <span style={{ flex: 1 }}>{notice}</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setNotice('')}>Dismiss</button>
+          </div>
+        )}
+
         {operatorData && (
           <div className="main-content">
             {/* Stats Bar */}
@@ -997,15 +1025,16 @@ const QueueManagementPage: React.FC = () => {
                   <p className="modal-subtitle">Would you like to send them to another service?</p>
                   <div className="next-service-options">
                     {nextServiceSuggestions.map(ns => (
-                      <button 
-                        key={ns.serviceId} 
+                      <button
+                        key={ns.serviceId}
                         className="next-service-option"
-                        onClick={async () => {
-                          // TODO: Implement sending to next service
-                          setShowCompleteModal(false);
-                        }}
+                        disabled={transferringTo !== null}
+                        onClick={() => handleSendToService(ns.serviceId, ns.displayName)}
                       >
-                        <span className="service-name">{ns.displayName}</span>
+                        <span className="service-name">
+                          {transferringTo === ns.serviceId ? `Sending to ${ns.displayName}…` : ns.displayName}
+                          {ns.isRequired && <span className="queue-info"> · required next step</span>}
+                        </span>
                         {ns.queueInfo && (
                           <span className="queue-info">
                             {ns.queueInfo.waitingCount} waiting • ~{ns.queueInfo.estimatedWait}min

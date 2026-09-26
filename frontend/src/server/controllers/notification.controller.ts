@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
-import { emitToUser, SOCKET_EVENTS } from '../lib/socket';
+import { emitToUser, SOCKET_EVENTS } from '../lib/realtime';
 
 export const sendNotification = async (req: Request, res: Response, next: NextFunction) => {
   try {

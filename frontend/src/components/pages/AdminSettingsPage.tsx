@@ -7,7 +7,7 @@ import type { CustomDomainInfo } from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
-import { Icon, PageHeader, Button } from '@/components/ui';
+import { Icon, PageHeader, Button, Input, Switch } from '@/components/ui';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
 import { APP_NAME } from '@/lib/appConfig';
@@ -65,7 +65,7 @@ export default function AdminSettingsPage() {
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'identity' | 'display' | 'branding' | 'domain'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'identity' | 'display' | 'notifications' | 'branding' | 'domain'>('general');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [formData, setFormData] = useState({
     name: '',
@@ -90,6 +90,7 @@ export default function AdminSettingsPage() {
   const [identityFields, setIdentityFields] = useState<IdentityField[]>([]);
   const [customField, setCustomField] = useState({ key: '', label: '', type: 'text' });
   const [displayMode, setDisplayMode] = useState('TICKET_ONLY');
+  const [notificationSettings, setNotificationSettings] = useState({ turnApproachingAt: 3, email: true, sms: false });
 
   useEffect(() => {
     if (isAdmin && user?.organizationId) {
@@ -125,6 +126,9 @@ export default function AdminSettingsPage() {
         primaryColor: org.primaryColor || '',
         hidePoweredBy: org.hidePoweredBy || false,
       });
+      if (org.notificationSettings) {
+        setNotificationSettings((current) => ({ ...current, ...org.notificationSettings }));
+      }
       
       // Load identity fields config
       if (org.identityFieldsConfig) {
@@ -181,8 +185,12 @@ export default function AdminSettingsPage() {
         phone: formData.phone || undefined,
         identityFieldsConfig,
         defaultDisplayMode: displayMode,
-        primaryColor: formData.primaryColor || null,
-        hidePoweredBy: formData.hidePoweredBy,
+        notificationSettings,
+        // Branding fields are plan-gated server-side; sending them (even as
+        // null) on a plan without customBranding rejects the whole save.
+        ...(hasFeature('customBranding')
+          ? { primaryColor: formData.primaryColor || null, hidePoweredBy: formData.hidePoweredBy }
+          : {}),
       });
       setOrganization(updated);
       setMessage({ type: 'success', text: 'Organization settings saved successfully!' });
@@ -373,6 +381,13 @@ export default function AdminSettingsPage() {
             style={activeTab === 'display' ? activeTabStyle : tabStyle}
           >
             Display Settings
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('notifications')}
+            style={activeTab === 'notifications' ? activeTabStyle : tabStyle}
+          >
+            Notifications
           </button>
           <button
             type="button"
@@ -614,6 +629,45 @@ export default function AdminSettingsPage() {
               </>
             )}
 
+            {/* Notifications Tab */}
+            {activeTab === 'notifications' && (
+              <>
+                <div style={sectionHeader}>
+                  <h2 style={sectionTitle}>Patient Notifications</h2>
+                  <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
+                    Patients always see live updates on their ticket page. Email and SMS are sent in addition, using your plan&apos;s message credits.
+                  </p>
+                </div>
+
+                <div className="stack">
+                  <Input
+                    label="Tell patients their turn is close when they are this many places from the front"
+                    type="number"
+                    min={1}
+                    max={20}
+                    value={notificationSettings.turnApproachingAt}
+                    onChange={(e) =>
+                      setNotificationSettings({
+                        ...notificationSettings,
+                        turnApproachingAt: Math.min(20, Math.max(1, Number(e.target.value) || 1)),
+                      })
+                    }
+                    hint="Each patient is told once. 3 is a good default."
+                  />
+                  <Switch
+                    label="Email patients who gave an email address"
+                    checked={notificationSettings.email}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, email: e.target.checked })}
+                  />
+                  <Switch
+                    label="Text patients who gave a phone number (SMS)"
+                    checked={notificationSettings.sms}
+                    onChange={(e) => setNotificationSettings({ ...notificationSettings, sms: e.target.checked })}
+                  />
+                </div>
+              </>
+            )}
+
             {/* Branding Tab */}
             {activeTab === 'branding' && (
               <>
@@ -847,6 +901,7 @@ const tabsContainer: React.CSSProperties = {
   marginBottom: '1rem',
   borderBottom: '1px solid #e5e7eb',
   paddingBottom: '0.5rem',
+  overflowX: 'auto',
 };
 
 const tabStyle: React.CSSProperties = {
@@ -858,6 +913,7 @@ const tabStyle: React.CSSProperties = {
   cursor: 'pointer',
   borderRadius: '0.375rem',
   fontSize: '0.875rem',
+  whiteSpace: 'nowrap',
 };
 
 const activeTabStyle: React.CSSProperties = {

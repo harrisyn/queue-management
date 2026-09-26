@@ -1,0 +1,288 @@
+import prisma from '../lib/prisma';
+import { emitToQueue, emitToLocation, SOCKET_EVENTS } from '../lib/realtime';
+import { generateTicketNumber, getNextSequence } from '../utils/ticket';
+import { getStartOfDay, generateTimeSlots } from '../utils/date';
+import { dispatchWebhook, WebhookEvent } from './webhooks.service';
+import { notifyEntry, notifyPositions } from './notifications.service';
+
+/**
+ * One place every queue state change goes through after it's written:
+ * the audit log (PRD 7), outbound EMR webhooks (PRD 5.3), customer journey
+ * bookkeeping, and patient notifications. Side effects here must never fail
+ * the staff action that triggered them, so everything is caught and logged.
+ */
+
+export type QueueAction =
+  | 'entry.joined'
+  | 'entry.called'
+  | 'entry.served'
+  | 'entry.cancelled'
+  | 'entry.no_show'
+  | 'entry.transferred'
+  | 'entry.reordered'
+  | 'queue.status_changed'
+  | 'appointment.created'
+  | 'appointment.rescheduled'
+  | 'appointment.cancelled'
+  | 'appointment.checked_in';
+
+const WEBHOOK_ACTIONS = new Set<string>([
+  'entry.joined', 'entry.called', 'entry.served', 'entry.cancelled', 'entry.no_show', 'entry.transferred',
+  'appointment.created', 'appointment.rescheduled', 'appointment.cancelled', 'appointment.checked_in',
+]);
+
+interface QueueEventInput {
+  action: QueueAction;
+  actorUserId?: string | null;
+  queueId?: string | null;
+  entryId?: string | null;
+  organizationId?: string | null;
+  data?: Record<string, unknown>;
+}
+
+async function entrySnapshot(entryId: string) {
+  const entry = await prisma.queueEntry.findUnique({
+    where: { id: entryId },
+    include: {
+      user: { select: { id: true, firstName: true, lastName: true, phone: true, identityData: true } },
+      queue: { select: { id: true, service: { select: { id: true, name: true, location: { select: { id: true, name: true, organizationId: true } } } } } },
+    },
+  });
+  if (!entry) return null;
+  return {
+    organizationId: entry.queue.service.location.organizationId,
+    snapshot: {
+      entryId: entry.id,
+      ticketNumber: entry.ticketNumber,
+      status: entry.status,
+      queueId: entry.queueId,
+      service: { id: entry.queue.service.id, name: entry.queue.service.name },
+      location: { id: entry.queue.service.location.id, name: entry.queue.service.location.name },
+      journeyId: entry.journeyId,
+      previousEntryId: entry.previousEntryId,
+      joinedAt: entry.joinedAt,
+      calledAt: entry.calledAt,
+      servedAt: entry.servedAt,
+      completedAt: entry.completedAt,
+      patient: entry.user,
+    },
+  };
+}
+
+async function orgIdForQueue(queueId: string): Promise<string | null> {
+  const q = await prisma.queue.findUnique({
+    where: { id: queueId },
+    select: { service: { select: { location: { select: { organizationId: true } } } } },
+  });
+  return q?.service.location.organizationId ?? null;
+}
+
+export async function recordQueueEvent(input: QueueEventInput): Promise<void> {
+  try {
+    const snap = input.entryId ? await entrySnapshot(input.entryId) : null;
+    const organizationId =
+      input.organizationId ?? snap?.organizationId ?? (input.queueId ? await orgIdForQueue(input.queueId) : null);
+    if (!organizationId) return;
+
+    await prisma.auditLog.create({
+      data: {
+        organizationId,
+        actorUserId: input.actorUserId ?? null,
+        action: input.action,
+        queueId: input.queueId ?? snap?.snapshot.queueId ?? null,
+        entryId: input.entryId ?? null,
+        data: (input.data ?? undefined) as any,
+      },
+    });
+
+    if (WEBHOOK_ACTIONS.has(input.action)) {
+      await dispatchWebhook(organizationId, input.action as WebhookEvent, {
+        ...(snap?.snapshot ?? {}),
+        ...(input.data ?? {}),
+      });
+    }
+  } catch (error) {
+    console.error(`recordQueueEvent(${input.action}) failed:`, error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Customer journeys: one per patient visit, spanning every queue they pass
+// through. Started on join, extended on transfer, closed once nothing in it
+// is still waiting or being served.
+// ---------------------------------------------------------------------------
+
+export async function startJourney(entryId: string): Promise<void> {
+  try {
+    const entry = await prisma.queueEntry.findUnique({ where: { id: entryId }, select: { userId: true, journeyId: true } });
+    if (!entry || entry.journeyId) return;
+    const journey = await prisma.customerJourney.create({
+      data: { userId: entry.userId, queueEntryIds: [entryId] },
+    });
+    await prisma.queueEntry.update({ where: { id: entryId }, data: { journeyId: journey.id } });
+  } catch (error) {
+    console.error('startJourney failed:', error);
+  }
+}
+
+export async function closeJourneyIfDone(entryId: string): Promise<void> {
+  try {
+    const entry = await prisma.queueEntry.findUnique({ where: { id: entryId }, select: { journeyId: true } });
+    if (!entry?.journeyId) return;
+    const journey = await prisma.customerJourney.findUnique({ where: { id: entry.journeyId } });
+    if (!journey) return;
+    const open = await prisma.queueEntry.count({
+      where: { id: { in: journey.queueEntryIds }, status: { in: ['WAITING', 'SERVING'] } },
+    });
+    if (open > 0) return;
+    const completedAt = new Date();
+    await prisma.customerJourney.update({
+      where: { id: journey.id },
+      data: {
+        completedAt,
+        totalDuration: Math.round((completedAt.getTime() - journey.startedAt.getTime()) / 60000),
+      },
+    });
+  } catch (error) {
+    console.error('closeJourneyIfDone failed:', error);
+  }
+}
+
+/** Runs everything that should follow an entry leaving the waiting line
+ * (called, served, cancelled, no-show): positions shift for everyone else. */
+export async function afterQueueChange(queueId: string): Promise<void> {
+  try {
+    await notifyPositions(queueId);
+  } catch (error) {
+    console.error('afterQueueChange failed:', error);
+  }
+}
+
+export async function afterEntryCalled(entryId: string, servicePointName?: string | null): Promise<void> {
+  try {
+    await notifyEntry(entryId, 'NOW_SERVING', { servicePointName });
+  } catch (error) {
+    console.error('afterEntryCalled failed:', error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Transfers
+// ---------------------------------------------------------------------------
+
+export async function getOrCreateQueueForDate(serviceId: string, date: Date = new Date()) {
+  const service = await prisma.service.findUnique({ where: { id: serviceId } });
+  if (!service) return null;
+  const day = getStartOfDay(date);
+  const existing = await prisma.queue.findFirst({ where: { serviceId, date: day } });
+  if (existing) return { queue: existing, service };
+
+  const slots = generateTimeSlots(service.startTime, service.endTime, service.slotDuration, day);
+  const queue = await prisma.queue.create({
+    data: {
+      serviceId,
+      date: day,
+      slots: {
+        create: slots.map((slot) => ({ startTime: slot.startTime, endTime: slot.endTime, capacity: service.concurrentLimit })),
+      },
+    },
+  });
+  return { queue, service };
+}
+
+export class TransferError extends Error {
+  constructor(message: string, public status = 400) {
+    super(message);
+  }
+}
+
+/**
+ * Sends a patient on to another service: new ticket in today's queue for
+ * that service, linked back to the source entry and the same journey and
+ * public session (so the patient's status page follows them).
+ */
+export async function transferEntryToService(
+  sourceEntryId: string,
+  toServiceId: string,
+  opts: { actorUserId?: string | null; priority?: number; completeSource?: boolean } = {}
+) {
+  const source = await prisma.queueEntry.findUnique({
+    where: { id: sourceEntryId },
+    include: { queue: { include: { service: { include: { location: true } } } } },
+  });
+  if (!source) throw new TransferError('Entry not found', 404);
+
+  const target = await getOrCreateQueueForDate(toServiceId);
+  if (!target) throw new TransferError('Target service not found', 404);
+  const targetLocation = await prisma.location.findUnique({ where: { id: target.service.locationId } });
+  if (!targetLocation || targetLocation.organizationId !== source.queue.service.location.organizationId) {
+    throw new TransferError('Target service not found', 404);
+  }
+  if (!target.service.isActive) throw new TransferError('That service is not active');
+  if (target.queue.status !== 'ACTIVE') throw new TransferError(`The ${target.service.name} queue is not accepting patients right now`);
+
+  if (opts.completeSource && (source.status === 'WAITING' || source.status === 'SERVING')) {
+    await prisma.queueEntry.update({
+      where: { id: source.id },
+      data: { status: 'SERVED', completedAt: new Date(), notes: `Transferred to ${target.service.name}` },
+    });
+  }
+
+  const sequence = await getNextSequence(prisma, target.queue.id);
+  const ticketNumber = generateTicketNumber(target.service.name.charAt(0).toUpperCase(), sequence);
+  const lastEntry = await prisma.queueEntry.findFirst({ where: { queueId: target.queue.id }, orderBy: { sortOrder: 'desc' } });
+
+  const newEntry = await prisma.queueEntry.create({
+    data: {
+      queueId: target.queue.id,
+      userId: source.userId,
+      ticketNumber,
+      priority: opts.priority ?? source.priority,
+      sortOrder: (lastEntry?.sortOrder || 0) + 1,
+      sessionId: source.sessionId,
+      journeyId: source.journeyId,
+      previousEntryId: source.id,
+      notes: `Transferred from ${source.queue.service.name}`,
+    },
+    include: { user: { select: { id: true, firstName: true, lastName: true } } },
+  });
+
+  if (source.journeyId) {
+    await prisma.customerJourney.update({
+      where: { id: source.journeyId },
+      data: { queueEntryIds: { push: newEntry.id }, completedAt: null, totalDuration: null },
+    }).catch(() => {});
+  } else {
+    await startJourney(source.id);
+    const refreshed = await prisma.queueEntry.findUnique({ where: { id: source.id }, select: { journeyId: true } });
+    if (refreshed?.journeyId) {
+      await prisma.customerJourney.update({
+        where: { id: refreshed.journeyId },
+        data: { queueEntryIds: { push: newEntry.id } },
+      });
+      await prisma.queueEntry.update({ where: { id: newEntry.id }, data: { journeyId: refreshed.journeyId } });
+    }
+  }
+
+  const transitionData = { fromQueueId: source.queueId, toQueueId: target.queue.id, entry: newEntry };
+  emitToQueue(source.queueId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    queueId: source.queueId, entryId: source.id, status: 'SERVED', action: 'transferred',
+  });
+  emitToLocation(source.queue.service.locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, {
+    queueId: source.queueId, entryId: source.id, status: 'SERVED', action: 'transferred',
+  });
+  emitToQueue(target.queue.id, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
+  emitToLocation(target.service.locationId, SOCKET_EVENTS.SERVICEFLOW_TRANSITION, transitionData);
+
+  await recordQueueEvent({
+    action: 'entry.transferred',
+    actorUserId: opts.actorUserId,
+    queueId: target.queue.id,
+    entryId: newEntry.id,
+    data: { fromEntryId: source.id, fromServiceId: source.queue.serviceId, toServiceId },
+  });
+  await afterQueueChange(source.queueId);
+  await afterQueueChange(target.queue.id);
+
+  return { entry: newEntry, queue: target.queue, service: target.service };
+}

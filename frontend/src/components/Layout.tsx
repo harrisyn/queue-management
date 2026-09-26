@@ -47,9 +47,12 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     window.location.href = `${buildAdminUrl(impersonation.returnPath)}#restore=${encodeURIComponent(impersonation.returnToken)}`;
   };
 
+  const isOrgAdmin = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';
+
   const navItems = [
     { href: '/', label: 'Dashboard', icon: DashboardIcon, show: true },
     { href: '/queues', label: 'Queues', icon: QueueIcon, show: isStaff },
+    { href: '/appointments', label: 'Appointments', icon: CalendarIcon, show: isStaff },
     { href: '/services', label: 'Services', icon: ServicesIcon, show: isAdmin },
     { href: '/admin/locations', label: 'Locations', icon: LocationIcon, show: isAdmin },
     { href: '/admin/service-points', label: 'Service Points', icon: ServicePointIcon, show: isAdmin },
@@ -57,6 +60,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     { href: '/admin/qr', label: 'QR Codes', icon: QRCodeIcon, show: isAdmin },
     { href: '/admin/invites', label: 'Invites', icon: InviteIcon, show: isAdmin },
     { href: '/admin/data-sources', label: 'Data Sources', icon: DataSourceIcon, show: isAdmin },
+    { href: '/admin/integrations', label: 'Integrations', icon: WebhookIcon, show: isOrgAdmin },
+    { href: '/admin/audit-log', label: 'Audit Log', icon: AuditIcon, show: isOrgAdmin },
     { href: '/admin/settings', label: 'Settings', icon: SettingsIcon, show: isAdmin },
     { href: '/admin/billing', label: 'Billing', icon: BillingIcon, show: isAdmin },
     { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon, show: isAdmin },
@@ -210,6 +215,25 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
 };
 
 // Icons
+const CalendarIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
+    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
+  </svg>
+);
+
+const WebhookIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
+    <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
+  </svg>
+);
+
+const AuditIcon = ({ active }: { active: boolean }) => (
+  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
+    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
+    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+  </svg>
+);
+
 const DashboardIcon = ({ active }: { active: boolean }) => (
   <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
     <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
@@ -432,6 +456,9 @@ const mainStyle: React.CSSProperties = {
   flex: 1,
   marginLeft: '260px',
   minHeight: '100vh',
+  // Without this a wide child (e.g. a data table) stretches the flex item
+  // past the viewport instead of scrolling inside its own wrapper.
+  minWidth: 0,
 };
 
 const impersonationBanner: React.CSSProperties = {

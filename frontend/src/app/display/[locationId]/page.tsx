@@ -84,7 +84,7 @@ interface QueueSwimlane {
 type ViewMode = 'swimlanes' | 'service-points' | 'single-queue';
 
 const TVDisplayPage: React.FC = () => {
-  const params = useParams();
+  const params = useParams() ?? {};
   const locationId = params.locationId as string;
   
   const [location, setLocation] = useState<BrandedLocation | null>(null);
@@ -93,6 +93,7 @@ const TVDisplayPage: React.FC = () => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [notFound, setNotFound] = useState(false);
   const [resolvedLocationId, setResolvedLocationId] = useState<string | null>(null);
   const [hasServicePoints, setHasServicePoints] = useState<boolean | null>(null);
   
@@ -210,7 +211,10 @@ const TVDisplayPage: React.FC = () => {
               setHasServicePoints((locationInfo._count?.servicePoints || 0) > 0);
             }
           } catch (_) {
-            setResolvedLocationId(locationId);
+            // Neither a public code nor a location ID: stop here rather than
+            // polling a location that doesn't exist.
+            setNotFound(true);
+            return;
           }
         }
       }
@@ -283,6 +287,7 @@ const TVDisplayPage: React.FC = () => {
 
   // Fallback polling
   useEffect(() => {
+    if (notFound) return;
     const refreshInterval = setInterval(() => fetchData(false), 30000);
     const clockInterval = setInterval(() => setCurrentTime(new Date()), 1000);
 
@@ -290,7 +295,7 @@ const TVDisplayPage: React.FC = () => {
       clearInterval(refreshInterval);
       clearInterval(clockInterval);
     };
-  }, [fetchData]);
+  }, [fetchData, notFound]);
 
   // Get service points with currently serving entries
   const activePoints = servicePoints.filter((sp: DisplayServicePoint) => sp.currentlyServing);
@@ -306,6 +311,20 @@ const TVDisplayPage: React.FC = () => {
 
   const brandColor = location?.organization?.primaryColor || '#3b82f6';
   const brandGlow = hexToRgba(brandColor, 0.35);
+
+  if (notFound) {
+    return (
+      <main className="auth-shell">
+        <div className="auth-shell-inner" style={{ maxWidth: 520, textAlign: 'center', color: 'white' }}>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 700, marginBottom: '0.75rem', color: 'white' }}>Display not found</h1>
+          <p style={{ color: '#9ca3af', lineHeight: 1.6 }}>
+            There&apos;s no location with the code or ID <code style={{ color: '#5eead4' }}>{locationId}</code>.
+            Open the display link from the QR Codes page in the admin app, or check the address for typos.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   if (loading) {
     return (
