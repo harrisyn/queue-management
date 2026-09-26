@@ -8,6 +8,7 @@ import type { DisplayConfig, DisplayMediaItem } from '@/api/client';
 import { useSocket } from '@/hooks/useSocket';
 import type { Location } from '@/types';
 import { APP_NAME } from '@/lib/appConfig';
+import { termsFor } from '@/lib/terms';
 import styles from './display.module.css';
 
 /**
@@ -17,7 +18,7 @@ import styles from './display.module.css';
  */
 
 interface BrandedLocation extends Location {
-  organization?: { id: string; name: string; logoUrl?: string | null; primaryColor?: string | null; hidePoweredBy?: boolean };
+  organization?: { id: string; name: string; logoUrl?: string | null; primaryColor?: string | null; hidePoweredBy?: boolean; industry?: string | null; customerLabel?: string | null; customerLabelPlural?: string | null };
 }
 
 interface DisplayServicePoint {
@@ -385,6 +386,7 @@ export default function TVDisplayPage() {
   }
 
   const accent = location?.organization?.primaryColor || '#0e8f80';
+  const terms = termsFor(location?.organization);
   const joinCode = location?.publicCode;
   const joinUrl = joinCode && typeof window !== 'undefined' ? `${window.location.origin}/join/${joinCode}` : null;
   const pickedLane = swimlanes.find((s) => s.queueId === selectedQueueId);
@@ -433,7 +435,7 @@ export default function TVDisplayPage() {
                   ))}
                 </ul>
               ) : (
-                <p className={styles.laneIdle}>Ready for the next patient</p>
+                <p className={styles.laneIdle}>Ready for the next {terms.person}</p>
               )}
               {lane.waitingList.length > 0 && (
                 <div className={styles.next}>
@@ -494,7 +496,7 @@ export default function TVDisplayPage() {
               </div>
             ))}
           </div>
-        ) : <p className={styles.laneIdle}>Ready for the next patient</p>}
+        ) : <p className={styles.laneIdle}>Ready for the next {terms.person}</p>}
       </section>
       <section>
         <h2 className={styles.sectionLabel}>

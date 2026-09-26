@@ -27,6 +27,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useTerms } from '@/hooks/useTerms';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { buildAdminUrl } from '@/lib/subdomain';
 import { APP_NAME } from '@/lib/appConfig';
@@ -50,7 +51,7 @@ const ROLE_LABELS: Record<string, string> = {
   LOCATION_ADMIN: 'Location admin',
   SERVICE_STAFF: 'Service staff',
   RECEPTIONIST: 'Receptionist',
-  PATIENT: 'Patient',
+  PATIENT: 'Visitor',
 };
 
 export function BrandMark({ size = 32 }: { size?: number }) {
@@ -65,6 +66,7 @@ export function BrandMark({ size = 32 }: { size?: number }) {
 
 const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout, isAdmin, isStaff, isSuperAdmin } = useAuthContext();
+  const terms = useTerms();
   const { organizationStatus } = useSubscription();
   const router = useRouter();
   const pathname = usePathname();
@@ -101,7 +103,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
       label: 'Today',
       items: [
         { href: '/', label: 'Dashboard', icon: LayoutDashboard, show: true },
-        { href: '/queues', label: 'Queues', icon: ListOrdered, show: isStaff },
+        { href: '/queues', label: 'My desk', icon: ListOrdered, show: isStaff },
         { href: '/appointments', label: 'Appointments', icon: CalendarDays, show: isStaff },
       ],
     },
@@ -118,7 +120,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         { href: '/admin/locations', label: 'Locations', icon: MapPin, show: isAdmin },
         { href: '/services', label: 'Services', icon: Stethoscope, show: isAdmin },
         { href: '/admin/service-points', label: 'Desks & rooms', icon: DoorOpen, show: isAdmin },
-        { href: '/admin/flow-designer', label: 'Patient flow', icon: Workflow, show: isAdmin },
+        { href: '/admin/flow-designer', label: `${terms.Person} flow`, icon: Workflow, show: isAdmin },
         { href: '/admin/qr', label: 'QR codes', icon: QrCode, show: isAdmin },
         { href: '/admin/displays', label: 'Display screens', icon: MonitorPlay, show: isAdmin },
       ],
@@ -235,7 +237,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
         )}
         {isAdmin && organizationStatus === 'PAUSED' && (
           <div className="app-banner app-banner-paused">
-            This workspace is paused by the platform administrator. Staff can still sign in, but patients can&apos;t join
+            This workspace is paused by the platform administrator. Staff can still sign in, but {terms.people} can&apos;t join
             queues or see their ticket until it&apos;s reactivated.
           </div>
         )}

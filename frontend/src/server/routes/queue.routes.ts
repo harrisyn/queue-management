@@ -14,6 +14,7 @@ import {
   generateTicket,
   reorderEntries,
   callNextWithServicePoint,
+  recallEntry,
   getQueueEntriesForOperator,
   completeWithNextSuggestions,
   transferEntry,
@@ -40,6 +41,7 @@ router.post('/:id/call-next', authorize('SERVICE_STAFF', 'LOCATION_ADMIN', 'ORG_
 router.post('/:id/call-next-sp', authorize('SERVICE_STAFF', 'LOCATION_ADMIN', 'ORG_ADMIN', 'SUPER_ADMIN', 'RECEPTIONIST'), scope(q, instance('body.servicePointInstanceId')), callNextWithServicePoint);
 router.patch('/:id/reorder', authorize('SERVICE_STAFF', 'RECEPTIONIST', 'LOCATION_ADMIN', 'ORG_ADMIN', 'SUPER_ADMIN'), scope(q, each('entries', 'id', entry)), reorderEntries);
 router.patch('/:id/entry/:entryId/serve', authorize('SERVICE_STAFF', 'LOCATION_ADMIN', 'ORG_ADMIN', 'SUPER_ADMIN'), scope(q, e), markServed);
+router.post('/:id/entry/:entryId/recall', authorize('SERVICE_STAFF', 'LOCATION_ADMIN', 'ORG_ADMIN', 'SUPER_ADMIN', 'RECEPTIONIST'), scope(q, e), recallEntry);
 router.patch('/:id/entry/:entryId/complete', authorize('SERVICE_STAFF', 'LOCATION_ADMIN', 'ORG_ADMIN', 'SUPER_ADMIN', 'RECEPTIONIST'), scope(q, e), completeWithNextSuggestions);
 router.patch('/:id/entry/:entryId/cancel', scope(q, e), cancelEntry);
 router.patch('/:id/entry/:entryId/no-show', authorize('SERVICE_STAFF', 'LOCATION_ADMIN', 'ORG_ADMIN', 'SUPER_ADMIN'), scope(q, e), markNoShow);

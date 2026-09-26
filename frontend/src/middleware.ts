@@ -7,7 +7,7 @@ import prisma from '@/server/lib/prisma';
 export const config = {
   runtime: 'nodejs',
   // Everything except the API, Next internals and static files.
-  matcher: ['/((?!api/|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|txt|xml|json|webmanifest)$).*)'],
+  matcher: ['/((?!api/|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|txt|xml|json|webmanifest|js)$).*)'],
 };
 
 // Tenant lookups are hot (every page view) and change rarely.

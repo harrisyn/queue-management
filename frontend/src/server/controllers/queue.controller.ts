@@ -272,27 +272,28 @@ export const callNext = async (req: Request, res: Response, next: NextFunction) 
   try {
     const { id } = req.params;
 
-    // Find next waiting entry
-    const nextEntry = await prisma.queueEntry.findFirst({
-      where: {
-        queueId: id,
-        status: 'WAITING',
-      },
-      orderBy: WAITING_ORDER,
-    });
-
-    if (!nextEntry) {
-      return res.status(404).json({ error: 'No waiting entries in queue' });
+    // Claim atomically (see callNextWithServicePoint).
+    let claimedId: string | null = null;
+    for (let attempt = 0; attempt < 5 && !claimedId; attempt++) {
+      const candidate = await prisma.queueEntry.findFirst({
+        where: { queueId: id, status: 'WAITING' },
+        orderBy: WAITING_ORDER,
+        select: { id: true, joinedAt: true },
+      });
+      if (!candidate) break;
+      const claimed = await prisma.queueEntry.updateMany({
+        where: { id: candidate.id, status: 'WAITING' },
+        data: { status: 'SERVING', calledAt: new Date(), waitDuration: minutesSince(candidate.joinedAt) },
+      });
+      if (claimed.count === 1) claimedId = candidate.id;
     }
 
-    // Update status to serving
-    const entry = await prisma.queueEntry.update({
-      where: { id: nextEntry.id },
-      data: {
-        status: 'SERVING',
-        calledAt: new Date(),
-        waitDuration: minutesSince(nextEntry.joinedAt),
-      },
+    if (!claimedId) {
+      return res.status(404).json({ error: 'Nobody is waiting.' });
+    }
+
+    const entry = await prisma.queueEntry.findUniqueOrThrow({
+      where: { id: claimedId },
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true, phone: true },
@@ -776,7 +777,7 @@ export const getPublicStatus = async (req: Request, res: Response, next: NextFun
                 location: {
                   include: {
                     organization: {
-                      select: { logoUrl: true, primaryColor: true, hidePoweredBy: true, status: true },
+                      select: { logoUrl: true, primaryColor: true, hidePoweredBy: true, industry: true, customerLabel: true, customerLabelPlural: true, status: true },
                     },
                   },
                 },
@@ -942,26 +943,39 @@ export const callNextWithServicePoint = async (req: Request, res: Response, next
       }
     }
 
-    const nextEntry = await prisma.queueEntry.findFirst({
-      where: {
-        queueId: id,
-        status: 'WAITING',
-      },
-      orderBy: WAITING_ORDER,
-    });
-
-    if (!nextEntry) {
-      return res.status(404).json({ error: 'No waiting entries in queue' });
+    // Claim atomically: two desks pressing "Call next" together must not get
+    // the same person. The conditional update only succeeds for one of them;
+    // the other moves on to the next in line.
+    const requestedEntryId = req.body?.entryId ? String(req.body.entryId) : null;
+    let claimedId: string | null = null;
+    for (let attempt = 0; attempt < 5 && !claimedId; attempt++) {
+      const candidate = await prisma.queueEntry.findFirst({
+        where: { queueId: id, status: 'WAITING', ...(requestedEntryId ? { id: requestedEntryId } : {}) },
+        orderBy: WAITING_ORDER,
+        select: { id: true, joinedAt: true },
+      });
+      if (!candidate) break;
+      const claimed = await prisma.queueEntry.updateMany({
+        where: { id: candidate.id, status: 'WAITING' },
+        data: {
+          status: 'SERVING',
+          calledAt: new Date(),
+          waitDuration: minutesSince(candidate.joinedAt),
+          servicePointInstanceId: servicePointInstanceId || null,
+        },
+      });
+      if (claimed.count === 1) claimedId = candidate.id;
+      else if (requestedEntryId) break;
     }
 
-    const entry = await prisma.queueEntry.update({
-      where: { id: nextEntry.id },
-      data: {
-        status: 'SERVING',
-        calledAt: new Date(),
-        waitDuration: minutesSince(nextEntry.joinedAt),
-        servicePointInstanceId: servicePointInstanceId || null,
-      },
+    if (!claimedId) {
+      return res.status(404).json({
+        error: requestedEntryId ? 'They’ve already been called, or have left the queue.' : 'Nobody is waiting.',
+      });
+    }
+
+    const entry = await prisma.queueEntry.findUniqueOrThrow({
+      where: { id: claimedId },
       include: {
         user: {
           select: { id: true, firstName: true, lastName: true, phone: true },
@@ -1721,6 +1735,33 @@ export const updatePublicEntryIdentity = async (req: Request, res: Response, nex
       message: 'Information updated successfully',
       user: updatedUser,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+/** Calls the current ticket again: lobby screens flash and announce it,
+ * and the person gets the "it's your turn" message again. */
+export const recallEntry = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { id, entryId } = req.params;
+    const updated = await prisma.queueEntry.updateMany({
+      where: { id: entryId, queueId: id, status: 'SERVING' },
+      data: { calledAt: new Date() },
+    });
+    if (updated.count === 0) return res.status(400).json({ error: 'Only someone being served can be called again.' });
+    const entry = await prisma.queueEntry.findUniqueOrThrow({
+      where: { id: entryId },
+      include: { servicePointInstance: { include: { servicePointService: { include: { servicePoint: true } } } } },
+    });
+    const sp = entry.servicePointInstance?.servicePointService?.servicePoint ?? null;
+    const locationId = await getLocationIdFromQueue(id);
+    emitToQueueAndLocation(id, locationId, SOCKET_EVENTS.ENTRY_STATUS_CHANGED, { queueId: id, entryId, status: 'SERVING', action: 'recalled' });
+    await afterEntryCalled(
+      entry.id,
+      entry.servicePointInstance?.displayName ||
+        (sp ? [sp.displayName || sp.name, entry.servicePointInstance?.instanceNumber].filter(Boolean).join(' ') : null)
+    );
+    res.json({ ok: true, calledAt: entry.calledAt });
   } catch (error) {
     next(error);
   }

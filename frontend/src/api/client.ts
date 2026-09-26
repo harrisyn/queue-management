@@ -753,8 +753,13 @@ class ApiClient {
     return data;
   }
 
-  async activateServicePointInstance(instanceId: string, serviceId?: string) {
-    const { data } = await this.client.post(`/service-points/instances/${instanceId}/activate`, { serviceId });
+  async activateServicePointInstance(instanceId: string, serviceId?: string, takeOver = false) {
+    const { data } = await this.client.post(`/service-points/instances/${instanceId}/activate`, { serviceId, takeOver });
+    return data;
+  }
+
+  async markNoShow(queueId: string, entryId: string) {
+    const { data } = await this.client.patch(`/queues/${queueId}/entry/${entryId}/no-show`);
     return data;
   }
 
@@ -828,10 +833,16 @@ class ApiClient {
     return data;
   }
 
-  async callNextWithServicePoint(queueId: string, servicePointInstanceId?: string) {
+  async callNextWithServicePoint(queueId: string, servicePointInstanceId?: string, entryId?: string) {
     const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, {
-      servicePointInstanceId
+      servicePointInstanceId,
+      entryId,
     });
+    return data;
+  }
+
+  async recallEntry(queueId: string, entryId: string) {
+    const { data } = await this.client.post(`/queues/${queueId}/entry/${entryId}/recall`);
     return data;
   }
 
@@ -956,7 +967,7 @@ class ApiClient {
     return data;
   }
 
-  async quickStart(payload: { locationName: string; services: string[]; startTime: string; endTime: string; activeDays: string; timezone?: string }): Promise<{ location: { id: string; name: string; publicCode: string }; services: { id: string; name: string; desk: string }[] }> {
+  async quickStart(payload: { locationName: string; services: string[]; startTime: string; endTime: string; activeDays: string; timezone?: string; industry?: string }): Promise<{ location: { id: string; name: string; publicCode: string }; services: { id: string; name: string; desk: string }[] }> {
     const { data } = await this.client.post('/onboarding/quick-start', payload);
     return data;
   }

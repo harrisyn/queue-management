@@ -549,8 +549,17 @@ export const activateServicePointInstance = async (req: Request, res: Response, 
       return res.status(400).json({ error: 'Service point is not active' });
     }
 
-    if (instance.isOccupied) {
-      return res.status(400).json({ error: 'Instance is already occupied' });
+    // Re-entering your own desk (after a refresh) is fine. Someone else's
+    // needs an explicit take-over, since desks left open would otherwise
+    // stay locked forever.
+    if (instance.isOccupied && instance.occupiedByUserId !== userId && !req.body?.takeOver) {
+      const holder = instance.occupiedByUserId
+        ? await prisma.user.findUnique({ where: { id: instance.occupiedByUserId }, select: { firstName: true, lastName: true } })
+        : null;
+      return res.status(409).json({
+        error: holder ? `${holder.firstName} ${holder.lastName} is signed in to this desk.` : 'Someone is signed in to this desk.',
+        occupied: true,
+      });
     }
 
     const updated = await prisma.servicePointInstance.update({
@@ -669,6 +678,8 @@ export const getLocationInstances = async (req: Request, res: Response, next: Ne
         instanceNumber: inst.instanceNumber,
         displayName: inst.displayName,
         servicePointType: inst.servicePointService.servicePoint.type,
+        servicePointName: inst.servicePointService.servicePoint.displayName || inst.servicePointService.servicePoint.name,
+        servicePointCapacity: inst.servicePointService.capacity,
         displayMode,
         isOccupied: inst.isOccupied,
         currentService: service ? { id: service.id, name: service.name } : null,

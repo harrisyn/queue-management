@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import { Bricolage_Grotesque, Public_Sans } from 'next/font/google';
 import './globals.css';
 import './settings.css';
+import './desk.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { APP_NAME } from '@/lib/appConfig';
