@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
+import { screenName } from '../lib/screenName';
 import { emitToQueue, emitToService, emitToLocation, emitToQueueAndLocation, SOCKET_EVENTS } from '../lib/realtime';
 import { generateTicketNumber, getNextSequence, generateQRData } from '../utils/ticket';
 import { getStartOfDay, generateTimeSlots } from '../utils/date';
@@ -1585,7 +1586,7 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
         currentlyServing: serving.map(e => ({
           id: e.id,
           ticketNumber: e.ticketNumber,
-          customerName: `${e.user.firstName} ${e.user.lastName}`,
+          customerName: screenName(service.displayMode || orgDefaultDisplayMode, e.user.firstName, e.user.lastName),
           servicePoint: e.servicePointInstance?.servicePointService?.servicePoint
             ? (e.servicePointInstance.servicePointService.servicePoint.displayName || e.servicePointInstance.servicePointService.servicePoint.name)
             : null,
@@ -1602,7 +1603,7 @@ export const getLocationQueues = async (req: Request, res: Response, next: NextF
           return {
             id: e.id,
             ticketNumber: e.ticketNumber,
-            customerName: `${e.user.firstName} ${e.user.lastName}`,
+            customerName: screenName(service.displayMode || orgDefaultDisplayMode, e.user.firstName, e.user.lastName),
             position: positionInQueue,
             joinedAt: e.joinedAt,
             estimatedWait,

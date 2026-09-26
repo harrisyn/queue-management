@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
+import { screenName } from '../lib/screenName';
 
 // Ensure a service-point-to-service assignment has exactly `capacity` active
 // ServicePointInstance rows. Creates missing instances and deactivates
@@ -220,7 +221,7 @@ export const getActiveServicePoints = async (req: Request, res: Response, next: 
         displayMode,
         currentlyServing: entry ? {
           ticketNumber: entry.ticketNumber,
-          customerName: `${entry.user.firstName} ${entry.user.lastName}`,
+          customerName: screenName(displayMode, entry.user.firstName, entry.user.lastName),
           serviceName: link.service.name,
         } : null,
       };
