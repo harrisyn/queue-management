@@ -51,9 +51,9 @@ function createApp(): Application {
   return app;
 }
 
-// One instance per server process (or warm serverless instance).
-const globalForApp = globalThis as unknown as { apiApp?: Application };
-export const app: Application = globalForApp.apiApp ?? createApp();
-if (process.env.NODE_ENV !== 'production') globalForApp.apiApp = app;
+// One instance per module load (per server process / warm serverless
+// instance). Deliberately not cached on globalThis: in development that kept
+// serving the old route table after hot reloads.
+export const app: Application = createApp();
 
 export default app;

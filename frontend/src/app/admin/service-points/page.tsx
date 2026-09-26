@@ -226,7 +226,7 @@ const ServicePointsPage: React.FC = () => {
                   className={`point-card ${!point.isActive ? 'inactive' : ''}`}
                 >
                   <div className="point-header">
-                    <span className="point-icon"><Icon icon={typeInfo.icon} size={28} color="#14b8a6" /></span>
+                    <span className="point-icon"><Icon icon={typeInfo.icon} size={28} color="#0e8f80" /></span>
                     <div className="point-title">
                       <h3>{point.name}</h3>
                       {point.displayName && point.displayName !== point.name && (
@@ -539,7 +539,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .edit-btn:hover {
-            background: rgba(20, 184, 166, 0.1);
+            background: rgba(14, 143, 128, 0.1);
             color: var(--primary);
           }
 
@@ -672,7 +672,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .type-option.selected {
-            background: rgba(20, 184, 166, 0.1);
+            background: rgba(14, 143, 128, 0.1);
             border-color: var(--primary);
             color: var(--primary);
           }

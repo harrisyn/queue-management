@@ -150,7 +150,7 @@ const AdminInvitesPage: React.FC = () => {
         {/* How it works */}
         <div style={howItWorksCard}>
           <h3 style={{ fontWeight: 600, color: '#111827', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Icon icon={ClipboardList} size={20} color="#14b8a6" />
+            <Icon icon={ClipboardList} size={20} color="#0e8f80" />
             How Invites Work
           </h3>
           <ol style={{ margin: 0, paddingLeft: '1.5rem', color: '#4b5563', fontSize: '0.9375rem', lineHeight: 1.8 }}>
@@ -248,7 +248,7 @@ const AdminInvitesPage: React.FC = () => {
         ) : invites.length === 0 ? (
           <div style={emptyState}>
             <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-              <Icon icon={Mail} size={48} color="#14b8a6" strokeWidth={1.5} />
+              <Icon icon={Mail} size={48} color="#0e8f80" strokeWidth={1.5} />
             </div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>
               No invites yet
@@ -320,7 +320,7 @@ const addButton: React.CSSProperties = {
   gap: '0.5rem',
   padding: '0.75rem 1.25rem',
   background: 'white',
-  color: '#14b8a6',
+  color: '#0e8f80',
   borderRadius: '0.75rem',
   border: 'none',
   fontWeight: 600,
@@ -444,7 +444,7 @@ const submitButton: React.CSSProperties = {
   padding: '0.625rem 1.25rem',
   borderRadius: '0.5rem',
   border: 'none',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',

@@ -16,6 +16,7 @@ import superadminRoutes from './superadmin.routes';
 import integrationRoutes from './integration.routes';
 import cronRoutes from './cron.routes';
 import aiRoutes from './ai.routes';
+import onboardingRoutes from './onboarding.routes';
 import { limits } from '../middleware/rateLimit.middleware';
 import { authenticate } from '../middleware/auth.middleware';
 import { getMySubscription } from '../middleware/subscription.middleware';
@@ -96,6 +97,7 @@ router.use('/notifications', notificationRoutes);
 router.use('/users', userRoutes);
 router.use('/analytics', analyticsRoutes);
 router.use('/ai', aiRoutes);
+router.use('/onboarding', onboardingRoutes);
 router.use('/superadmin', superadminRoutes);
 // Mounted at '/' - these carry their own per-route auth.
 router.use('/', datasourceRoutes);

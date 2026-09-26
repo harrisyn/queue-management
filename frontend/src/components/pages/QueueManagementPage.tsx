@@ -1548,7 +1548,7 @@ const QueueManagementPage: React.FC = () => {
 
           .waiting-card.dragging {
             opacity: 0.5;
-            background: rgba(20, 184, 166, 0.12);
+            background: rgba(14, 143, 128, 0.12);
           }
 
           .drag-handle {
@@ -1832,7 +1832,7 @@ const QueueManagementPage: React.FC = () => {
           .identity-field.editable select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.15);
+            box-shadow: 0 0 0 3px rgba(14, 143, 128, 0.15);
           }
 
           .no-fields-message {
@@ -1915,7 +1915,7 @@ const QueueManagementPage: React.FC = () => {
 
           .view-details-btn {
             padding: 0.5rem;
-            background: rgba(20, 184, 166, 0.1);
+            background: rgba(14, 143, 128, 0.1);
             border: none;
             border-radius: 8px;
             color: var(--primary);
@@ -1925,7 +1925,7 @@ const QueueManagementPage: React.FC = () => {
           }
 
           .view-details-btn:hover {
-            background: rgba(20, 184, 166, 0.2);
+            background: rgba(14, 143, 128, 0.2);
           }
 
           @media (max-width: 768px) {

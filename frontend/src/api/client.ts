@@ -884,6 +884,16 @@ class ApiClient {
     return data;
   }
 
+  async getOnboardingStatus(): Promise<{ locations: number; services: number; desks: number; entries: number; needsSetup: boolean; firstLocation: { id: string; name: string; publicCode: string | null } | null }> {
+    const { data } = await this.client.get('/onboarding/status');
+    return data;
+  }
+
+  async quickStart(payload: { locationName: string; services: string[]; startTime: string; endTime: string; activeDays: string; timezone?: string }): Promise<{ location: { id: string; name: string; publicCode: string }; services: { id: string; name: string; desk: string }[] }> {
+    const { data } = await this.client.post('/onboarding/quick-start', payload);
+    return data;
+  }
+
   async getPublicOrganization(orgId: string) {
     const { data } = await this.client.get(`/public/orgs/${orgId}`);
     return data;

@@ -3,6 +3,29 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
+import {
+  LayoutDashboard,
+  ListOrdered,
+  CalendarDays,
+  BarChart3,
+  ScrollText,
+  MapPin,
+  Stethoscope,
+  DoorOpen,
+  Workflow,
+  QrCode,
+  MonitorPlay,
+  UserPlus,
+  Database,
+  Plug,
+  Settings,
+  CreditCard,
+  ShieldCheck,
+  LogOut,
+  Menu,
+  X,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { buildAdminUrl } from '@/lib/subdomain';
@@ -14,18 +37,40 @@ interface ImpersonationInfo {
   orgName: string;
 }
 
-interface LayoutProps {
-  children: React.ReactNode;
+interface NavItem {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  show: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children }) => {
+const ROLE_LABELS: Record<string, string> = {
+  SUPER_ADMIN: 'Super admin',
+  ORG_ADMIN: 'Organization admin',
+  LOCATION_ADMIN: 'Location admin',
+  SERVICE_STAFF: 'Service staff',
+  RECEPTIONIST: 'Receptionist',
+  PATIENT: 'Patient',
+};
+
+export function BrandMark({ size = 32 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 48 48" fill="none" aria-hidden="true">
+      <rect width="48" height="48" rx="12" fill="var(--primary-500)" />
+      <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.92" />
+      <circle cx="24" cy="22" r="4" fill="var(--primary-700)" />
+    </svg>
+  );
+}
+
+const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, logout, isAdmin, isStaff, isSuperAdmin } = useAuthContext();
   const { organizationStatus } = useSubscription();
   const router = useRouter();
   const pathname = usePathname();
-  const [showUserMenu, setShowUserMenu] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [impersonation, setImpersonation] = useState<ImpersonationInfo | null>(null);
+  const isOrgAdmin = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';
 
   useEffect(() => {
     try {
@@ -35,6 +80,8 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
       // Malformed/unavailable sessionStorage - just skip the banner.
     }
   }, []);
+
+  useEffect(() => setMobileMenuOpen(false), [pathname]);
 
   const handleLogout = () => {
     logout();
@@ -47,26 +94,52 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     window.location.href = `${buildAdminUrl(impersonation.returnPath)}#restore=${encodeURIComponent(impersonation.returnToken)}`;
   };
 
-  const isOrgAdmin = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';
-
-  const navItems = [
-    { href: '/', label: 'Dashboard', icon: DashboardIcon, show: true },
-    { href: '/queues', label: 'Queues', icon: QueueIcon, show: isStaff },
-    { href: '/appointments', label: 'Appointments', icon: CalendarIcon, show: isStaff },
-    { href: '/services', label: 'Services', icon: ServicesIcon, show: isAdmin },
-    { href: '/admin/locations', label: 'Locations', icon: LocationIcon, show: isAdmin },
-    { href: '/admin/service-points', label: 'Service Points', icon: ServicePointIcon, show: isAdmin },
-    { href: '/admin/flow-designer', label: 'Flow Designer', icon: FlowIcon, show: isAdmin },
-    { href: '/admin/qr', label: 'QR Codes', icon: QRCodeIcon, show: isAdmin },
-    { href: '/admin/invites', label: 'Invites', icon: InviteIcon, show: isAdmin },
-    { href: '/admin/data-sources', label: 'Data Sources', icon: DataSourceIcon, show: isAdmin },
-    { href: '/admin/integrations', label: 'Integrations', icon: WebhookIcon, show: isOrgAdmin },
-    { href: '/admin/audit-log', label: 'Audit Log', icon: AuditIcon, show: isOrgAdmin },
-    { href: '/admin/settings', label: 'Settings', icon: SettingsIcon, show: isAdmin },
-    { href: '/admin/billing', label: 'Billing', icon: BillingIcon, show: isAdmin },
-    { href: '/analytics', label: 'Analytics', icon: AnalyticsIcon, show: isAdmin },
-    { href: '/superadmin', label: 'Super Admin', icon: SuperAdminIcon, show: isSuperAdmin },
-  ].filter(item => item.show);
+  // Grouped by what people come here to do: run today, look back, set up,
+  // administer the organization.
+  const groups: { label: string; items: NavItem[] }[] = [
+    {
+      label: 'Today',
+      items: [
+        { href: '/', label: 'Dashboard', icon: LayoutDashboard, show: true },
+        { href: '/queues', label: 'Queues', icon: ListOrdered, show: isStaff },
+        { href: '/appointments', label: 'Appointments', icon: CalendarDays, show: isStaff },
+      ],
+    },
+    {
+      label: 'Insights',
+      items: [
+        { href: '/analytics', label: 'Analytics', icon: BarChart3, show: isAdmin },
+        { href: '/admin/audit-log', label: 'Audit log', icon: ScrollText, show: isOrgAdmin },
+      ],
+    },
+    {
+      label: 'Setup',
+      items: [
+        { href: '/admin/locations', label: 'Locations', icon: MapPin, show: isAdmin },
+        { href: '/services', label: 'Services', icon: Stethoscope, show: isAdmin },
+        { href: '/admin/service-points', label: 'Desks & rooms', icon: DoorOpen, show: isAdmin },
+        { href: '/admin/flow-designer', label: 'Patient flow', icon: Workflow, show: isAdmin },
+        { href: '/admin/qr', label: 'QR codes', icon: QrCode, show: isAdmin },
+        { href: '/admin/displays', label: 'Display screens', icon: MonitorPlay, show: isAdmin },
+      ],
+    },
+    {
+      label: 'Organization',
+      items: [
+        { href: '/admin/invites', label: 'Staff invites', icon: UserPlus, show: isAdmin },
+        { href: '/admin/data-sources', label: 'Data sources', icon: Database, show: isAdmin },
+        { href: '/admin/integrations', label: 'Integrations', icon: Plug, show: isOrgAdmin },
+        { href: '/admin/settings', label: 'Settings', icon: Settings, show: isAdmin },
+        { href: '/admin/billing', label: 'Billing', icon: CreditCard, show: isAdmin },
+      ],
+    },
+    {
+      label: 'Platform',
+      items: [{ href: '/superadmin', label: 'Super admin', icon: ShieldCheck, show: isSuperAdmin }],
+    },
+  ]
+    .map((g) => ({ ...g, items: g.items.filter((i) => i.show) }))
+    .filter((g) => g.items.length > 0);
 
   const isActive = (href: string) => {
     if (href === '/') return pathname === '/';
@@ -74,556 +147,102 @@ const Layout: React.FC<LayoutProps> = ({ children }) => {
     return pathname === href;
   };
 
+  const nav = (
+    <nav className="app-nav" aria-label="Main">
+      {groups.map((group) => (
+        <div key={group.label} className="app-nav-group">
+          <p className="app-nav-label">{group.label}</p>
+          {group.items.map((item) => {
+            const active = isActive(item.href);
+            const ItemIcon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className="app-nav-item" aria-current={active ? 'page' : undefined}>
+                <ItemIcon size={18} strokeWidth={1.9} aria-hidden="true" />
+                <span>{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      ))}
+    </nav>
+  );
+
+  const userBlock = user && (
+    <div className="app-user">
+      <div className="app-avatar" aria-hidden="true">
+        {user.firstName?.[0]}{user.lastName?.[0]}
+      </div>
+      <div className="app-user-text">
+        <span className="app-user-name">{user.firstName} {user.lastName}</span>
+        <span className="app-user-role">{ROLE_LABELS[user.role] || user.role}</span>
+      </div>
+      <button type="button" onClick={handleLogout} className="app-icon-btn" aria-label="Sign out" title="Sign out">
+        <LogOut size={17} />
+      </button>
+    </div>
+  );
+
   return (
-    <div style={layoutContainer}>
-      {/* Sidebar for desktop */}
-      <aside style={sidebarStyle}>
-        {/* Logo */}
-        <Link href="/" style={logoLink}>
-          <div style={logoContainer}>
-            <svg width="40" height="40" viewBox="0 0 48 48" fill="none">
-              <rect width="48" height="48" rx="12" fill="#14b8a6" />
-              <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-              <circle cx="24" cy="22" r="4" fill="#0d9488"/>
-            </svg>
-            <span style={logoText}>{APP_NAME}</span>
-          </div>
+    <div className="app-shell">
+      <aside className="app-sidebar">
+        <Link href="/" className="app-brand">
+          <BrandMark size={34} />
+          <span>{APP_NAME}</span>
         </Link>
-
-        {/* Navigation */}
-        <nav style={navStyle}>
-          {navItems.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              style={{
-                ...navItemStyle,
-                ...(isActive(item.href) ? activeNavItemStyle : {}),
-              }}
-            >
-              <item.icon active={isActive(item.href)} />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
-
-        {/* User section at bottom */}
-        {user && (
-          <div style={userSectionStyle}>
-            <div style={userInfoContainer}>
-              <div style={avatarStyle}>
-                {user.firstName?.[0]}{user.lastName?.[0]}
-              </div>
-              <div style={userDetails}>
-                <span style={userName}>{user.firstName} {user.lastName}</span>
-                <span style={userRoleBadge(user.role)}>
-                  {user.role.replace('_', ' ')}
-                </span>
-              </div>
-            </div>
-            <button onClick={handleLogout} style={logoutBtn} title="Logout">
-              <LogoutIcon />
-            </button>
-          </div>
-        )}
+        {nav}
+        {userBlock}
       </aside>
 
-      {/* Mobile header */}
-      <div style={mobileHeader}>
-        <button 
-          onClick={() => setMobileMenuOpen(!mobileMenuOpen)} 
-          style={menuBtn}
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M4 6h16M4 12h16M4 18h16" />
-          </svg>
+      <header className="app-mobile-bar">
+        <button type="button" className="app-icon-btn" onClick={() => setMobileMenuOpen(true)} aria-label="Open menu">
+          <Menu size={20} />
         </button>
-        <Link href="/" style={mobileLogoLink}>
-          <svg width="32" height="32" viewBox="0 0 48 48" fill="none">
-            <rect width="48" height="48" rx="12" fill="#14b8a6" />
-            <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-            <circle cx="24" cy="22" r="4" fill="#0d9488"/>
-          </svg>
-          <span style={mobileLogoText}>{APP_NAME}</span>
+        <Link href="/" className="app-brand app-brand-sm">
+          <BrandMark size={28} />
+          <span>{APP_NAME}</span>
         </Link>
-        {user && (
-          <button 
-            onClick={() => setShowUserMenu(!showUserMenu)} 
-            style={mobileAvatarBtn}
-          >
-            {user.firstName?.[0]}{user.lastName?.[0]}
-          </button>
-        )}
-      </div>
+        <span className="app-avatar app-avatar-sm" aria-hidden="true">
+          {user?.firstName?.[0]}{user?.lastName?.[0]}
+        </span>
+      </header>
 
-      {/* Mobile menu overlay */}
       {mobileMenuOpen && (
-        <div style={mobileMenuOverlay} onClick={() => setMobileMenuOpen(false)}>
-          <div style={mobileMenuContent} onClick={e => e.stopPropagation()}>
-            <nav style={mobileNavStyle}>
-              {navItems.map((item) => (
-                <Link
-                  key={item.href}
-                  href={item.href}
-                  onClick={() => setMobileMenuOpen(false)}
-                  style={{
-                    ...mobileNavItem,
-                    ...(isActive(item.href) ? activeMobileNavItem : {}),
-                  }}
-                >
-                  <item.icon active={isActive(item.href)} />
-                  <span>{item.label}</span>
-                </Link>
-              ))}
-            </nav>
-            {user && (
-              <button onClick={handleLogout} style={mobileLogoutBtn}>
-                <LogoutIcon />
-                <span>Logout</span>
+        <div className="app-drawer-backdrop" onClick={() => setMobileMenuOpen(false)}>
+          <div className="app-drawer" role="dialog" aria-label="Menu" onClick={(e) => e.stopPropagation()}>
+            <div className="app-drawer-top">
+              <span className="app-brand">
+                <BrandMark size={30} />
+                <span>{APP_NAME}</span>
+              </span>
+              <button type="button" className="app-icon-btn" onClick={() => setMobileMenuOpen(false)} aria-label="Close menu">
+                <X size={20} />
               </button>
-            )}
+            </div>
+            {nav}
+            {userBlock}
           </div>
         </div>
       )}
 
-      {/* Main content */}
-      <main style={mainStyle}>
+      <main className="app-main">
         {impersonation && (
-          <div style={impersonationBanner}>
+          <div className="app-banner app-banner-impersonating">
             <span>
-              Impersonating <strong>{impersonation.orgName || 'organization'}</strong>
+              You&apos;re viewing <strong>{impersonation.orgName || 'this organization'}</strong> as its admin.
             </span>
-            <button onClick={handleExitImpersonation} style={impersonationExitBtn}>
-              Exit impersonation
-            </button>
+            <button type="button" onClick={handleExitImpersonation}>Return to super admin</button>
           </div>
         )}
         {isAdmin && organizationStatus === 'PAUSED' && (
-          <div style={pausedBanner}>
-            <span>
-              This workspace is currently <strong>paused</strong> by an administrator. Staff can still sign in,
-              but customers cannot join queues or view ticket status until it&apos;s reactivated.
-            </span>
+          <div className="app-banner app-banner-paused">
+            This workspace is paused by the platform administrator. Staff can still sign in, but patients can&apos;t join
+            queues or see their ticket until it&apos;s reactivated.
           </div>
         )}
-        <div style={contentWrapper}>
-          {children}
-        </div>
+        <div className="app-content">{children}</div>
       </main>
     </div>
   );
-};
-
-// Icons
-const CalendarIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" />
-  </svg>
-);
-
-const WebhookIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0 1 1 0 00-1.414 1.414 4 4 0 005.656 0l3-3a4 4 0 00-5.656-5.656l-1.5 1.5a1 1 0 101.414 1.414l1.5-1.5zm-5 5a2 2 0 012.828 0 1 1 0 101.414-1.414 4 4 0 00-5.656 0l-3 3a4 4 0 105.656 5.656l1.5-1.5a1 1 0 10-1.414-1.414l-1.5 1.5a2 2 0 11-2.828-2.828l3-3z" clipRule="evenodd" />
-  </svg>
-);
-
-const AuditIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z" />
-    <path fillRule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm9.707 5.707a1 1 0 00-1.414-1.414L9 12.586l-1.293-1.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-  </svg>
-);
-
-const DashboardIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M3 4a1 1 0 011-1h12a1 1 0 011 1v2a1 1 0 01-1 1H4a1 1 0 01-1-1V4zM3 10a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM14 9a1 1 0 00-1 1v6a1 1 0 001 1h2a1 1 0 001-1v-6a1 1 0 00-1-1h-2z" />
-  </svg>
-);
-
-const QueueIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-  </svg>
-);
-
-const ServicesIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-  </svg>
-);
-
-const LocationIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-  </svg>
-);
-
-const AnalyticsIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" />
-  </svg>
-);
-
-const QRCodeIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm2 2V5h1v1H5zM3 13a1 1 0 011-1h3a1 1 0 011 1v3a1 1 0 01-1 1H4a1 1 0 01-1-1v-3zm2 2v-1h1v1H5zM13 3a1 1 0 00-1 1v3a1 1 0 001 1h3a1 1 0 001-1V4a1 1 0 00-1-1h-3zm1 2v1h1V5h-1z" clipRule="evenodd" />
-    <path d="M11 4a1 1 0 10-2 0v1a1 1 0 002 0V4zM10 7a1 1 0 011 1v1h2a1 1 0 110 2h-3a1 1 0 01-1-1V8a1 1 0 011-1zM16 9a1 1 0 100 2 1 1 0 000-2zM9 13a1 1 0 011-1h1a1 1 0 110 2v2a1 1 0 11-2 0v-3zM16 13a1 1 0 100 2h1a1 1 0 100-2h-1z" />
-  </svg>
-);
-
-const InviteIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-    <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
-  </svg>
-);
-
-const DataSourceIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z" />
-    <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z" />
-    <path d="M17 5c0 1.657-3.134 3-7 3S3 6.657 3 5s3.134-3 7-3 7 1.343 7 3z" />
-  </svg>
-);
-
-const SettingsIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-  </svg>
-);
-
-const BillingIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M2 4a2 2 0 012-2h12a2 2 0 012 2v1H2V4zM2 7h16v7a2 2 0 01-2 2H4a2 2 0 01-2-2V7zm2 5a1 1 0 100 2h4a1 1 0 100-2H4z" />
-  </svg>
-);
-
-const ServicePointIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
-  </svg>
-);
-
-const FlowIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M6 2a2 2 0 00-2 2v12a2 2 0 002 2h8a2 2 0 002-2V4a2 2 0 00-2-2H6zm1 2a1 1 0 000 2h6a1 1 0 100-2H7zm6 7a1 1 0 011 1v3a1 1 0 11-2 0v-3a1 1 0 011-1zm-3 3a1 1 0 100 2h.01a1 1 0 100-2H10zm-4 1a1 1 0 011-1h.01a1 1 0 110 2H7a1 1 0 01-1-1zm1-4a1 1 0 100 2h.01a1 1 0 100-2H7zm2 1a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zm4-4a1 1 0 100 2h.01a1 1 0 100-2H13zM9 9a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1zM7 8a1 1 0 000 2h.01a1 1 0 000-2H7z" clipRule="evenodd" />
-  </svg>
-);
-
-const TicketIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path d="M2 6a2 2 0 012-2h12a2 2 0 012 2v2a2 2 0 100 4v2a2 2 0 01-2 2H4a2 2 0 01-2-2v-2a2 2 0 100-4V6z" />
-  </svg>
-);
-
-const SuperAdminIcon = ({ active }: { active: boolean }) => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill={active ? '#14b8a6' : '#6b7280'}>
-    <path fillRule="evenodd" d="M2.166 4.999A11.954 11.954 0 0010 1.944 11.954 11.954 0 0017.834 5c.11.65.166 1.32.166 2.001 0 5.225-3.34 9.67-8 11.317C5.34 16.67 2 12.225 2 7c0-.682.057-1.35.166-2.001zm11.541 3.708a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-  </svg>
-);
-
-const LogoutIcon = () => (
-  <svg width="20" height="20" viewBox="0 0 20 20" fill="#6b7280">
-    <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-  </svg>
-);
-
-// Styles
-const layoutContainer: React.CSSProperties = {
-  display: 'flex',
-  minHeight: '100vh',
-  background: '#f9fafb',
-};
-
-const sidebarStyle: React.CSSProperties = {
-  width: '260px',
-  background: 'white',
-  borderRight: '1px solid #e5e7eb',
-  display: 'flex',
-  flexDirection: 'column',
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  bottom: 0,
-  zIndex: 40,
-};
-
-const logoLink: React.CSSProperties = {
-  textDecoration: 'none',
-  padding: '1.5rem',
-  borderBottom: '1px solid #e5e7eb',
-};
-
-const logoContainer: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-};
-
-const logoText: React.CSSProperties = {
-  fontSize: '1.25rem',
-  fontWeight: 700,
-  color: '#111827',
-  letterSpacing: '-0.02em',
-};
-
-const navStyle: React.CSSProperties = {
-  flex: 1,
-  padding: '1rem',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.25rem',
-};
-
-const navItemStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  padding: '0.75rem 1rem',
-  borderRadius: '0.75rem',
-  color: '#4b5563',
-  textDecoration: 'none',
-  fontSize: '0.9375rem',
-  fontWeight: 500,
-  transition: 'all 0.15s',
-};
-
-const activeNavItemStyle: React.CSSProperties = {
-  background: 'rgba(20, 184, 166, 0.1)',
-  color: '#0d9488',
-};
-
-const userSectionStyle: React.CSSProperties = {
-  padding: '1rem',
-  borderTop: '1px solid #e5e7eb',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-};
-
-const userInfoContainer: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-};
-
-const avatarStyle: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  borderRadius: '10px',
-  background: '#14b8a6',
-  color: 'white',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontWeight: 600,
-  fontSize: '0.875rem',
-};
-
-const userDetails: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.125rem',
-};
-
-const userName: React.CSSProperties = {
-  fontWeight: 600,
-  fontSize: '0.875rem',
-  color: '#111827',
-};
-
-const userRoleBadge = (role: string): React.CSSProperties => ({
-  fontSize: '0.6875rem',
-  fontWeight: 500,
-  color: getRoleColor(role),
-  textTransform: 'capitalize',
-});
-
-const logoutBtn: React.CSSProperties = {
-  width: '36px',
-  height: '36px',
-  borderRadius: '8px',
-  border: '1px solid #e5e7eb',
-  background: 'white',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  transition: 'all 0.15s',
-};
-
-const mainStyle: React.CSSProperties = {
-  flex: 1,
-  marginLeft: '260px',
-  minHeight: '100vh',
-  // Without this a wide child (e.g. a data table) stretches the flex item
-  // past the viewport instead of scrolling inside its own wrapper.
-  minWidth: 0,
-};
-
-const impersonationBanner: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: '1rem',
-  padding: '0.625rem 1.5rem',
-  background: '#7c3aed',
-  color: 'white',
-  fontSize: '0.875rem',
-  textAlign: 'center',
-};
-
-const impersonationExitBtn: React.CSSProperties = {
-  padding: '0.25rem 0.75rem',
-  borderRadius: '0.5rem',
-  border: '1px solid rgba(255, 255, 255, 0.4)',
-  background: 'rgba(255, 255, 255, 0.15)',
-  color: 'white',
-  fontSize: '0.8125rem',
-  fontWeight: 600,
-  cursor: 'pointer',
-};
-
-const pausedBanner: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  padding: '0.75rem 1.5rem',
-  background: '#fef3c7',
-  color: '#92400e',
-  borderBottom: '1px solid #fcd34d',
-  fontSize: '0.875rem',
-  textAlign: 'center',
-};
-
-const contentWrapper: React.CSSProperties = {
-  padding: '2rem',
-  maxWidth: '1400px',
-  margin: '0 auto',
-};
-
-// Mobile styles
-const mobileHeader: React.CSSProperties = {
-  display: 'none',
-  position: 'fixed',
-  top: 0,
-  left: 0,
-  right: 0,
-  height: '64px',
-  background: 'white',
-  borderBottom: '1px solid #e5e7eb',
-  padding: '0 1rem',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  zIndex: 50,
-};
-
-const menuBtn: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  borderRadius: '8px',
-  border: 'none',
-  background: 'transparent',
-  cursor: 'pointer',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  color: '#374151',
-};
-
-const mobileLogoLink: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.5rem',
-  textDecoration: 'none',
-};
-
-const mobileLogoText: React.CSSProperties = {
-  fontWeight: 700,
-  fontSize: '1.125rem',
-  color: '#111827',
-};
-
-const mobileAvatarBtn: React.CSSProperties = {
-  width: '40px',
-  height: '40px',
-  borderRadius: '10px',
-  border: 'none',
-  background: '#14b8a6',
-  color: 'white',
-  fontWeight: 600,
-  fontSize: '0.875rem',
-  cursor: 'pointer',
-};
-
-const mobileMenuOverlay: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  zIndex: 60,
-};
-
-const mobileMenuContent: React.CSSProperties = {
-  position: 'absolute',
-  left: 0,
-  top: 0,
-  bottom: 0,
-  width: '280px',
-  background: 'white',
-  padding: '1rem',
-  paddingTop: '80px',
-};
-
-const mobileNavStyle: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.5rem',
-};
-
-const mobileNavItem: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  padding: '1rem',
-  borderRadius: '0.75rem',
-  color: '#4b5563',
-  textDecoration: 'none',
-  fontSize: '1rem',
-  fontWeight: 500,
-};
-
-const activeMobileNavItem: React.CSSProperties = {
-  background: 'rgba(20, 184, 166, 0.1)',
-  color: '#0d9488',
-};
-
-const mobileLogoutBtn: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  padding: '1rem',
-  borderRadius: '0.75rem',
-  color: '#ef4444',
-  background: 'transparent',
-  border: 'none',
-  width: '100%',
-  textAlign: 'left',
-  fontSize: '1rem',
-  fontWeight: 500,
-  cursor: 'pointer',
-  marginTop: '1rem',
-};
-
-const getRoleColor = (role: string): string => {
-  const colors: Record<string, string> = {
-    SUPER_ADMIN: '#dc2626',
-    ORG_ADMIN: '#2563eb',
-    LOCATION_ADMIN: '#059669',
-    SERVICE_STAFF: '#d97706',
-    RECEPTIONIST: '#7c3aed',
-    PATIENT: '#0891b2',
-  };
-  return colors[role] || '#6b7280';
 };
 
 export default Layout;

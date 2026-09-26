@@ -292,7 +292,7 @@ export default function QueueStatusPage({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'WAITING': return '#14b8a6';
+      case 'WAITING': return '#0e8f80';
       case 'SERVING': return '#f59e0b';
       case 'SERVED': return '#10b981';
       case 'CANCELLED': case 'NO_SHOW': return '#ef4444';
@@ -353,7 +353,7 @@ export default function QueueStatusPage({
   const isCalled = status.status === 'SERVING';
   const isCompleted = status.status === 'SERVED' || status.status === 'CANCELLED' || status.status === 'NO_SHOW';
 
-  const brandColor = status.organization?.primaryColor || '#14b8a6';
+  const brandColor = status.organization?.primaryColor || '#0e8f80';
 
   const renderLogo = () => (
     status.organization?.logoUrl ? (
@@ -833,7 +833,7 @@ const spinner: React.CSSProperties = {
   width: '48px',
   height: '48px',
   border: '4px solid rgba(255, 255, 255, 0.2)',
-  borderTopColor: '#14b8a6',
+  borderTopColor: '#0e8f80',
   borderRadius: '50%',
   animation: 'spin 1s linear infinite',
 };
@@ -870,7 +870,7 @@ const errorSubtitle: React.CSSProperties = {
 
 const homeButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   borderRadius: '0.75rem',
   textDecoration: 'none',
@@ -1191,9 +1191,9 @@ const shareButton: React.CSSProperties = {
   gap: '0.5rem',
   flex: 1,
   padding: '0.875rem',
-  background: 'rgba(20, 184, 166, 0.2)',
+  background: 'rgba(14, 143, 128, 0.2)',
   color: 'white',
-  border: '1px solid rgba(20, 184, 166, 0.3)',
+  border: '1px solid rgba(14, 143, 128, 0.3)',
   borderRadius: '0.75rem',
   fontWeight: 500,
   cursor: 'pointer',
@@ -1264,7 +1264,7 @@ const qrTicketInfo: React.CSSProperties = {
 const qrTicketLabel: React.CSSProperties = {
   fontSize: '1.125rem',
   fontWeight: 600,
-  color: '#14b8a6',
+  color: '#0e8f80',
 };
 
 const shareUrlButton: React.CSSProperties = {
@@ -1274,7 +1274,7 @@ const shareUrlButton: React.CSSProperties = {
   gap: '0.5rem',
   width: '100%',
   padding: '0.875rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '0.75rem',
@@ -1403,7 +1403,7 @@ const identitySaveButton: React.CSSProperties = {
   width: '100%',
   marginTop: '1rem',
   padding: '0.75rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '0.5rem',

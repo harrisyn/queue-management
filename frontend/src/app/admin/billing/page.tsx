@@ -351,7 +351,7 @@ export default function BillingPage() {
           const upgradeDisabled = !upgradeTargetIsFree && activeProviders.length === 0;
           return (
             <Card style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', background: '#f0fdfa', border: '1px solid #99f6e4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#0f766e', fontSize: '0.875rem' }}>
+              <span style={{ color: '#0a655a', fontSize: '0.875rem' }}>
                 Need more room to grow? <strong>Upgrade to {data.upgradePlan.name}</strong> for higher limits and more features.
               </span>
               <Button variant="primary" size="sm" disabled={upgradeDisabled} onClick={() => handleChoosePlan(data.upgradePlan!.id)}>Upgrade to {data.upgradePlan.name}</Button>
@@ -369,7 +369,7 @@ export default function BillingPage() {
                 key={cycle}
                 onClick={() => setBillingCycle(cycle)}
                 className="btn btn-sm"
-                style={{ background: billingCycle === cycle ? '#14b8a6' : '#f3f4f6', color: billingCycle === cycle ? 'white' : '#374151', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                style={{ background: billingCycle === cycle ? '#0e8f80' : '#f3f4f6', color: billingCycle === cycle ? 'white' : '#374151', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
               >
                 {cycle === 'monthly' ? 'Monthly' : cycle === 'quarterly' ? 'Quarterly' : 'Yearly'}
                 {bestSavings > 0 && (
@@ -407,7 +407,7 @@ export default function BillingPage() {
                 key={plan.id}
                 style={{
                   padding: '1rem',
-                  border: showRecommended ? '2px solid #14b8a6' : undefined,
+                  border: showRecommended ? '2px solid #0e8f80' : undefined,
                   position: 'relative',
                 }}
               >

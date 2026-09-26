@@ -354,7 +354,7 @@ export default function AdminDataSourcesPage() {
             <div className="sources-list">
               {dataSources.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon"><Icon icon={Plug} size={40} color="#14b8a6" strokeWidth={1.5} /></div>
+                  <div className="empty-icon"><Icon icon={Plug} size={40} color="#0e8f80" strokeWidth={1.5} /></div>
                   <h3>No data sources configured</h3>
                   <p>Add a data source to connect external systems and enrich customer data.</p>
                 </div>
@@ -367,7 +367,7 @@ export default function AdminDataSourcesPage() {
                   >
                     <div className="source-header">
                       <span className="source-icon">
-                        <Icon icon={DATA_SOURCE_TYPES.find(t => t.value === source.type)?.icon || Package} size={22} color="#14b8a6" />
+                        <Icon icon={DATA_SOURCE_TYPES.find(t => t.value === source.type)?.icon || Package} size={22} color="#0e8f80" />
                       </span>
                       <div className="source-info">
                         <h3>{source.name}</h3>

@@ -2,51 +2,34 @@
 
 import React from 'react';
 import { AlertCircle, CheckCircle2 } from 'lucide-react';
-import { APP_NAME } from '@/lib/appConfig';
+import AuthLayout from './AuthLayout';
 
 interface AuthShellProps {
   title: string;
   subtitle?: React.ReactNode;
   brandName?: string;
   logoUrl?: string | null;
+  panelTitle?: React.ReactNode;
+  panelText?: React.ReactNode;
   footer?: React.ReactNode;
   children: React.ReactNode;
 }
 
-/** Single-column card on the dark public background, shared by the invite,
- * forgot-password and reset-password pages. */
-export function AuthShell({ title, subtitle, brandName, logoUrl, footer, children }: AuthShellProps) {
+/** Account pages (invite, forgot/reset password) on the shared auth layout. */
+export function AuthShell({ title, subtitle, brandName, logoUrl, panelTitle, panelText, footer, children }: AuthShellProps) {
   return (
-    <main className="auth-shell">
-      <div className="auth-shell-inner">
-        <div className="auth-brand">
-          {logoUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={logoUrl} alt="" />
-          ) : (
-            <svg width="32" height="32" viewBox="0 0 48 48" fill="none" aria-hidden="true">
-              <rect width="48" height="48" rx="12" fill="#14b8a6" />
-              <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9" />
-              <circle cx="24" cy="22" r="4" fill="#0d9488" />
-            </svg>
-          )}
-          <span>{brandName || APP_NAME}</span>
-        </div>
-        <div className="auth-card">
-          <h1>{title}</h1>
-          {subtitle && <p className="auth-subtitle">{subtitle}</p>}
-          {children}
-        </div>
-        {footer && <div className="auth-footer">{footer}</div>}
-      </div>
-    </main>
+    <AuthLayout orgName={brandName} logoUrl={logoUrl} panelTitle={panelTitle} panelText={panelText} footer={footer}>
+      <h1>{title}</h1>
+      {subtitle ? <p className="authx-sub">{subtitle}</p> : <div style={{ height: '1.5rem' }} />}
+      {children}
+    </AuthLayout>
   );
 }
 
 export function AuthAlert({ tone, children }: { tone: 'error' | 'success'; children: React.ReactNode }) {
   const IconComponent = tone === 'error' ? AlertCircle : CheckCircle2;
   return (
-    <div className={`auth-alert auth-alert-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
+    <div className={`authx-alert authx-alert-${tone}`} role={tone === 'error' ? 'alert' : 'status'}>
       <IconComponent size={18} aria-hidden="true" />
       <div>{children}</div>
     </div>

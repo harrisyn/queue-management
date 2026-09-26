@@ -443,7 +443,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
   }, [isPrinting, joinResult, location, selectedServiceId]);
 
   const selectedService = location?.services.find(s => s.id === selectedServiceId);
-  const brandColor = location?.organization?.primaryColor || '#14b8a6';
+  const brandColor = location?.organization?.primaryColor || '#0e8f80';
 
   // Org logo if the org has uploaded one, otherwise the app's default mark
   const renderLogo = (size: number = 48) => (
@@ -454,7 +454,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       <svg width={size} height={size} viewBox="0 0 48 48" fill="none">
         <rect width="48" height="48" rx="12" fill={brandColor} />
         <path d="M14 24C14 18.477 18.477 14 24 14V14C29.523 14 34 18.477 34 24V34H14V24Z" fill="white" fillOpacity="0.9"/>
-        <circle cx="24" cy="22" r="4" fill="#0d9488"/>
+        <circle cx="24" cy="22" r="4" fill="#0b7a6d"/>
       </svg>
     )
   );
@@ -1058,7 +1058,7 @@ const homeButton: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   borderRadius: '0.75rem',
   textDecoration: 'none',
@@ -1254,7 +1254,7 @@ const joinButton: React.CSSProperties = {
   fontSize: '1rem',
   fontWeight: 600,
   color: 'white',
-  background: '#14b8a6',
+  background: '#0e8f80',
   border: 'none',
   borderRadius: '0.75rem',
   cursor: 'pointer',
@@ -1517,7 +1517,7 @@ const countdownProgress: React.CSSProperties = {
   bottom: 0,
   left: 0,
   height: '3px',
-  background: '#14b8a6',
+  background: '#0e8f80',
 };
 
 const cancelCountdownBtn: React.CSSProperties = {
@@ -1611,7 +1611,7 @@ const sessionTicketCard: React.CSSProperties = {
 const sessionTicketNumber: React.CSSProperties = {
   fontSize: '1.5rem',
   fontWeight: 700,
-  color: '#0d9488',
+  color: '#0b7a6d',
   minWidth: '80px',
 };
 
@@ -1640,7 +1640,7 @@ const addAnotherButton: React.CSSProperties = {
   gap: '0.5rem',
   width: '100%',
   padding: '1rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '0.75rem',

@@ -562,7 +562,7 @@ export default function AdminLocationsPage() {
             {locations.length === 0 && !showForm && (
               <div style={emptyState}>
                 <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                  <Icon icon={MapPin} size={48} color="#14b8a6" strokeWidth={1.5} />
+                  <Icon icon={MapPin} size={48} color="#0e8f80" strokeWidth={1.5} />
                 </div>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>No locations yet</h3>
                 <p style={{ color: '#6b7280', marginBottom: '1rem' }}>Create your first location to start managing queues.</p>
@@ -864,7 +864,7 @@ const editButtonLarge: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '8px',
@@ -979,7 +979,7 @@ const submitButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
   borderRadius: '8px',
   border: 'none',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
@@ -1014,8 +1014,8 @@ const locationCard: React.CSSProperties = {
 };
 
 const locationCardActive: React.CSSProperties = {
-  borderColor: '#14b8a6',
-  boxShadow: '0 8px 30px rgba(20, 184, 166, 0.2)',
+  borderColor: '#0e8f80',
+  boxShadow: '0 8px 30px rgba(14, 143, 128, 0.2)',
 };
 
 const cardHeader: React.CSSProperties = {
@@ -1028,12 +1028,12 @@ const cardHeader: React.CSSProperties = {
 const cardIcon: React.CSSProperties = {
   width: '48px',
   height: '48px',
-  background: 'rgba(20, 184, 166, 0.1)',
+  background: 'rgba(14, 143, 128, 0.1)',
   borderRadius: '12px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#14b8a6',
+  color: '#0e8f80',
 };
 
 const publicCodeBadge: React.CSSProperties = {
@@ -1078,7 +1078,7 @@ const cardUrlPreview: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   fontSize: '0.75rem',
-  color: '#0d9488',
+  color: '#0b7a6d',
   marginBottom: '1rem',
 };
 

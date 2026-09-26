@@ -119,7 +119,7 @@ export default function AdminQRPage() {
           h1 { font-size: 2rem; margin-bottom: 0.5rem; color: #111827; }
           p { color: #6b7280; margin-bottom: 2rem; }
           img { max-width: 300px; border: 1px solid #e5e7eb; border-radius: 12px; }
-          .url { margin-top: 1rem; font-family: monospace; color: #14b8a6; }
+          .url { margin-top: 1rem; font-family: monospace; color: #0e8f80; }
         </style>
       </head>
       <body>
@@ -158,7 +158,7 @@ export default function AdminQRPage() {
         ) : locations.length === 0 ? (
           <div style={emptyState}>
             <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-              <Icon icon={QrCode} size={48} color="#14b8a6" strokeWidth={1.5} />
+              <Icon icon={QrCode} size={48} color="#0e8f80" strokeWidth={1.5} />
             </div>
             <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>
               No locations with public codes
@@ -203,9 +203,9 @@ export default function AdminQRPage() {
                       onClick={() => setQrSize(size)}
                       style={{
                         ...sizeButton,
-                        background: qrSize === size ? '#14b8a6' : 'white',
+                        background: qrSize === size ? '#0e8f80' : 'white',
                         color: qrSize === size ? 'white' : '#374151',
-                        borderColor: qrSize === size ? '#14b8a6' : '#e5e7eb',
+                        borderColor: qrSize === size ? '#0e8f80' : '#e5e7eb',
                       }}
                     >
                       {size}px
@@ -292,7 +292,7 @@ const emptyState: React.CSSProperties = {
 const linkButton: React.CSSProperties = {
   display: 'inline-block',
   padding: '0.625rem 1.25rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   borderRadius: '0.5rem',
   textDecoration: 'none',
@@ -366,7 +366,7 @@ const urlBox: React.CSSProperties = {
 const codeStyle: React.CSSProperties = {
   fontSize: '0.8125rem',
   fontFamily: 'monospace',
-  color: '#14b8a6',
+  color: '#0e8f80',
   wordBreak: 'break-all',
 };
 

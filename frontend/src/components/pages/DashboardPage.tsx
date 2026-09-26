@@ -198,7 +198,7 @@ const DashboardPage: React.FC = () => {
           {statCards.map((stat, index) => (
             <div key={index} className="card" style={statCardStyle}>
               <div style={statCardHeader}>
-                <Icon icon={stat.icon} size={22} color="#14b8a6" />
+                <Icon icon={stat.icon} size={22} color="#0e8f80" />
               </div>
               <div style={statValue}>{stat.value}</div>
               <div style={statLabel}>{stat.label}</div>
@@ -239,7 +239,7 @@ const DashboardPage: React.FC = () => {
             {quickActions.map((action, index) => (
               <Link key={index} href={action.href} className="card card-hover" style={actionCard}>
                 <div style={actionIconBox}>
-                  <Icon icon={action.icon} size={22} color="#14b8a6" />
+                  <Icon icon={action.icon} size={22} color="#0e8f80" />
                 </div>
                 <div style={actionContent}>
                   <h3 style={actionTitle}>{action.title}</h3>
@@ -254,7 +254,7 @@ const DashboardPage: React.FC = () => {
         {/* Getting Started Card - shown if no locations */}
         {stats && stats.locations === 0 && (
           <div style={gettingStartedCard}>
-            <Icon icon={Rocket} size={28} color="#0d9488" />
+            <Icon icon={Rocket} size={28} color="#0b7a6d" />
             <div style={gettingStartedContent}>
               <h3 style={gettingStartedTitle}>Get Started</h3>
               <p style={gettingStartedText}>
@@ -375,7 +375,7 @@ const actionIconBox: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   flexShrink: 0,
-  background: 'rgba(20, 184, 166, 0.1)',
+  background: 'rgba(14, 143, 128, 0.1)',
 };
 
 const actionContent: React.CSSProperties = {
@@ -400,9 +400,9 @@ const gettingStartedCard: React.CSSProperties = {
   alignItems: 'flex-start',
   gap: '1.5rem',
   padding: '1.5rem',
-  background: 'rgba(20, 184, 166, 0.08)',
+  background: 'rgba(14, 143, 128, 0.08)',
   borderRadius: '1rem',
-  border: '1px solid rgba(20, 184, 166, 0.25)',
+  border: '1px solid rgba(14, 143, 128, 0.25)',
   marginBottom: '2rem',
 };
 
@@ -412,13 +412,13 @@ const gettingStartedContent: React.CSSProperties = {
 
 const gettingStartedTitle: React.CSSProperties = {
   fontWeight: 700,
-  color: '#0f766e',
+  color: '#0a655a',
   marginBottom: '0.5rem',
   fontSize: '1.125rem',
 };
 
 const gettingStartedText: React.CSSProperties = {
-  color: '#0d9488',
+  color: '#0b7a6d',
   fontSize: '0.9375rem',
   lineHeight: 1.5,
   marginBottom: '1rem',

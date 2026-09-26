@@ -860,7 +860,7 @@ const FlowDesignerPage: React.FC = () => {
             text-transform: uppercase;
             padding: 0.125rem 0.375rem;
             border-radius: 4px;
-            background: rgba(20, 184, 166, 0.1);
+            background: rgba(14, 143, 128, 0.1);
             color: var(--primary);
           }
 

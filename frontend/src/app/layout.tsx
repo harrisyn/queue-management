@@ -1,9 +1,15 @@
 import type { Metadata } from 'next';
-import { GeistSans } from 'geist/font/sans';
+import { Bricolage_Grotesque, Public_Sans } from 'next/font/google';
 import './globals.css';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { SubscriptionProvider } from '@/contexts/SubscriptionContext';
 import { APP_NAME } from '@/lib/appConfig';
+
+// Two families: Public Sans for UI/body (plain, highly legible - civic and
+// healthcare signage heritage) and Bricolage Grotesque for headlines and big
+// ticket numbers, where the type itself carries the personality.
+const bodyFont = Public_Sans({ subsets: ['latin'], variable: '--font-body', display: 'swap' });
+const displayFont = Bricolage_Grotesque({ subsets: ['latin'], variable: '--font-headline', display: 'swap', axes: ['opsz', 'wdth'] });
 
 export const metadata: Metadata = {
   title: APP_NAME,
@@ -16,7 +22,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={GeistSans.variable}>
+    <html lang="en" className={`${bodyFont.variable} ${displayFont.variable}`}>
       <body>
         {/*
           Cross-subdomain impersonation handoff. localStorage/sessionStorage
@@ -35,7 +41,12 @@ export default function RootLayout({
                 var params = new URLSearchParams(hash.slice(1));
                 var impersonateToken = params.get('impersonate');
                 var restoreToken = params.get('restore');
-                if (impersonateToken) {
+                var sessionToken = params.get('session');
+                if (sessionToken) {
+                  // New sign-up handed over from the root domain.
+                  localStorage.setItem('token', sessionToken);
+                  history.replaceState(null, '', window.location.pathname + window.location.search);
+                } else if (impersonateToken) {
                   var superToken = params.get('superToken') || '';
                   var orgId = params.get('orgId') || '';
                   var orgName = params.get('orgName') || '';

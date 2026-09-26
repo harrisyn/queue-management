@@ -46,7 +46,7 @@ const DEFAULT_IDENTITY_FIELDS: IdentityField[] = [
 ];
 
 const COLOR_PRESETS = [
-  { name: 'Teal', value: '#14b8a6' },
+  { name: 'Teal', value: '#0e8f80' },
   { name: 'Blue', value: '#2563eb' },
   { name: 'Purple', value: '#7c3aed' },
   { name: 'Orange', value: '#f97316' },
@@ -607,8 +607,8 @@ export default function AdminSettingsPage() {
                       key={mode.value}
                       style={{
                         ...displayModeOption,
-                        borderColor: displayMode === mode.value ? '#14b8a6' : '#e5e7eb',
-                        background: displayMode === mode.value ? 'rgba(20, 184, 166, 0.08)' : 'white',
+                        borderColor: displayMode === mode.value ? '#0e8f80' : '#e5e7eb',
+                        background: displayMode === mode.value ? 'rgba(14, 143, 128, 0.08)' : 'white',
                       }}
                     >
                       <input
@@ -708,7 +708,7 @@ export default function AdminSettingsPage() {
                       <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
                         <input
                           type="color"
-                          value={formData.primaryColor || '#14b8a6'}
+                          value={formData.primaryColor || '#0e8f80'}
                           onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
                           style={{ width: '48px', height: '40px', padding: '0.25rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}
                         />
@@ -716,7 +716,7 @@ export default function AdminSettingsPage() {
                           type="text"
                           value={formData.primaryColor}
                           onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
-                          placeholder="#14b8a6"
+                          placeholder="#0e8f80"
                           style={{ ...inputStyle, maxWidth: '160px' }}
                         />
                       </div>
@@ -918,7 +918,7 @@ const tabStyle: React.CSSProperties = {
 
 const activeTabStyle: React.CSSProperties = {
   ...tabStyle,
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
 };
 
@@ -954,7 +954,7 @@ const addFieldButton: React.CSSProperties = {
 const addButton: React.CSSProperties = {
   padding: '0.75rem 1rem',
   border: 'none',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   borderRadius: '0.5rem',
   cursor: 'pointer',
@@ -1065,7 +1065,7 @@ const saveButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
   borderRadius: '0.5rem',
   border: 'none',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
