@@ -1,5 +1,6 @@
 'use client';
 
+import QrCode from '@/components/QrCode';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useSearchParams } from 'next/navigation';
 import { LayoutGrid, Users, Sun, Moon, Volume2, VolumeX, Maximize, Minimize, ChevronLeft } from 'lucide-react';
@@ -534,8 +535,7 @@ export default function TVDisplayPage() {
           {joinUrl && (
             <div className={styles.join}>
               <span>Scan to join<br />the queue</span>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&margin=4&data=${encodeURIComponent(joinUrl)}`} alt="" />
+              <QrCode value={joinUrl} size={64} className={styles.joinQr} label="QR code to join the queue" />
             </div>
           )}
           <div className={styles.clock}>

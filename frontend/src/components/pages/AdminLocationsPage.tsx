@@ -221,7 +221,7 @@ export default function AdminLocationsPage() {
         <PageHeader
           icon={MapPin}
           title="Locations"
-          subtitle={subscriptionLoading ? 'Manage your physical locations and their public access codes' : `Manage your physical locations and their public access codes (${limits.locations.current}/${limits.locations.limit} used)`}
+          subtitle="Each place people come to. Every location gets its own join code, QR poster and lobby screen."
           actions={
             <button
               onClick={() => { resetForm(); setShowForm(true); }}

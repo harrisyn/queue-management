@@ -79,18 +79,16 @@ function formToAddOnOverridesPayload(form: AddOnOverrideForm) {
 }
 
 const defaultFeatures = [
-  { key: 'analytics', label: 'Analytics Dashboard' },
-  { key: 'ai', label: 'AI-assisted Analytics' },
-  { key: 'customBranding', label: 'Custom Branding' },
-  { key: 'customDomain', label: 'Custom Domain' },
-  { key: 'apiAccess', label: 'API Access' },
-  { key: 'smsNotifications', label: 'SMS Notifications' },
-  { key: 'emailNotifications', label: 'Email Notifications' },
-  { key: 'multipleLocations', label: 'Multiple Locations' },
-  { key: 'serviceFlows', label: 'Service Flows' },
-  { key: 'dataIntegration', label: 'Data Integration' },
-  { key: 'prioritySupport', label: 'Priority Support' },
-  { key: 'whiteLabel', label: 'White Label' },
+  // Keys must match what the server enforces (subscription.middleware.ts).
+  { key: 'analytics', label: 'Analytics' },
+  { key: 'ai', label: 'AI-assisted analytics' },
+  { key: 'multiLocation', label: 'More than one location' },
+  { key: 'servicePoints', label: 'Desks and rooms' },
+  { key: 'serviceFlows', label: 'Journeys between services' },
+  { key: 'smsNotifications', label: 'Text message alerts' },
+  { key: 'customBranding', label: 'Own logo and colour' },
+  { key: 'customDomain', label: 'Custom domain' },
+  { key: 'apiAccess', label: 'API and integrations' },
 ];
 
 export default function PlansPage() {
@@ -306,8 +304,8 @@ export default function PlansPage() {
   return (
     <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
       <PageHeader
-        title="Subscription Plans"
-        subtitle="Define pricing tiers and feature limits"
+        title="Plans"
+        subtitle="What each plan costs and includes."
         icon={CreditCard}
         actions={
           <Button variant="primary" onClick={openCreateModal}>

@@ -145,7 +145,7 @@ export default function OrganizationsPage() {
 
   return (
     <div style={pageContainer}>
-      <PageHeader title="Organizations" subtitle="Manage all organizations and their subscriptions" icon={Building2} />
+      <PageHeader title="Organizations" subtitle="Every workspace, its plan and its status." icon={Building2} />
 
       {/* Filters */}
       <div style={filtersContainer}>

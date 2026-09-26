@@ -267,7 +267,7 @@ const ServicesPage: React.FC = () => {
         <PageHeader
           icon={Layers}
           title="Services"
-          subtitle={subscriptionLoading ? 'Configure and manage your queue services' : `Configure and manage your queue services (${limits.services.current}/${limits.services.limit} used)`}
+          subtitle="What people queue for. Each service has its own queue, hours and ticket letter."
           actions={
             <button
               onClick={() => setShowWizard(true)}

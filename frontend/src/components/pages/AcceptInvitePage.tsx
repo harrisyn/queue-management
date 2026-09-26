@@ -26,7 +26,11 @@ export default function AcceptInvitePage({ code }: { code: string }) {
 
   useEffect(() => {
     api.previewInvite(code)
-      .then(setPreview)
+      .then((p) => {
+        setPreview(p);
+        // Invites sent by email arrive with the address already known.
+        if (p.email) setForm((f) => ({ ...f, email: f.email || p.email! }));
+      })
       .catch(() => setLoadError('This invite link is not valid. Check that you copied the whole link, or ask your admin for a new one.'));
   }, [code]);
 

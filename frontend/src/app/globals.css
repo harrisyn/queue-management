@@ -440,24 +440,15 @@ input::placeholder {
   flex-shrink: 0;
 }
 
-/* Buttons placed in header actions sit on the teal banner - keep them white for contrast */
-.page-header-actions .btn-primary {
-  background: white;
-  color: var(--primary);
-}
-
-.page-header-actions .btn-primary:hover {
-  background: rgba(255, 255, 255, 0.9);
-}
-
 .page-header-actions select {
-  padding: 0.5rem 1rem;
-  font-size: 0.9rem;
-  border: none;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.95);
-  color: var(--text);
+  padding: 0.5rem 2rem 0.5rem 0.875rem;
+  font-size: 0.9375rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 10px;
+  background-color: white;
+  color: var(--gray-800);
   min-width: 160px;
+  width: auto;
 }
 
 /* ========================================
@@ -1301,17 +1292,15 @@ input::placeholder {
 .data-table th {
   text-align: left;
   font-weight: 600;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-size: 0.8125rem;
   color: var(--gray-500);
-  padding: 0.75rem 1.25rem;
+  padding: 0.75rem 1rem;
   border-bottom: 1px solid var(--gray-200);
   white-space: nowrap;
 }
 
 .data-table td {
-  padding: 0.875rem 1.25rem;
+  padding: 0.875rem 1rem;
   border-bottom: 1px solid var(--gray-100);
   color: var(--gray-700);
   vertical-align: middle;
@@ -1859,3 +1848,11 @@ input::placeholder {
   .welcome-live { grid-template-columns: 1fr; }
   .welcome-actions { grid-template-columns: 1fr; }
 }
+
+.upgrade-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem; flex-wrap: wrap;
+  margin: 0 0 1.25rem; padding: 0.75rem 1rem; border-radius: 12px;
+  background: var(--amber-50); color: #6b4300; font-size: 0.9375rem;
+}
+.upgrade-note a { font-weight: 600; color: #6b4300; text-decoration: underline; text-underline-offset: 2px; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

@@ -1,5 +1,6 @@
 'use client';
 
+import QrCode from '@/components/QrCode';
 import React, { useState, useEffect, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { useSocket } from '@/hooks/useSocket';
@@ -725,11 +726,7 @@ export default function QueueStatusPage({
               <h3 style={qrTitle}>Share Your Ticket</h3>
               <p style={qrSubtitle}>Scan this QR code to view ticket status</p>
               <div style={qrCodeContainer}>
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
-                  alt="QR Code"
-                  style={qrImage}
-                />
+                <QrCode value={typeof window !== 'undefined' ? window.location.href : ''} size={200} label="QR code for this ticket" />
               </div>
               <div style={qrTicketInfo}>
                 <span style={{ ...qrTicketLabel, color: brandColor }}>Ticket #{status.ticketNumber}</span>

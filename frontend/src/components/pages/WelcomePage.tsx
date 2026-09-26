@@ -1,5 +1,6 @@
 'use client';
 
+import QrCode from '@/components/QrCode';
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Check, Loader2, Plus, Printer, MonitorPlay, Smartphone, UserPlus, X } from 'lucide-react';
@@ -132,8 +133,7 @@ export default function WelcomePage() {
             </Link>
           </div>
           <figure className="welcome-qr">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`https://api.qrserver.com/v1/create-qr-code/?size=320x320&margin=10&data=${encodeURIComponent(joinUrl)}`} alt={`QR code linking to ${joinUrl}`} />
+            <QrCode value={joinUrl} size={240} label={`QR code linking to ${joinUrl}`} />
             <figcaption>{joinUrl.replace(/^https?:\/\//, '')}</figcaption>
           </figure>
         </div>

@@ -178,3 +178,24 @@ export const sendNotificationEmail = async (email: string, heading: string, mess
     text: message,
   });
 };
+
+export const sendInviteEmail = async (email: string, opts: { inviteUrl: string; orgName: string; inviterName: string; roleLabel: string }) => {
+  const heading = `Join ${opts.orgName}`;
+  const html = emailLayout(
+    heading,
+    paragraph(`${escapeHtml(opts.inviterName)} has invited you to ${escapeHtml(opts.orgName)} as ${escapeHtml(opts.roleLabel)}.`) +
+      button(opts.inviteUrl, 'Accept the invite') +
+      paragraph('The link expires in 7 days. If you weren’t expecting this, you can ignore it.'),
+    opts.orgName
+  );
+  return sendEmail({
+    to: email,
+    subject: `${opts.inviterName} invited you to ${opts.orgName}`,
+    html,
+    text: `${opts.inviterName} has invited you to ${opts.orgName} as ${opts.roleLabel}.
+
+Accept: ${opts.inviteUrl}
+
+The link expires in 7 days.`,
+  });
+};

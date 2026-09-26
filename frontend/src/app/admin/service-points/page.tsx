@@ -181,8 +181,8 @@ const ServicePointsPage: React.FC = () => {
       <div className="service-points-page">
         <PageHeader
           icon={Building2}
-          title="Service Points"
-          subtitle="Manage reception desks, consultation rooms, and more"
+          title="Desks & rooms"
+          subtitle="Where staff sit to call people: counters, desks and rooms. Link each to the services it handles."
           actions={
             <div className="header-actions">
               <button className="add-btn" onClick={() => handleOpenModal()}>

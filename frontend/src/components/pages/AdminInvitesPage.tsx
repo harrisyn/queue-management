@@ -1,523 +1,215 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { ClipboardList, Mail, Check, Link2, Copy } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Copy, Mail, Send, Trash2, UserPlus } from 'lucide-react';
 import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { useSubscription, UpgradePrompt } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
-import { Icon, PageHeader } from '@/components/ui';
+import { Button, PageHeader } from '@/components/ui';
 
-type Invite = {
-  id: string;
-  code: string;
-  role: string;
-  organizationId?: string | null;
-  used: boolean;
-  expiresAt?: string | null;
-  createdAt: string;
-  createdBy?: string | null;
-  // Additional fields for invitee details
-  inviteeEmail?: string;
-  inviteeName?: string;
+/**
+ * The team: who has access and what they can do, plus invites waiting to
+ * be accepted. Invites go by email, or as a link to share another way.
+ */
+
+interface Member { id: string; email: string; firstName: string; lastName: string; role: string; isActive: boolean }
+interface Invite { id: string; code: string; role: string; email?: string | null; used: boolean; expiresAt: string | null; createdAt: string }
+
+const ROLES = [
+  { id: 'SERVICE_STAFF', label: 'Staff', hint: 'Signs in to a desk and calls people.' },
+  { id: 'RECEPTIONIST', label: 'Receptionist', hint: 'Adds people to queues, books and checks in appointments.' },
+  { id: 'LOCATION_ADMIN', label: 'Location admin', hint: 'Runs services and desks.' },
+  { id: 'ORG_ADMIN', label: 'Admin', hint: 'Everything, including billing and settings.' },
+];
+const ASSIGNABLE: Record<string, string[]> = {
+  SUPER_ADMIN: ['ORG_ADMIN', 'LOCATION_ADMIN', 'SERVICE_STAFF', 'RECEPTIONIST'],
+  ORG_ADMIN: ['ORG_ADMIN', 'LOCATION_ADMIN', 'SERVICE_STAFF', 'RECEPTIONIST'],
+  LOCATION_ADMIN: ['SERVICE_STAFF', 'RECEPTIONIST'],
 };
+const roleLabel = (id: string) => ROLES.find((r) => r.id === id)?.label || id.toLowerCase().replace('_', ' ');
 
-const AdminInvitesPage: React.FC = () => {
-  const { user, isAdmin } = useAuthContext();
+function errorText(err: unknown, fallback: string) {
+  const e = err as { response?: { data?: { error?: string } } };
+  return e?.response?.data?.error || fallback;
+}
+
+export default function AdminInvitesPage() {
+  const { user } = useAuthContext();
+  const { limits, refresh } = useSubscription();
+  const [members, setMembers] = useState<Member[] | null>(null);
   const [invites, setInvites] = useState<Invite[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showForm, setShowForm] = useState(false);
-  const [copiedCode, setCopiedCode] = useState<string | null>(null);
-  
-  // Form state
-  const [formData, setFormData] = useState({
-    role: 'SERVICE_STAFF',
-    expiresAt: '',
-    inviteeEmail: '',
-    inviteeName: '',
-  });
+  const [email, setEmail] = useState('');
+  const [role, setRole] = useState('SERVICE_STAFF');
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ tone: 'ok' | 'bad'; text: string } | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (isAdmin) {
-      loadInvites();
-    } else {
-      setLoading(false);
-    }
-  }, [isAdmin]);
+  const assignable = ASSIGNABLE[user?.role || ''] || [];
+  const canManage = user?.role === 'ORG_ADMIN' || user?.role === 'SUPER_ADMIN';
 
-  const loadInvites = async () => {
-    setLoading(true);
-    try {
-      const data = await api.getInvites();
-      setInvites(data);
-    } catch { /* ignore */ }
-    finally {
-      setLoading(false);
-    }
+  const load = () => {
+    if (!user?.organizationId) return;
+    api.getUsers({ organizationId: user.organizationId })
+      .then((list: Member[]) => setMembers(list.filter((m) => m.role !== 'PATIENT')))
+      .catch(() => setMembers([]));
+    if (canManage) api.getInvites().then(setInvites).catch(() => setInvites([]));
   };
+  useEffect(load, [user?.organizationId, canManage]);
 
-  const handleCreate = async (e: React.FormEvent) => {
+  const pending = useMemo(
+    () => invites.filter((i) => !i.used && (!i.expiresAt || new Date(i.expiresAt).getTime() > Date.now())),
+    [invites]
+  );
+  const atSeatLimit = limits.users.limit !== null && limits.users.current + pending.length >= limits.users.limit;
+
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const linkFor = (inv: Invite) => `${origin}/register?invite=${inv.code}`;
+  const copy = (inv: Invite) => navigator.clipboard.writeText(linkFor(inv)).then(() => { setCopied(inv.id); setTimeout(() => setCopied(null), 1500); });
+
+  const invite = async (e: React.FormEvent, byLink = false) => {
     e.preventDefault();
+    setBusy(true);
+    setMessage(null);
     try {
-      const payload: any = { role: formData.role };
-      if (formData.expiresAt) payload.expiresAt = formData.expiresAt;
-      if (user?.organizationId) payload.organizationId = user.organizationId;
-      
-      const res = await api.createInvite(payload);
-      setInvites(prev => [res.invite, ...prev]);
-      setShowForm(false);
-      resetForm();
-      
-      // Auto-copy the new code
-      if (res.invite.code) {
-        copyToClipboard(res.invite.code);
+      const res = await api.createInvite({ role, email: byLink ? undefined : email.trim() || undefined, organizationId: user?.organizationId });
+      setInvites((list) => [res.invite, ...list]);
+      if (byLink || !email.trim()) {
+        await navigator.clipboard.writeText(linkFor(res.invite)).catch(() => {});
+        setMessage({ tone: 'ok', text: 'Invite link copied. Send it however you like; it works once and expires in 7 days.' });
+      } else {
+        setMessage(res.emailed
+          ? { tone: 'ok', text: `Invite sent to ${email.trim()}.` }
+          : { tone: 'bad', text: 'The invite was created but the email didn’t send. Copy the link from the list below instead.' });
+        setEmail('');
       }
-    } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to create invite');
+    } catch (err) {
+      setMessage({ tone: 'bad', text: errorText(err, 'Couldn’t create the invite.') });
+    } finally {
+      setBusy(false);
     }
   };
 
-  const copyToClipboard = async (code: string) => {
+  const revoke = async (inv: Invite) => {
+    if (!window.confirm(`Cancel the invite${inv.email ? ` for ${inv.email}` : ''}? The link will stop working.`)) return;
     try {
-      await navigator.clipboard.writeText(code);
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode(null), 2000);
-    } catch { /* ignore */ }
+      await api.revokeInvite(inv.id);
+      setInvites((list) => list.filter((i) => i.id !== inv.id));
+    } catch (err) {
+      setMessage({ tone: 'bad', text: errorText(err, 'Couldn’t cancel it.') });
+    }
   };
 
-  const copyInviteLink = async (code: string) => {
-    const link = `${window.location.origin}/register?invite=${code}`;
+  const change = async (m: Member, patch: { role?: string; isActive?: boolean }) => {
+    if (patch.isActive === false && !window.confirm(`Remove ${m.firstName}’s access? They won’t be able to sign in. You can restore it later.`)) return;
+    const before = members;
+    setMembers((list) => list?.map((x) => (x.id === m.id ? { ...x, ...patch } : x)) || null);
     try {
-      await navigator.clipboard.writeText(link);
-      setCopiedCode(code);
-      setTimeout(() => setCopiedCode(null), 2000);
-    } catch { /* ignore */ }
+      await api.updateUser(m.id, patch);
+      refresh?.();
+    } catch (err) {
+      setMembers(before);
+      setMessage({ tone: 'bad', text: errorText(err, 'That change didn’t save.') });
+    }
   };
 
-  const resetForm = () => {
-    setFormData({
-      role: 'SERVICE_STAFF',
-      expiresAt: '',
-      inviteeEmail: '',
-      inviteeName: '',
-    });
-  };
-
-  const getRoleLabel = (role: string) => {
-    const labels: Record<string, string> = {
-      SERVICE_STAFF: 'Service Staff',
-      RECEPTIONIST: 'Receptionist',
-      LOCATION_ADMIN: 'Location Admin',
-      ORG_ADMIN: 'Organization Admin',
-    };
-    return labels[role] || role.replace('_', ' ');
-  };
-
-  const getRoleBadgeColor = (role: string) => {
-    const colors: Record<string, { bg: string; text: string }> = {
-      SERVICE_STAFF: { bg: '#dbeafe', text: '#1d4ed8' },
-      RECEPTIONIST: { bg: '#f3e8ff', text: '#7c3aed' },
-      LOCATION_ADMIN: { bg: '#d1fae5', text: '#059669' },
-      ORG_ADMIN: { bg: '#fee2e2', text: '#dc2626' },
-    };
-    return colors[role] || { bg: '#f3f4f6', text: '#374151' };
-  };
-
-  if (!isAdmin) {
-    return (
-      <Layout>
-        <div style={{ padding: 20 }}>Admins only</div>
-      </Layout>
-    );
-  }
+  const active = (members || []).filter((m) => m.isActive);
+  const inactive = (members || []).filter((m) => !m.isActive);
 
   return (
     <Layout>
-      <div>
-        <PageHeader
-          icon={Mail}
-          title="Staff Invites"
-          subtitle="Create invite codes for operators and staff to join your organization."
-          actions={
-            <button onClick={() => setShowForm(true)} style={addButton}>
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z" clipRule="evenodd" />
-              </svg>
-              Create Invite
-            </button>
-          }
-        />
+      <PageHeader title="Staff" subtitle="Who can sign in, and what they can do." />
 
-        {/* How it works */}
-        <div style={howItWorksCard}>
-          <h3 style={{ fontWeight: 600, color: '#111827', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            <Icon icon={ClipboardList} size={20} color="#0e8f80" />
-            How Invites Work
-          </h3>
-          <ol style={{ margin: 0, paddingLeft: '1.5rem', color: '#4b5563', fontSize: '0.9375rem', lineHeight: 1.8 }}>
-            <li>Create an invite with the desired role for the new staff member</li>
-            <li>Share the invite code or registration link with them</li>
-            <li>They register at <code style={codeInline}>/register</code> using the invite code</li>
-            <li>Once used, the invite is marked as consumed and cannot be reused</li>
-          </ol>
-        </div>
-
-        {/* Create Form Modal */}
-        {showForm && (
-          <div style={modalOverlay} onClick={() => setShowForm(false)}>
-            <div style={modalContent} onClick={e => e.stopPropagation()}>
-              <div style={modalHeader}>
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827' }}>Create New Invite</h2>
-                <button onClick={() => setShowForm(false)} style={closeButton}>×</button>
+      {canManage && (
+        <section className="panel staff-invite">
+          <h2><UserPlus size={18} /> Invite someone</h2>
+          {atSeatLimit ? <UpgradePrompt resource="users" /> : (
+            <form onSubmit={(e) => invite(e)}>
+              <label className="settings-field staff-email">
+                <span>Email</span>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@yourteam.com" />
+              </label>
+              <label className="settings-field">
+                <span>Role</span>
+                <select value={role} onChange={(e) => setRole(e.target.value)}>
+                  {ROLES.filter((r) => assignable.includes(r.id)).map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                </select>
+              </label>
+              <div className="staff-invite-actions">
+                <Button type="submit" disabled={busy || !email.trim()}><Send size={16} /> Send invite</Button>
+                <Button type="button" variant="ghost" disabled={busy} onClick={(e) => invite(e as unknown as React.FormEvent, true)}><Copy size={16} /> Copy a link instead</Button>
               </div>
-              <form onSubmit={handleCreate}>
-                <div style={formGrid}>
-                  <div style={formField}>
-                    <label style={labelStyle}>Role *</label>
-                    <select
-                      value={formData.role}
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value })}
-                      style={selectStyle}
-                    >
-                      <option value="SERVICE_STAFF">Service Staff</option>
-                      <option value="RECEPTIONIST">Receptionist</option>
-                      <option value="LOCATION_ADMIN">Location Admin</option>
-                      <option value="ORG_ADMIN">Organization Admin</option>
-                    </select>
-                    <p style={helpText}>
-                      {formData.role === 'SERVICE_STAFF' && 'Can manage queues and serve customers'}
-                      {formData.role === 'RECEPTIONIST' && 'Can check in appointments and manage queues'}
-                      {formData.role === 'LOCATION_ADMIN' && 'Can manage a specific location and its services'}
-                      {formData.role === 'ORG_ADMIN' && 'Full access to organization settings'}
-                    </p>
-                  </div>
+              <p className="staff-role-hint">{ROLES.find((r) => r.id === role)?.hint}</p>
+            </form>
+          )}
+          {message && <p className={message.tone === 'bad' ? 'desk-msg desk-msg-bad' : 'desk-msg'} role="status">{message.text}</p>}
+        </section>
+      )}
 
-                  <div style={formField}>
-                    <label style={labelStyle}>Expires At (optional)</label>
-                    <input
-                      type="datetime-local"
-                      value={formData.expiresAt}
-                      onChange={(e) => setFormData({ ...formData, expiresAt: e.target.value })}
-                      style={inputStyle}
-                    />
-                    <p style={helpText}>Leave empty for no expiration</p>
-                  </div>
-
-                  <div style={formField}>
-                    <label style={labelStyle}>Invitee Name (optional)</label>
-                    <input
-                      type="text"
-                      value={formData.inviteeName}
-                      onChange={(e) => setFormData({ ...formData, inviteeName: e.target.value })}
-                      placeholder="John Doe"
-                      style={inputStyle}
-                    />
-                    <p style={helpText}>For your reference only</p>
-                  </div>
-
-                  <div style={formField}>
-                    <label style={labelStyle}>Invitee Email (optional)</label>
-                    <input
-                      type="email"
-                      value={formData.inviteeEmail}
-                      onChange={(e) => setFormData({ ...formData, inviteeEmail: e.target.value })}
-                      placeholder="john@example.com"
-                      style={inputStyle}
-                    />
-                    <p style={helpText}>For your reference only</p>
-                  </div>
+      {canManage && pending.length > 0 && (
+        <section className="panel staff-section">
+          <h2>Waiting to accept</h2>
+          <ul className="staff-list">
+            {pending.map((inv) => (
+              <li key={inv.id}>
+                <span className="staff-avatar staff-avatar-pending"><Mail size={15} /></span>
+                <div className="staff-who">
+                  <strong>{inv.email || 'Invite link'}</strong>
+                  <small>{roleLabel(inv.role)} · expires {inv.expiresAt ? new Date(inv.expiresAt).toLocaleDateString([], { day: 'numeric', month: 'short' }) : 'never'}</small>
                 </div>
-
-                <div style={formActions}>
-                  <button type="button" onClick={() => setShowForm(false)} style={cancelButton}>
-                    Cancel
-                  </button>
-                  <button type="submit" style={submitButton}>
-                    Create Invite
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        )}
-
-        {/* Invites List */}
-        {loading ? (
-          <div style={{ padding: '3rem', textAlign: 'center' }}>
-            <div className="spinner" />
-          </div>
-        ) : invites.length === 0 ? (
-          <div style={emptyState}>
-            <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-              <Icon icon={Mail} size={48} color="#0e8f80" strokeWidth={1.5} />
-            </div>
-            <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>
-              No invites yet
-            </h3>
-            <p style={{ color: '#6b7280', marginBottom: '1rem' }}>
-              Create your first invite to add staff members to your organization.
-            </p>
-            <button onClick={() => setShowForm(true)} style={submitButton}>
-              Create First Invite
-            </button>
-          </div>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {invites.map(invite => (
-              <div key={invite.id} style={inviteCard}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
-                    <code style={codeStyle}>{invite.code}</code>
-                    <span style={{
-                      ...roleBadge,
-                      background: getRoleBadgeColor(invite.role).bg,
-                      color: getRoleBadgeColor(invite.role).text,
-                    }}>
-                      {getRoleLabel(invite.role)}
-                    </span>
-                    {invite.used ? (
-                      <span style={usedBadge}><Icon icon={Check} size={12} /> Used</span>
-                    ) : (
-                      <span style={availableBadge}>Available</span>
-                    )}
-                  </div>
-                  <div style={{ color: '#6b7280', fontSize: '0.8125rem' }}>
-                    Created {new Date(invite.createdAt).toLocaleDateString()}
-                    {invite.expiresAt && ` • Expires ${new Date(invite.expiresAt).toLocaleDateString()}`}
-                  </div>
-                </div>
-                
-                {!invite.used && (
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <button
-                      onClick={() => copyToClipboard(invite.code)}
-                      style={actionButton}
-                      title="Copy code"
-                    >
-                      <Icon icon={copiedCode === invite.code ? Check : Copy} size={16} />
-                    </button>
-                    <button
-                      onClick={() => copyInviteLink(invite.code)}
-                      style={actionButton}
-                      title="Copy registration link"
-                    >
-                      <Icon icon={Link2} size={16} />
-                    </button>
-                  </div>
-                )}
-              </div>
+                <Button variant="secondary" size="sm" onClick={() => copy(inv)}><Copy size={14} /> {copied === inv.id ? 'Copied' : 'Copy link'}</Button>
+                <button type="button" className="settings-remove" onClick={() => revoke(inv)} aria-label="Cancel invite"><Trash2 size={16} /></button>
+              </li>
             ))}
-          </div>
+          </ul>
+        </section>
+      )}
+
+      <section className="panel staff-section">
+        <div className="today-panel-head">
+          <h2>Team</h2>
+          {limits.users.limit !== null && <span className="muted">{limits.users.current} of {limits.users.limit} seats</span>}
+        </div>
+        {members === null ? <div className="spinner" /> : (
+          <ul className="staff-list">
+            {active.map((m) => {
+              const self = m.id === user?.id;
+              const editable = canManage && !self && assignable.includes(m.role);
+              return (
+                <li key={m.id}>
+                  <span className="staff-avatar">{m.firstName?.[0]}{m.lastName?.[0]}</span>
+                  <div className="staff-who">
+                    <strong>{m.firstName} {m.lastName}{self && <em> (you)</em>}</strong>
+                    <small>{m.email}</small>
+                  </div>
+                  {editable ? (
+                    <select value={m.role} onChange={(e) => change(m, { role: e.target.value })} aria-label={`Role for ${m.firstName}`}>
+                      {ROLES.filter((r) => assignable.includes(r.id)).map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+                    </select>
+                  ) : <span className="staff-role">{roleLabel(m.role)}</span>}
+                  {editable ? (
+                    <button type="button" className="settings-remove" onClick={() => change(m, { isActive: false })} aria-label={`Remove ${m.firstName}'s access`} title="Remove access"><Trash2 size={16} /></button>
+                  ) : <span className="staff-spacer" />}
+                </li>
+              );
+            })}
+          </ul>
         )}
-      </div>
+        {canManage && inactive.length > 0 && (
+          <details className="staff-inactive">
+            <summary>{inactive.length} without access</summary>
+            <ul className="staff-list">
+              {inactive.map((m) => (
+                <li key={m.id}>
+                  <span className="staff-avatar staff-avatar-pending">{m.firstName?.[0]}{m.lastName?.[0]}</span>
+                  <div className="staff-who"><strong>{m.firstName} {m.lastName}</strong><small>{m.email}</small></div>
+                  <Button variant="secondary" size="sm" onClick={() => change(m, { isActive: true })}>Restore access</Button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </section>
     </Layout>
   );
-};
-
-// Styles
-const addButton: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.5rem',
-  padding: '0.75rem 1.25rem',
-  background: 'white',
-  color: '#0e8f80',
-  borderRadius: '0.75rem',
-  border: 'none',
-  fontWeight: 600,
-  fontSize: '0.9375rem',
-  cursor: 'pointer',
-  boxShadow: '0 4px 14px rgba(0, 0, 0, 0.15)',
-};
-
-const howItWorksCard: React.CSSProperties = {
-  background: '#f0f9ff',
-  border: '1px solid #bae6fd',
-  borderRadius: '0.75rem',
-  padding: '1.25rem',
-  marginBottom: '1.5rem',
-};
-
-const codeInline: React.CSSProperties = {
-  background: '#e0f2fe',
-  padding: '0.125rem 0.375rem',
-  borderRadius: '0.25rem',
-  fontSize: '0.875rem',
-  fontFamily: 'monospace',
-};
-
-const modalOverlay: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0, 0, 0, 0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 100,
-  padding: '1rem',
-};
-
-const modalContent: React.CSSProperties = {
-  background: 'white',
-  borderRadius: '1rem',
-  padding: '1.5rem',
-  maxWidth: '500px',
-  width: '100%',
-  maxHeight: '90vh',
-  overflow: 'auto',
-};
-
-const modalHeader: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '1.5rem',
-};
-
-const closeButton: React.CSSProperties = {
-  background: 'none',
-  border: 'none',
-  fontSize: '1.5rem',
-  color: '#9ca3af',
-  cursor: 'pointer',
-  padding: '0.25rem',
-};
-
-const formGrid: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '1rem',
-};
-
-const formField: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.375rem',
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  color: '#374151',
-};
-
-const selectStyle: React.CSSProperties = {
-  padding: '0.75rem 1rem',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-  fontSize: '0.9375rem',
-  background: '#f9fafb',
-  color: '#111827',
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: '0.75rem 1rem',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-  fontSize: '0.9375rem',
-  background: '#f9fafb',
-  color: '#111827',
-};
-
-const helpText: React.CSSProperties = {
-  fontSize: '0.75rem',
-  color: '#9ca3af',
-};
-
-const formActions: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'flex-end',
-  gap: '0.75rem',
-  marginTop: '1.5rem',
-};
-
-const cancelButton: React.CSSProperties = {
-  padding: '0.625rem 1.25rem',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-  background: 'white',
-  color: '#374151',
-  fontWeight: 500,
-  cursor: 'pointer',
-};
-
-const submitButton: React.CSSProperties = {
-  padding: '0.625rem 1.25rem',
-  borderRadius: '0.5rem',
-  border: 'none',
-  background: '#0e8f80',
-  color: 'white',
-  fontWeight: 600,
-  cursor: 'pointer',
-};
-
-const emptyState: React.CSSProperties = {
-  textAlign: 'center',
-  padding: '3rem',
-  background: 'white',
-  borderRadius: '1rem',
-  border: '1px solid #e5e7eb',
-};
-
-const inviteCard: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  padding: '1rem 1.25rem',
-  background: 'white',
-  borderRadius: '0.75rem',
-  border: '1px solid #e5e7eb',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.05)',
-};
-
-const codeStyle: React.CSSProperties = {
-  background: '#f3f4f6',
-  padding: '0.375rem 0.625rem',
-  borderRadius: '0.375rem',
-  fontFamily: 'monospace',
-  fontSize: '0.9375rem',
-  fontWeight: 600,
-  color: '#111827',
-};
-
-const roleBadge: React.CSSProperties = {
-  padding: '0.25rem 0.5rem',
-  borderRadius: '0.375rem',
-  fontSize: '0.75rem',
-  fontWeight: 500,
-};
-
-const usedBadge: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: '0.25rem',
-  padding: '0.25rem 0.5rem',
-  borderRadius: '0.375rem',
-  fontSize: '0.75rem',
-  fontWeight: 500,
-  background: '#f3f4f6',
-  color: '#6b7280',
-};
-
-const availableBadge: React.CSSProperties = {
-  padding: '0.25rem 0.5rem',
-  borderRadius: '0.375rem',
-  fontSize: '0.75rem',
-  fontWeight: 500,
-  background: '#dcfce7',
-  color: '#166534',
-};
-
-const actionButton: React.CSSProperties = {
-  width: '36px',
-  height: '36px',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-  background: 'white',
-  cursor: 'pointer',
-  fontSize: '1rem',
-};
-
-export default AdminInvitesPage;
+}

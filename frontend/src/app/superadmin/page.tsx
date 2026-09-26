@@ -79,7 +79,7 @@ export default function SuperadminDashboard() {
 
   return (
     <div style={pageContainer}>
-      <PageHeader title="SuperAdmin Dashboard" subtitle="System-wide overview and management" icon={LayoutDashboard} />
+      <PageHeader title="Platform overview" subtitle="Every organization on the platform, at a glance." icon={LayoutDashboard} />
 
       {/* Stats Grid */}
       <div style={statsGrid}>

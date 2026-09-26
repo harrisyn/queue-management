@@ -192,7 +192,7 @@ export const loadSubscription = async (req: Request, res: Response, next: NextFu
       status: subscription.status,
       features: {
         ...DEFAULT_FEATURES,
-        ...(subscription.plan.features as SubscriptionFeatures),
+        ...normalizePlanFeatures(subscription.plan.features),
       },
     };
 
@@ -468,9 +468,31 @@ export const getOrganizationFeatures = async (organizationId: string): Promise<S
 
   return {
     ...DEFAULT_FEATURES,
-    ...(subscription.plan.features as SubscriptionFeatures),
+    ...normalizePlanFeatures(subscription.plan.features),
   };
 };
+
+// Older plans were saved by an editor that used different keys than the
+// ones enforced here; read those as their enforced equivalents.
+const LEGACY_FEATURE_KEYS: Record<string, keyof SubscriptionFeatures> = {
+  multipleLocations: 'multiLocation',
+  whiteLabel: 'customBranding',
+  dataIntegration: 'apiAccess',
+};
+
+export function normalizePlanFeatures(raw: unknown): SubscriptionFeatures {
+  const src = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(src)) {
+    const target = LEGACY_FEATURE_KEYS[key];
+    if (target) {
+      if (value === true) out[target] = true;
+    } else {
+      out[key] = value;
+    }
+  }
+  return out as SubscriptionFeatures;
+}
 
 /**
  * Endpoint to get current user's subscription info
@@ -524,7 +546,7 @@ export const getMySubscription = async (req: Request, res: Response) => {
 
     const isExpiredNoFallback = subscription?.status === 'EXPIRED';
     const isUsable = subscription && (subscription.status === 'ACTIVE' || subscription.status === 'TRIAL');
-    const features = (isUsable ? subscription!.plan.features : {}) as SubscriptionFeatures;
+    const features = normalizePlanFeatures(isUsable ? subscription!.plan.features : {});
     const mergedFeatures = isExpiredNoFallback ? {} : { ...DEFAULT_FEATURES, ...features };
     // Limit numbers come from the plan's dedicated columns, not the features
     // JSON blob (nothing populates maxLocations/etc there). An unusable

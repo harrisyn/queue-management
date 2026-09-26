@@ -72,7 +72,7 @@ export default function AuditLogPage() {
     <Layout>
       <PageHeader
         icon={ScrollText}
-        title="Audit Log"
+        title="Audit log"
         subtitle="Every queue movement, transfer and appointment change, with who did it."
       />
 

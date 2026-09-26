@@ -96,7 +96,7 @@ export default function AiProvidersPage() {
   return (
     <div style={{ maxWidth: '900px', margin: '0 auto' }}>
       <PageHeader
-        title="AI Providers"
+        title="AI providers"
         subtitle="Choose which LLM powers AI-assisted analytics. Only one provider is active at a time; tenants must also have the AI feature in their plan and switch it on."
         icon={Sparkles}
       />

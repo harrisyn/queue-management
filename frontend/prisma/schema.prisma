@@ -427,6 +427,7 @@ model Invite {
   organizationId String?
   createdBy     String?
   used          Boolean   @default(false)
+  email         String?   // who it was sent to, if sent by email
   expiresAt     DateTime?
   createdAt     DateTime  @default(now())
 

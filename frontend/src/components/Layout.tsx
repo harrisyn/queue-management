@@ -102,7 +102,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     {
       label: 'Today',
       items: [
-        { href: '/', label: 'Dashboard', icon: LayoutDashboard, show: true },
+        { href: '/', label: 'Overview', icon: LayoutDashboard, show: true },
         { href: '/queues', label: 'My desk', icon: ListOrdered, show: isStaff },
         { href: '/appointments', label: 'Appointments', icon: CalendarDays, show: isStaff },
       ],
@@ -128,7 +128,7 @@ const Layout: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     {
       label: 'Organization',
       items: [
-        { href: '/admin/invites', label: 'Staff invites', icon: UserPlus, show: isAdmin },
+        { href: '/admin/invites', label: 'Staff', icon: UserPlus, show: isAdmin },
         { href: '/admin/data-sources', label: 'Data sources', icon: Database, show: isAdmin },
         { href: '/admin/integrations', label: 'Integrations', icon: Plug, show: isOrgAdmin },
         { href: '/admin/settings', label: 'Settings', icon: Settings, show: isAdmin },

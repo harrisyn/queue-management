@@ -334,8 +334,8 @@ export default function AdminDataSourcesPage() {
       <div className="page-container">
         <PageHeader
           icon={Database}
-          title="Data Sources"
-          subtitle="Connect external systems (EMR, EHR, databases) to enrich customer data"
+          title="Data sources"
+          subtitle="Look people up in your own systems (records, CRM, databases) from the desk."
           actions={
             <button className="btn-primary" onClick={() => setShowForm(true)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

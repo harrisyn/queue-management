@@ -1,453 +1,254 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import {
-  ClipboardList,
-  Settings,
-  MapPin,
-  Mail,
-  Building2,
-  BarChart3,
-  CheckCircle2,
-  AlertTriangle,
-  Lightbulb,
-  Rocket,
-  QrCode,
-  ChevronRight,
-} from 'lucide-react';
-import { useAuthContext } from '@/contexts/AuthContext';
+import { Check, Circle, X } from 'lucide-react';
 import api from '@/api/client';
+import type { Appointment } from '@/api/client';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { useSubscription } from '@/contexts/SubscriptionContext';
+import { useSocket } from '@/hooks/useSocket';
+import { useTerms } from '@/hooks/useTerms';
 import Layout from '@/components/Layout';
-import { Icon, PageHeader, UsageBar } from '@/components/ui';
+import { PageHeader } from '@/components/ui';
+import WaitAlerts from '@/components/ai/WaitAlerts';
+import type { DeskInstance } from '@/components/desk/useDesk';
+import { deskLabel } from '@/components/desk/useDesk';
 
-interface Stats {
-  locations: number;
-  services: number;
-  activeQueues: number;
-  todayServed: number;
+/**
+ * Today at a location: who's waiting, how long for, who's at which desk,
+ * and what's booked. The first thing staff see after signing in.
+ */
+
+interface LocationRow { id: string; name: string; publicCode?: string | null }
+
+interface ServiceMetric {
+  serviceId: string;
+  serviceName: string;
+  counts: { total: number; served: number; waiting: number; serving: number; noShows: number };
+  waitTime: { average: number; longest: number };
 }
 
-interface Organization {
-  id: string;
-  name: string;
-  slug?: string;
-  email?: string;
+interface Detailed {
+  services: ServiceMetric[];
+  totals: { total: number; served: number; waiting: number; serving: number; noShows: number };
+  longestCurrentWait: number;
 }
 
-interface UsageLimit {
-  current: number;
-  limit: number | null;
-  allowed: boolean;
-}
+type DeskRow = DeskInstance & { currentlyServing?: { ticketNumber: string; customerName: string } | null };
 
-interface SubscriptionLimits {
-  locations: UsageLimit;
-  services: UsageLimit;
-  users: UsageLimit;
-  queueEntriesDaily: UsageLimit;
-  queueEntriesPeriod: UsageLimit;
-}
+const mins = (n: number) => (n >= 60 ? `${Math.floor(n / 60)}h ${n % 60}m` : `${n} min`);
+const LOC_KEY = 'qms_dashboard_location';
+const CHECKLIST_KEY = 'qms_setup_dismissed';
 
-const DashboardPage: React.FC = () => {
-  const { user, isAdmin, isStaff } = useAuthContext();
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [organization, setOrganization] = useState<Organization | null>(null);
-  const [limits, setLimits] = useState<SubscriptionLimits | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+function SetupChecklist({ location, terms }: { location: LocationRow; terms: ReturnType<typeof useTerms> }) {
+  const { limits } = useSubscription();
+  const [status, setStatus] = useState<{ desks: number; entries: number } | null>(null);
+  const [printed, setPrinted] = useState(false);
+  const [dismissed, setDismissed] = useState(true);
 
   useEffect(() => {
-    loadDashboard();
-  }, [user]);
-
-  const loadDashboard = async () => {
     try {
-      setLoading(true);
-      setError('');
+      setDismissed(localStorage.getItem(CHECKLIST_KEY) === '1');
+      setPrinted(localStorage.getItem('qms_setup_printed') === '1');
+    } catch { setDismissed(false); }
+    api.getOnboardingStatus().then(setStatus).catch(() => {});
+  }, []);
 
-      // Get organization info for the logged-in user
-      if (user?.organizationId) {
-        const org = await api.getOrganization(user.organizationId);
-        setOrganization(org);
-
-        // Get real stats
-        const statsData = await api.getDashboardStats(user.organizationId);
-        setStats(statsData);
-
-        const subData = await api.getMySubscription();
-        if (subData.limits) setLimits(subData.limits);
-      } else {
-        // No organization on this account (e.g. a superadmin browsing the
-        // regular tenant app shell by mistake). Never guess an org - render
-        // the empty state instead of leaking another tenant's data.
-        setOrganization(null);
-      }
-    } catch (err: any) {
-      console.error('Failed to load dashboard', err);
-      setError('Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <Layout>
-        <div style={loadingContainer}>
-          <div className="spinner" />
-          <p style={loadingText}>Loading dashboard...</p>
-        </div>
-      </Layout>
-    );
-  }
-
-  if (!loading && !user?.organizationId && !organization) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
-  }
-
-  const quickActions = [
-    {
-      href: '/queues',
-      icon: ClipboardList,
-      title: 'Manage Queues',
-      desc: 'View and manage active queues',
-      show: isStaff,
-    },
-    {
-      href: '/services',
-      icon: Settings,
-      title: 'Services',
-      desc: 'Configure services and schedules',
-      show: isAdmin,
-    },
-    {
-      href: '/admin/locations',
-      icon: MapPin,
-      title: 'Locations',
-      desc: 'Manage locations and branches',
-      show: isAdmin,
-    },
-    {
-      href: '/admin/invites',
-      icon: Mail,
-      title: 'Invites',
-      desc: 'Manage staff invitations',
-      show: isAdmin,
-    },
-    {
-      href: '/admin/settings',
-      icon: Building2,
-      title: 'Organization',
-      desc: 'Edit organization details',
-      show: isAdmin,
-    },
-    {
-      href: '/analytics',
-      icon: BarChart3,
-      title: 'Analytics',
-      desc: 'View reports and metrics',
-      show: isAdmin,
-    },
-  ].filter(action => action.show);
-
-  const statCards = [
-    { label: 'Locations', value: stats?.locations ?? 0, icon: MapPin },
-    { label: 'Services', value: stats?.services ?? 0, icon: Settings },
-    { label: 'Active Queues', value: stats?.activeQueues ?? 0, icon: ClipboardList },
-    { label: 'Served Today', value: stats?.todayServed ?? 0, icon: CheckCircle2 },
+  if (dismissed || !status) return null;
+  const steps = [
+    { done: status.desks > 0, label: 'Add a desk or room to call from', href: '/admin/service-points' },
+    { done: printed, label: 'Print the QR poster for the entrance', href: '/admin/qr', onClick: () => { try { localStorage.setItem('qms_setup_printed', '1'); } catch { /* ignore */ } } },
+    { done: status.entries > 0, label: `Join the queue yourself, as a ${terms.person} would`, href: location.publicCode ? `/join/${location.publicCode}` : '/admin/qr', external: true },
+    { done: (limits.users.current || 0) > 1, label: 'Invite the rest of your team', href: '/admin/invites' },
   ];
+  if (steps.every((s) => s.done)) return null;
+
+  return (
+    <section className="panel today-setup" aria-label="Finish setting up">
+      <div className="today-setup-head">
+        <h2>Finish setting up</h2>
+        <span>{steps.filter((s) => s.done).length} of {steps.length} done</span>
+        <button type="button" aria-label="Hide setup steps" onClick={() => { try { localStorage.setItem(CHECKLIST_KEY, '1'); } catch { /* ignore */ } setDismissed(true); }}><X size={16} /></button>
+      </div>
+      <ol>
+        {steps.map((s) => (
+          <li key={s.label} data-done={s.done}>
+            {s.done ? <Check size={16} /> : <Circle size={16} />}
+            {s.done ? <span>{s.label}</span> : (
+              <Link href={s.href} onClick={s.onClick} target={s.external ? '_blank' : undefined}>{s.label}</Link>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
+export default function DashboardPage() {
+  const { user, isAdmin } = useAuthContext();
+  const terms = useTerms();
+  const { joinLocation, onQueueUpdated, onEntryStatusChanged } = useSocket();
+  const [locations, setLocations] = useState<LocationRow[] | null>(null);
+  const [locationId, setLocationId] = useState('');
+  const [metrics, setMetrics] = useState<Detailed | null>(null);
+  const [desks, setDesks] = useState<DeskRow[]>([]);
+  const [appointments, setAppointments] = useState<Appointment[]>([]);
+  const [problem, setProblem] = useState('');
+
+  useEffect(() => {
+    if (!user?.organizationId) return;
+    api.getLocations(user.organizationId).then((locs: LocationRow[]) => {
+      setLocations(locs);
+      let saved: string | null = null;
+      try { saved = localStorage.getItem(LOC_KEY); } catch { /* ignore */ }
+      setLocationId((locs.find((l) => l.id === saved) || locs[0])?.id || '');
+    }).catch(() => { setLocations([]); setProblem('Couldn’t load your locations.'); });
+  }, [user?.organizationId]);
+
+  const load = useCallback(async (id: string) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const [m, d, a] = await Promise.all([
+      api.getDetailedAnalytics(id).catch(() => null),
+      api.getLocationInstances(id).catch(() => []),
+      api.getAppointments({ locationId: id, date: today }).catch(() => []),
+    ]);
+    setMetrics(m);
+    setDesks(d);
+    setAppointments(a);
+  }, []);
+
+  useEffect(() => {
+    if (!locationId) return;
+    try { localStorage.setItem(LOC_KEY, locationId); } catch { /* ignore */ }
+    load(locationId);
+    joinLocation(locationId);
+    const refresh = () => load(locationId);
+    const a = onQueueUpdated(refresh);
+    const b = onEntryStatusChanged(refresh);
+    const t = setInterval(refresh, 60000);
+    return () => { a(); b(); clearInterval(t); };
+  }, [locationId, load, joinLocation, onQueueUpdated, onEntryStatusChanged]);
+
+  const location = locations?.find((l) => l.id === locationId);
+  const today = new Date().toLocaleDateString([], { weekday: 'long', day: 'numeric', month: 'long' });
+  const served = metrics?.services.filter((s) => s.counts.served > 0) || [];
+  const avgWait = served.length ? Math.round(served.reduce((n, s) => n + s.waitTime.average * s.counts.served, 0) / served.reduce((n, s) => n + s.counts.served, 0)) : 0;
+  const upcoming = appointments
+    .filter((a) => a.status !== 'CANCELLED' && a.status !== 'COMPLETED')
+    .sort((x, y) => x.slot.startTime.localeCompare(y.slot.startTime));
+
+  if (locations && locations.length === 0) {
+    return (
+      <Layout>
+        <PageHeader title="Today" subtitle={today} />
+        <div className="panel today-empty">
+          <h2>Set up your first queue</h2>
+          <p>Add a location and a service, and {terms.people} can start joining from a QR code.</p>
+          {isAdmin && <Link className="btn btn-primary" href="/welcome">Start setup</Link>}
+        </div>
+      </Layout>
+    );
+  }
 
   return (
     <Layout>
-      <div style={containerStyle}>
-        <PageHeader
-          icon={ClipboardList}
-          title={`Welcome back, ${user?.firstName}!`}
-          subtitle={
-            organization
-              ? `Managing ${organization.name}`
-              : "Here's what's happening with your queues today."
-          }
-          actions={
-            organization && (
-              <Link href="/admin/qr" className="btn btn-primary">
-                <Icon icon={QrCode} size={18} />
-                <span>Generate QR</span>
-              </Link>
-            )
-          }
-        />
-
-        {/* Error message */}
-        {error && (
-          <div style={errorAlert}>
-            <Icon icon={AlertTriangle} size={18} color="#dc2626" />
-            <span>{error}</span>
+      <PageHeader
+        title="Today"
+        subtitle={`${today}${location ? ` · ${location.name}` : ''}`}
+        actions={
+          <div className="today-actions">
+            {locations && locations.length > 1 && (
+              <select value={locationId} onChange={(e) => setLocationId(e.target.value)} aria-label="Location">
+                {locations.map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+              </select>
+            )}
+            <Link className="btn btn-primary" href="/queues">Go to my desk</Link>
           </div>
-        )}
+        }
+      />
 
-        {/* Stats Grid */}
-        <div style={statsGrid}>
-          {statCards.map((stat, index) => (
-            <div key={index} className="card" style={statCardStyle}>
-              <div style={statCardHeader}>
-                <Icon icon={stat.icon} size={22} color="#0e8f80" />
-              </div>
-              <div style={statValue}>{stat.value}</div>
-              <div style={statLabel}>{stat.label}</div>
+      {problem && <div className="inline-alert inline-alert-error" role="alert">{problem}</div>}
+      {isAdmin && location && <SetupChecklist location={location} terms={terms} />}
+      {locationId && <WaitAlerts locationId={locationId} />}
+
+      <section className="today-numbers" aria-label="Right now">
+        <div><b>{metrics ? metrics.totals.waiting : '–'}</b><span>waiting now</span></div>
+        <div><b>{metrics ? (metrics.totals.waiting ? mins(metrics.longestCurrentWait) : '–') : '–'}</b><span>longest wait right now</span></div>
+        <div><b>{metrics ? metrics.totals.served : '–'}</b><span>{terms.people} served today</span></div>
+        <div><b>{metrics && served.length ? mins(avgWait) : '–'}</b><span>average wait today</span></div>
+      </section>
+
+      <div className="today-grid">
+        <section className="panel today-services">
+          <h2>Services</h2>
+          {!metrics ? <div className="spinner" /> : metrics.services.length === 0 ? (
+            <p className="muted">No services at this location yet.</p>
+          ) : (
+            <div className="data-table-wrap">
+              <table className="data-table">
+                <thead>
+                  <tr><th>Service</th><th>Waiting</th><th>Being served</th><th>Served</th><th>Average wait</th><th>Not here</th></tr>
+                </thead>
+                <tbody>
+                  {metrics.services.map((s) => (
+                    <tr key={s.serviceId}>
+                      <td><strong>{s.serviceName}</strong></td>
+                      <td data-hot={s.counts.waiting >= 5}>{s.counts.waiting}</td>
+                      <td>{s.counts.serving}</td>
+                      <td>{s.counts.served}</td>
+                      <td>{s.counts.served ? mins(s.waitTime.average) : '–'}</td>
+                      <td>{s.counts.noShows || '–'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          ))}
-        </div>
-
-        {/* Usage Widget - only near-limit resources, full breakdown lives on the billing page */}
-        {isAdmin && limits && (() => {
-          const nearLimitEntries = (
-            [
-              ['Locations', limits.locations],
-              ['Users', limits.users],
-              ['Services', limits.services],
-              ['Queue entries today', limits.queueEntriesDaily],
-              ['Queue entries this period', limits.queueEntriesPeriod],
-            ] as [string, UsageLimit][]
-          ).filter(([, l]) => l.limit !== null && l.current / l.limit >= 0.8);
-
-          if (nearLimitEntries.length === 0) return null;
-
-          return (
-            <section style={sectionStyle}>
-              <h2 style={sectionTitle}>Usage</h2>
-              <div className="card" style={{ padding: '1.25rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1.25rem' }}>
-                {nearLimitEntries.map(([label, l]) => (
-                  <UsageBar key={label} label={label} current={l.current} limit={l.limit} />
-                ))}
-              </div>
-            </section>
-          );
-        })()}
-
-        {/* Quick Actions */}
-        <section style={sectionStyle}>
-          <h2 style={sectionTitle}>Quick Actions</h2>
-          <div style={actionsGrid}>
-            {quickActions.map((action, index) => (
-              <Link key={index} href={action.href} className="card card-hover" style={actionCard}>
-                <div style={actionIconBox}>
-                  <Icon icon={action.icon} size={22} color="#0e8f80" />
-                </div>
-                <div style={actionContent}>
-                  <h3 style={actionTitle}>{action.title}</h3>
-                  <p style={actionDesc}>{action.desc}</p>
-                </div>
-                <Icon icon={ChevronRight} size={18} color="#9ca3af" />
-              </Link>
-            ))}
-          </div>
+          )}
         </section>
 
-        {/* Getting Started Card - shown if no locations */}
-        {stats && stats.locations === 0 && (
-          <div style={gettingStartedCard}>
-            <Icon icon={Rocket} size={28} color="#0b7a6d" />
-            <div style={gettingStartedContent}>
-              <h3 style={gettingStartedTitle}>Get Started</h3>
-              <p style={gettingStartedText}>
-                Create your first location to start managing queues. Add services to each location and generate QR codes for customers to join.
-              </p>
-              <Link href="/admin/locations" className="btn btn-primary btn-sm">
-                Create First Location
-                <Icon icon={ChevronRight} size={16} />
-              </Link>
-            </div>
-          </div>
-        )}
+        <div className="today-side">
+          <section className="panel">
+            <h2>Desks</h2>
+            {desks.length === 0 ? (
+              <p className="muted">No desks yet.{isAdmin && <> <Link href="/admin/service-points">Add one</Link>.</>}</p>
+            ) : (
+              <ul className="today-desks">
+                {desks.map((d) => (
+                  <li key={d.id} data-open={d.isOccupied}>
+                    <span className="today-dot" aria-hidden="true" />
+                    <div>
+                      <strong>{deskLabel(d)}</strong>
+                      <small>{d.isOccupied && d.occupiedBy ? `${d.occupiedBy.firstName} ${d.occupiedBy.lastName}` : 'Nobody signed in'} · {d.currentService?.name}</small>
+                    </div>
+                    {d.currentlyServing && <b>{d.currentlyServing.ticketNumber}</b>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
 
-        {/* Tips Card */}
-        <div style={tipsCard}>
-          <Icon icon={Lightbulb} size={22} color="#92400e" />
-          <div style={tipsContent}>
-            <h3 style={tipsTitle}>Pro Tip</h3>
-            <p style={tipsText}>
-              Generate a QR code and display it at your entrance. Customers can scan to join the queue without downloading any app!
-            </p>
-          </div>
+          <section className="panel">
+            <div className="today-panel-head">
+              <h2>Appointments today</h2>
+              <Link href="/appointments">All</Link>
+            </div>
+            {upcoming.length === 0 ? (
+              <p className="muted">Nothing booked for today.</p>
+            ) : (
+              <ul className="today-appts">
+                {upcoming.slice(0, 6).map((a) => (
+                  <li key={a.id}>
+                    <time>{new Date(a.slot.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</time>
+                    <span>{a.user.firstName} {a.user.lastName}</span>
+                    <small>{a.status === 'CHECKED_IN' ? 'Checked in' : a.service.name}</small>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
     </Layout>
   );
-};
-
-// Styles
-const containerStyle: React.CSSProperties = {};
-
-const loadingContainer: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'center',
-  justifyContent: 'center',
-  minHeight: '400px',
-  gap: '1rem',
-};
-
-const loadingText: React.CSSProperties = {
-  color: '#6b7280',
-  fontSize: '0.9375rem',
-};
-
-const errorAlert: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  padding: '1rem 1.25rem',
-  background: '#fef2f2',
-  border: '1px solid #fecaca',
-  color: '#dc2626',
-  borderRadius: '0.75rem',
-  marginBottom: '1.5rem',
-};
-
-const statsGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-  gap: '1.25rem',
-  marginBottom: '2rem',
-};
-
-const statCardStyle: React.CSSProperties = {
-  padding: '1.5rem',
-};
-
-const statCardHeader: React.CSSProperties = {
-  display: 'flex',
-  justifyContent: 'space-between',
-  alignItems: 'center',
-  marginBottom: '1rem',
-};
-
-const statValue: React.CSSProperties = {
-  fontSize: '2.25rem',
-  fontWeight: 700,
-  marginBottom: '0.25rem',
-  color: '#111827',
-};
-
-const statLabel: React.CSSProperties = {
-  color: '#6b7280',
-  fontSize: '0.875rem',
-};
-
-const sectionStyle: React.CSSProperties = {
-  marginBottom: '2rem',
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: '1.125rem',
-  fontWeight: 600,
-  color: '#111827',
-  marginBottom: '1rem',
-};
-
-const actionsGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-  gap: '1rem',
-};
-
-const actionCard: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: '1rem',
-  padding: '1.25rem',
-  textDecoration: 'none',
-};
-
-const actionIconBox: React.CSSProperties = {
-  width: '48px',
-  height: '48px',
-  borderRadius: '0.75rem',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  flexShrink: 0,
-  background: 'rgba(14, 143, 128, 0.1)',
-};
-
-const actionContent: React.CSSProperties = {
-  flex: 1,
-  minWidth: 0,
-};
-
-const actionTitle: React.CSSProperties = {
-  fontWeight: 600,
-  color: '#111827',
-  marginBottom: '0.25rem',
-  fontSize: '0.9375rem',
-};
-
-const actionDesc: React.CSSProperties = {
-  color: '#6b7280',
-  fontSize: '0.8125rem',
-};
-
-const gettingStartedCard: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: '1.5rem',
-  padding: '1.5rem',
-  background: 'rgba(14, 143, 128, 0.08)',
-  borderRadius: '1rem',
-  border: '1px solid rgba(14, 143, 128, 0.25)',
-  marginBottom: '2rem',
-};
-
-const gettingStartedContent: React.CSSProperties = {
-  flex: 1,
-};
-
-const gettingStartedTitle: React.CSSProperties = {
-  fontWeight: 700,
-  color: '#0a655a',
-  marginBottom: '0.5rem',
-  fontSize: '1.125rem',
-};
-
-const gettingStartedText: React.CSSProperties = {
-  color: '#0b7a6d',
-  fontSize: '0.9375rem',
-  lineHeight: 1.5,
-  marginBottom: '1rem',
-};
-
-const tipsCard: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  gap: '1rem',
-  padding: '1.25rem',
-  background: '#fef3c7',
-  borderRadius: '1rem',
-  border: '1px solid #fcd34d',
-};
-
-const tipsContent: React.CSSProperties = {
-  flex: 1,
-};
-
-const tipsTitle: React.CSSProperties = {
-  fontWeight: 600,
-  color: '#92400e',
-  marginBottom: '0.25rem',
-};
-
-const tipsText: React.CSSProperties = {
-  color: '#a16207',
-  fontSize: '0.875rem',
-  lineHeight: 1.5,
-};
-
-export default DashboardPage;
+}

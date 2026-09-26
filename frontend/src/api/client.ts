@@ -181,6 +181,7 @@ class ApiClient {
 
   async previewInvite(code: string): Promise<{
     role: string;
+    email?: string | null;
     status: 'valid' | 'used' | 'expired';
     organization: { name: string; slug: string | null; logoUrl: string | null };
   }> {
@@ -564,8 +565,17 @@ class ApiClient {
   }
 
   // Invites (admin)
-  async createInvite(payload: { role?: string; organizationId?: string; expiresAt?: string }) {
+  async createInvite(payload: { role?: string; organizationId?: string; expiresAt?: string; email?: string }) {
     const { data } = await this.client.post('/invites', payload);
+    return data as { invite: { id: string; code: string; role: string; email?: string | null; used: boolean; expiresAt: string | null; createdAt: string }; emailed?: boolean };
+  }
+
+  async revokeInvite(id: string) {
+    await this.client.delete(`/invites/${id}`);
+  }
+
+  async updateUser(id: string, patch: { role?: string; isActive?: boolean; firstName?: string; lastName?: string; phone?: string }) {
+    const { data } = await this.client.put(`/users/${id}`, patch);
     return data;
   }
 

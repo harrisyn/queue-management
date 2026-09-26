@@ -88,14 +88,20 @@ type BillingCycle = 'monthly' | 'quarterly' | 'yearly';
 
 const CYCLE_MONTHS: Record<BillingCycle, number> = { monthly: 1, quarterly: 3, yearly: 12 };
 
+// Only keys the server enforces are listed; anything else is not shown.
 const FEATURE_LABELS: Record<string, string> = {
-  multiLocation: 'Multiple locations',
-  smsNotifications: 'SMS notifications',
-  analytics: 'Analytics dashboard',
-  apiAccess: 'API access',
-  customBranding: 'Custom branding',
-  serviceFlows: 'Service flows',
-  servicePoints: 'Service points',
+  analytics: 'Analytics',
+  ai: 'AI-assisted analytics',
+  multiLocation: 'More than one location',
+  servicePoints: 'Desks and rooms',
+  serviceFlows: 'Journeys between services',
+  smsNotifications: 'Text message alerts',
+  customBranding: 'Own logo and colour',
+  customDomain: 'Custom domain',
+  apiAccess: 'API and integrations',
+  // legacy keys from the old plan editor
+  multipleLocations: 'More than one location',
+  whiteLabel: 'Own logo and colour',
 };
 
 function priceForCycle(plan: Plan, cycle: BillingCycle): number {
@@ -235,7 +241,7 @@ export default function BillingPage() {
           title="Billing"
           subtitle={
             data?.subscription
-              ? `Current plan: ${data.subscription.planName} (${data.subscription.status})`
+              ? `You’re on the ${data.subscription.planName} plan${data.subscription.status && data.subscription.status !== 'ACTIVE' ? ` (${data.subscription.status.toLowerCase().replace('_', ' ')})` : ''}.`
               : 'No active subscription'
           }
         />
@@ -245,10 +251,10 @@ export default function BillingPage() {
             <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--gray-900)' }}>Usage</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
               <UsageBar label="Locations" current={data.limits.locations.current} limit={data.limits.locations.limit} />
-              <UsageBar label="Users" current={data.limits.users.current} limit={data.limits.users.limit} />
+              <UsageBar label="Staff" current={data.limits.users.current} limit={data.limits.users.limit} />
               <UsageBar label="Services" current={data.limits.services.current} limit={data.limits.services.limit} />
-              <UsageBar label="Queue entries today" current={data.limits.queueEntriesDaily.current} limit={data.limits.queueEntriesDaily.limit} />
-              <UsageBar label="Queue entries this period" current={data.limits.queueEntriesPeriod.current} limit={data.limits.queueEntriesPeriod.limit} />
+              <UsageBar label="Joins today" current={data.limits.queueEntriesDaily.current} limit={data.limits.queueEntriesDaily.limit} />
+              <UsageBar label="Joins this billing period" current={data.limits.queueEntriesPeriod.current} limit={data.limits.queueEntriesPeriod.limit} />
               {data.credits && (['AI', 'EMAIL', 'SMS'] as const)
                 .filter(type => data.credits![type].limit !== null)
                 .map(type => (
@@ -393,14 +399,15 @@ export default function BillingPage() {
 
             const limitRows: { label: string; value: number | null }[] = [
               { label: 'Locations', value: plan.maxLocations },
-              { label: 'Services/loc', value: plan.maxServicesPerLoc },
-              { label: 'Users', value: plan.maxUsersPerOrg },
-              { label: 'Entries/day', value: plan.maxQueueEntriesPerDay },
+              { label: 'Services each', value: plan.maxServicesPerLoc },
+              { label: 'Staff', value: plan.maxUsersPerOrg },
+              { label: 'Joins a day', value: plan.maxQueueEntriesPerDay },
             ];
             const featureBullets = Object.entries(plan.features)
               .filter(([, enabled]) => enabled)
-              .map(([key]) => FEATURE_LABELS[key] || key)
-              .slice(0, 3);
+              .filter(([key]) => FEATURE_LABELS[key]).map(([key]) => FEATURE_LABELS[key])
+              .filter((label, i, all) => all.indexOf(label) === i)
+              .slice(0, 4);
 
             return (
               <Card
