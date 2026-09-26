@@ -201,3 +201,4 @@
   .displays-list li > label, .displays-list li > .settings-remove { margin-top: 0; }
   .displays-meta { order: 5; flex-basis: 100%; }
 }
+.settings-narrow-wide { max-width: 420px; margin-top: 1rem; }

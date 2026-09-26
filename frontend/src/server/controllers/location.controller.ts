@@ -127,7 +127,7 @@ export const getLocationByCode = async (req: Request, res: Response, next: NextF
             identityFieldsConfig: true,  // Include identity fields config for public join form
             logoUrl: true,
             primaryColor: true,
-            hidePoweredBy: true,
+            hidePoweredBy: true, industry: true, customerLabel: true, customerLabelPlural: true,
             status: true,
           }
         },
@@ -178,7 +178,7 @@ export const getPublicLocationInfo = async (req: Request, res: Response, next: N
         timezone: true,
         publicCode: true,
         organization: {
-          select: { id: true, name: true, logoUrl: true, primaryColor: true, hidePoweredBy: true },
+          select: { id: true, name: true, logoUrl: true, primaryColor: true, hidePoweredBy: true, industry: true, customerLabel: true, customerLabelPlural: true },
         },
         _count: { select: { services: true } },
       },

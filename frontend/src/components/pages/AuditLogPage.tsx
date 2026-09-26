@@ -86,7 +86,7 @@ export default function AuditLogPage() {
 
       <div className="panel">
         {!loading && logs.length === 0 ? (
-          <EmptyState icon={History} title="Nothing recorded yet" description="Actions appear here as staff and patients use the queues." />
+          <EmptyState icon={History} title="Nothing recorded yet" description="Actions appear here as staff and the public use your queues." />
         ) : (
           <div className="data-table-wrap">
             <table className="data-table">
@@ -105,7 +105,7 @@ export default function AuditLogPage() {
                         <span className="muted">—</span>
                       )}
                     </td>
-                    <td>{log.actor ? `${log.actor.firstName} ${log.actor.lastName}` : <span className="muted">Patient / system</span>}</td>
+                    <td>{log.actor ? `${log.actor.firstName} ${log.actor.lastName}` : <span className="muted">Public / system</span>}</td>
                     <td className="muted" style={{ minWidth: 200 }}>{describe(log)}</td>
                   </tr>
                 ))}

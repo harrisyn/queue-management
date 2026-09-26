@@ -1834,7 +1834,7 @@ input::placeholder {
   color: var(--gray-700); font-weight: 600; font-size: 0.9375rem;
 }
 .welcome-chip:hover { border-color: var(--gray-500); }
-.welcome-chip[aria-pressed="true"] { background: var(--primary-50); border-color: var(--primary-500); color: var(--primary-800); }
+.welcome-chip[aria-pressed="true"], .welcome-chip[aria-checked="true"] { background: var(--primary-50); border-color: var(--primary-500); color: var(--primary-800); }
 .welcome-day { min-width: 3.25rem; justify-content: center; }
 .welcome-custom { display: flex; gap: 0.5rem; margin-top: 0.875rem; max-width: 420px; }
 .welcome-hours { display: flex; gap: 1rem; margin-top: 1rem; flex-wrap: wrap; }

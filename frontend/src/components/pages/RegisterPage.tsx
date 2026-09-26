@@ -133,7 +133,7 @@ export default function RegisterPage() {
   return (
     <AuthLayout
       panelTitle="Your queue, live today."
-      panelText="Create your workspace, add a location and a service, and patients can scan in before the end of the day. The free plan covers one location."
+      panelText="Create your workspace, add a location and a service, and people can scan in and join before the end of the day. The free plan covers one location."
       footer={<>Already use it? <Link href="/login">Sign in</Link></>}
     >
       <div className="authx-steps" aria-hidden="true">

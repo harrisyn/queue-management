@@ -19,6 +19,11 @@ model Organization {
   identityFieldsConfig  Json?                    // {mrNumber: {required: true, label: "MR Number"}, ...}
   // Display settings for queues
   defaultDisplayMode    String                   @default("TICKET_ONLY") // TICKET_ONLY, NAME_AND_TICKET, FULL_INFO
+  // What kind of place this is, and what it calls the people in its queues
+  // ("patient", "guest", "client"...). Null label = the industry default.
+  industry              String?                  // HEALTHCARE, RESTAURANT, RETAIL, BANKING, GOVERNMENT, EDUCATION, SALON, OTHER
+  customerLabel         String?
+  customerLabelPlural   String?
   // Subscription
   subscriptionId        String?                  @unique
   // White-labeling (gated behind the plan's customBranding feature)

@@ -9,6 +9,7 @@ import { slugify, generateUniqueSlug } from '../utils/slug';
 import { isReservedSlug } from '../constants/reservedSlugs';
 import { getActiveFileStorageProvider } from '../services/fileStorage';
 import { getOrganizationFeatures } from '../middleware/subscription.middleware';
+import { INDUSTRIES } from '../../lib/terms';
 
 const ALLOWED_LOGO_MIME_TYPES = ['image/png', 'image/jpeg', 'image/svg+xml', 'image/webp'];
 const MAX_LOGO_SIZE_BYTES = 2 * 1024 * 1024; // 2MB
@@ -181,7 +182,7 @@ export const getPublicOrganization = async (req: Request, res: Response, next: N
         name: true,
         logoUrl: true,
         primaryColor: true,
-        hidePoweredBy: true,
+        hidePoweredBy: true, industry: true, customerLabel: true, customerLabelPlural: true,
         locations: {
           select: {
             id: true,
@@ -218,7 +219,7 @@ export const getPublicOrganizationBySlug = async (req: Request, res: Response, n
 
     const organization = await prisma.organization.findUnique({
       where: { slug },
-      select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, hidePoweredBy: true },
+      select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, hidePoweredBy: true, industry: true, customerLabel: true, customerLabelPlural: true },
     });
 
     if (!organization) {
@@ -314,7 +315,7 @@ export const getOrganization = async (req: Request, res: Response, next: NextFun
 export const updateOrganization = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { name, email, phone, slug, identityFieldsConfig, defaultDisplayMode, primaryColor, hidePoweredBy, notificationSettings } = req.body;
+    const { name, email, phone, slug, identityFieldsConfig, defaultDisplayMode, primaryColor, hidePoweredBy, notificationSettings, industry, customerLabel, customerLabelPlural } = req.body;
 
     if (primaryColor !== undefined || hidePoweredBy !== undefined) {
       const features = await getOrganizationFeatures(id);
@@ -357,6 +358,13 @@ export const updateOrganization = async (req: Request, res: Response, next: Next
     if (primaryColor !== undefined) updateData.primaryColor = primaryColor || null;
     if (hidePoweredBy !== undefined) updateData.hidePoweredBy = Boolean(hidePoweredBy);
     if (notificationSettings !== undefined) updateData.notificationSettings = readNotificationSettings(notificationSettings);
+    if (industry !== undefined) {
+      if (industry !== null && !INDUSTRIES.some((i) => i.id === industry)) return res.status(400).json({ error: 'Unknown industry' });
+      updateData.industry = industry;
+    }
+    const label = (v: unknown) => (v ? String(v).trim().toLowerCase().slice(0, 30) || null : null);
+    if (customerLabel !== undefined) updateData.customerLabel = label(customerLabel);
+    if (customerLabelPlural !== undefined) updateData.customerLabelPlural = label(customerLabelPlural);
 
     const organization = await prisma.organization.update({
       where: { id },

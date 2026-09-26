@@ -106,7 +106,7 @@ export default function AiProvidersPage() {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
           <p style={{ color: 'var(--gray-500)', fontSize: '0.875rem', margin: 0 }}>
-            The model only ever receives aggregated queue statistics (counts, wait and service times, service names), never patient names, contact details or identifiers.
+            The model only ever receives aggregated queue statistics (counts, wait and service times, service names), never names, contact details or identifiers.
           </p>
           {providers.map((p) => {
             const meta = PROVIDERS[p.provider];

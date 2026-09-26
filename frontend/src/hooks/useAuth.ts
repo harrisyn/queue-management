@@ -91,6 +91,7 @@ export const useAuth = () => {
     isSuperAdmin,
     isAdmin,
     isStaff,
+    refreshUser: fetchUser,
   };
 };
 

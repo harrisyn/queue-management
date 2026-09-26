@@ -7,8 +7,18 @@ import api from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { apiErrorMessage } from '@/components/auth/AuthShell';
+import { INDUSTRIES, termsFor } from '@/lib/terms';
 
-const SUGGESTED = ['Reception', 'Consultation', 'Lab', 'Pharmacy', 'Cashier'];
+const SUGGESTED_BY_INDUSTRY: Record<string, string[]> = {
+  HEALTHCARE: ['Reception', 'Consultation', 'Lab', 'Pharmacy', 'Cashier'],
+  RESTAURANT: ['Host stand', 'Takeaway', 'Bar'],
+  RETAIL: ['Customer service', 'Collections', 'Returns'],
+  BANKING: ['Tellers', 'Customer service', 'Loans'],
+  GOVERNMENT: ['Enquiries', 'Applications', 'Collections'],
+  EDUCATION: ['Admissions', 'Registry', 'Finance'],
+  SALON: ['Hair', 'Nails', 'Treatments'],
+  OTHER: ['Front desk', 'Service'],
+};
 const DAYS = [
   { n: 1, label: 'Mon' }, { n: 2, label: 'Tue' }, { n: 3, label: 'Wed' }, { n: 4, label: 'Thu' },
   { n: 5, label: 'Fri' }, { n: 6, label: 'Sat' }, { n: 0, label: 'Sun' },
@@ -17,12 +27,15 @@ const DAYS = [
 type Result = Awaited<ReturnType<typeof api.quickStart>>;
 
 export default function WelcomePage() {
-  const { user } = useAuthContext();
+  const { user, refreshUser } = useAuthContext();
+  const [industry, setIndustry] = useState<string>(user?.organization?.industry || '');
+  const terms = termsFor({ industry: industry || user?.organization?.industry, customerLabel: user?.organization?.customerLabel });
+  const SUGGESTED = SUGGESTED_BY_INDUSTRY[industry || 'OTHER'] || SUGGESTED_BY_INDUSTRY.OTHER;
   const { limits, loading: planLoading } = useSubscription();
   // How many services the plan lets this new location have (null = unlimited).
   const maxServices = planLoading || limits.services.limit === null ? null : Math.max(0, limits.services.limit - limits.services.current);
   const [locationName, setLocationName] = useState('');
-  const [services, setServices] = useState<string[]>(['Reception', 'Consultation']);
+  const [services, setServices] = useState<string[]>([]);
   const [custom, setCustom] = useState('');
   const [days, setDays] = useState<number[]>([1, 2, 3, 4, 5]);
   const [startTime, setStartTime] = useState('08:00');
@@ -71,6 +84,7 @@ export default function WelcomePage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    if (!industry) return setError('Choose what kind of place it is.');
     if (services.length === 0) return setError('Choose at least one service.');
     if (days.length === 0) return setError('Choose the days you’re open.');
     setBusy(true);
@@ -82,7 +96,9 @@ export default function WelcomePage() {
         endTime,
         activeDays: [...days].sort().join(','),
         timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        industry: industry || undefined,
       }));
+      refreshUser().catch(() => {});
     } catch (err) {
       setError(apiErrorMessage(err, 'Setup didn’t finish. Try again.'));
     } finally {
@@ -100,7 +116,7 @@ export default function WelcomePage() {
         <div className="welcome-live">
           <div>
             <p className="welcome-kicker"><Check size={16} /> {result ? 'You’re live' : 'Already set up'}</p>
-            <h1>Patients can join {live.name} now.</h1>
+            <h1>{terms.People} can join {live.name} now.</h1>
             <p className="welcome-lede">
               Print this code and put it where people arrive. Scanning it opens the ticket page for your services.
               {result && <> We also added a desk for each service, so your team can start calling straight away.</>}
@@ -108,7 +124,7 @@ export default function WelcomePage() {
             <div className="welcome-actions">
               <Link href="/admin/qr" className="welcome-action"><Printer size={18} /> Print the QR poster</Link>
               <a href={`/display/${live.publicCode}`} target="_blank" rel="noreferrer" className="welcome-action"><MonitorPlay size={18} /> Open the lobby screen</a>
-              <a href={joinUrl} target="_blank" rel="noreferrer" className="welcome-action"><Smartphone size={18} /> Try it as a patient</a>
+              <a href={joinUrl} target="_blank" rel="noreferrer" className="welcome-action"><Smartphone size={18} /> Try it as a {terms.person}</a>
               <Link href="/admin/invites" className="welcome-action"><UserPlus size={18} /> Invite your team</Link>
             </div>
             <Link href="/queues" className="authx-submit" style={{ width: 'auto', display: 'inline-flex', padding: '0.875rem 1.5rem', marginTop: '1.5rem' }}>
@@ -129,11 +145,37 @@ export default function WelcomePage() {
     <div className="welcome">
       <p className="welcome-kicker">Welcome{user?.firstName ? `, ${user.firstName}` : ''}</p>
       <h1>Set up your first queue.</h1>
-      <p className="welcome-lede">Three quick choices. You can change all of it later in Setup.</p>
+      <p className="welcome-lede">A few quick choices. You can change all of it later in Setup.</p>
 
       <form className="welcome-form" onSubmit={submit}>
         <section>
-          <h2>Where do patients come?</h2>
+          <h2>What kind of place is it?</h2>
+          <div className="welcome-chips" role="radiogroup" aria-label="Kind of organization">
+            {INDUSTRIES.map((i) => (
+              <button
+                key={i.id}
+                type="button"
+                role="radio"
+                aria-checked={industry === i.id}
+                className="welcome-chip"
+                onClick={() => {
+                  setIndustry(i.id);
+                  // Swap in suggestions that fit, unless they've added their own.
+                  setServices((list) => {
+                    const own = list.filter((s) => !Object.values(SUGGESTED_BY_INDUSTRY).flat().includes(s));
+                    const picks = (SUGGESTED_BY_INDUSTRY[i.id] || []).slice(0, 2);
+                    return [...picks, ...own].slice(0, maxServices ?? 8);
+                  });
+                }}
+              >
+                {i.label}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        <section>
+          <h2>Where do {terms.people} come?</h2>
           <label htmlFor="loc" className="field-label">Location name</label>
           <input id="loc" value={locationName} onChange={(e) => setLocationName(e.target.value)} placeholder="e.g. Main clinic" required />
         </section>

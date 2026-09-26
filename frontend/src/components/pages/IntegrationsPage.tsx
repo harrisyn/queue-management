@@ -9,8 +9,8 @@ import { Badge, Button, Checkbox, EmptyState, Input, Modal, PageHeader, Switch }
 import { apiErrorMessage } from '@/components/auth/AuthShell';
 
 const EVENT_LABELS: Record<string, string> = {
-  'entry.joined': 'Patient joined a queue',
-  'entry.called': 'Patient called',
+  'entry.joined': 'Someone joined a queue',
+  'entry.called': 'Ticket called',
   'entry.served': 'Service completed',
   'entry.cancelled': 'Ticket cancelled',
   'entry.no_show': 'No-show',
@@ -259,7 +259,7 @@ export default function IntegrationsPage() {
           <EmptyState
             icon={Webhook}
             title="No endpoints yet"
-            description="Add an endpoint to get a signed POST whenever a patient joins, is called, completes a service or moves to the next one."
+            description="Add an endpoint to get a signed POST whenever someone joins, is called, completes a service or moves to the next one."
             action={{ label: 'Add endpoint', onClick: () => setEditing('new') }}
           />
         ) : (

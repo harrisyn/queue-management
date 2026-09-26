@@ -219,7 +219,7 @@ export async function transferEntryToService(
     throw new TransferError('Target service not found', 404);
   }
   if (!target.service.isActive) throw new TransferError('That service is not active');
-  if (target.queue.status !== 'ACTIVE') throw new TransferError(`The ${target.service.name} queue is not accepting patients right now`);
+  if (target.queue.status !== 'ACTIVE') throw new TransferError(`The ${target.service.name} queue isn’t taking anyone right now`);
 
   if (opts.completeSource && (source.status === 'WAITING' || source.status === 'SERVING')) {
     await prisma.queueEntry.update({

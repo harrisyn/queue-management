@@ -3,6 +3,7 @@ import prisma from '../lib/prisma';
 import { loadCaller } from '../middleware/tenantScope.middleware';
 import { checkLimit } from '../middleware/subscription.middleware';
 import { syncInstancesForServicePointService } from './servicepoint.controller';
+import { INDUSTRIES } from '../../lib/terms';
 
 /**
  * First-run setup for a new organization: one request creates a location,
@@ -100,6 +101,9 @@ export const quickStart = async (req: Request, res: Response, next: NextFunction
         upgradeRequired: true,
       });
     }
+
+    const industry = INDUSTRIES.some((i) => i.id === req.body?.industry) ? String(req.body.industry) : null;
+    if (industry) await prisma.organization.update({ where: { id: organizationId }, data: { industry } });
 
     const publicCode = await uniquePublicCode(locationName);
     const location = await prisma.location.create({

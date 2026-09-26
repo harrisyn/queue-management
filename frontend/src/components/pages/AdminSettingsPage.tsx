@@ -14,6 +14,7 @@ import { PageHeader, Button, Switch } from '@/components/ui';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
 import { APP_NAME } from '@/lib/appConfig';
+import { INDUSTRIES, termsFor, defaultPersonFor, pluralize, type Terms } from '@/lib/terms';
 
 interface IdentityField {
   key: string;
@@ -36,16 +37,19 @@ interface Organization {
   primaryColor?: string | null;
   hidePoweredBy?: boolean;
   notificationSettings?: { turnApproachingAt: number; email: boolean; sms: boolean };
+  industry?: string | null;
+  customerLabel?: string | null;
+  customerLabelPlural?: string | null;
 }
 
 type Section = 'general' | 'patient' | 'screens' | 'notifications' | 'branding' | 'domain';
 
-const SECTIONS: { id: Section; label: string; hint: string; icon: typeof Building2 }[] = [
-  { id: 'general', label: 'Organization', hint: 'Name, contact and workspace address', icon: Building2 },
-  { id: 'patient', label: 'Patient details', hint: 'What people are asked when they join', icon: ContactRound },
-  { id: 'screens', label: 'Screen privacy', hint: 'How patients appear on lobby screens', icon: MonitorSmartphone },
+const sectionsFor = (t: Terms): { id: Section; label: string; hint: string; icon: typeof Building2 }[] => [
+  { id: 'general', label: 'Organization', hint: 'Name, type, contact and workspace address', icon: Building2 },
+  { id: 'patient', label: `${t.Person} details`, hint: 'What people are asked when they join', icon: ContactRound },
+  { id: 'screens', label: 'Screen privacy', hint: `How ${t.people} appear on lobby screens`, icon: MonitorSmartphone },
   { id: 'notifications', label: 'Notifications', hint: 'Turn-approaching alerts by email and SMS', icon: Bell },
-  { id: 'branding', label: 'Branding', hint: 'Logo and colour on patient pages', icon: Palette },
+  { id: 'branding', label: 'Branding', hint: 'Logo and colour on public pages', icon: Palette },
   { id: 'domain', label: 'Custom domain', hint: 'Use your own web address', icon: Globe },
 ];
 
@@ -55,7 +59,7 @@ const STANDARD_FIELDS: IdentityField[] = [
   { key: 'phone', label: 'Phone number', type: 'tel', required: false },
   { key: 'email', label: 'Email address', type: 'email', required: false },
   { key: 'mrNumber', label: 'MR number', type: 'text', required: false },
-  { key: 'patientId', label: 'Patient ID', type: 'text', required: false },
+  { key: 'patientId', label: 'Reference number', type: 'text', required: false },
   { key: 'nationalId', label: 'National ID', type: 'text', required: false },
   { key: 'dateOfBirth', label: 'Date of birth', type: 'date', required: false },
   { key: 'gender', label: 'Gender', type: 'select', required: false },
@@ -93,7 +97,7 @@ const toKey = (label: string) =>
     .join('');
 
 export default function AdminSettingsPage() {
-  const { user, isAdmin, loading: authLoading } = useAuthContext();
+  const { user, isAdmin, loading: authLoading, refreshUser } = useAuthContext();
   const { hasFeature } = useSubscription();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
@@ -101,7 +105,7 @@ export default function AdminSettingsPage() {
   const [section, setSection] = useState<Section>('general');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-  const [general, setGeneral] = useState({ name: '', slug: '', email: '', phone: '' });
+  const [general, setGeneral] = useState({ name: '', slug: '', email: '', phone: '', industry: 'HEALTHCARE', customerLabel: '' });
   const [fields, setFields] = useState<IdentityField[]>([]);
   const [newField, setNewField] = useState({ label: '', type: 'text' });
   const [displayMode, setDisplayMode] = useState('TICKET_ONLY');
@@ -134,7 +138,7 @@ export default function AdminSettingsPage() {
       try {
         const org: Organization = await api.getOrganization(user.organizationId!);
         setOrganization(org);
-        const g = { name: org.name || '', slug: org.slug || '', email: org.email || '', phone: org.phone || '' };
+        const g = { name: org.name || '', slug: org.slug || '', email: org.email || '', phone: org.phone || '', industry: org.industry || 'OTHER', customerLabel: org.customerLabel || '' };
         const f = fieldsFromConfig(org.identityFieldsConfig);
         const d = org.defaultDisplayMode || 'TICKET_ONLY';
         const n = { turnApproachingAt: 3, email: true, sms: false, ...(org.notificationSettings || {}) };
@@ -158,6 +162,8 @@ export default function AdminSettingsPage() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
 
+  const terms = termsFor(general);
+  const SECTIONS = sectionsFor(terms);
   const slugChanged = !!organization && (organization.slug || '') !== general.slug;
   const slugProblem =
     general.slug && isReservedSlug(general.slug) ? 'That address is reserved.'
@@ -168,7 +174,7 @@ export default function AdminSettingsPage() {
     if (!organization) return;
     if (slugProblem) return setMessage({ type: 'error', text: slugProblem });
     if (!fields.some((f) => ['firstName', 'name', 'fullName'].includes(f.key))) {
-      return setMessage({ type: 'error', text: 'Keep a name field so staff can call patients.' });
+      return setMessage({ type: 'error', text: `Keep a name field so staff can call ${terms.people}.` });
     }
     setSaving(true);
     setMessage(null);
@@ -180,6 +186,9 @@ export default function AdminSettingsPage() {
         slug: general.slug || undefined,
         email: general.email || undefined,
         phone: general.phone || undefined,
+        industry: general.industry,
+        customerLabel: general.customerLabel.trim() || null,
+        customerLabelPlural: general.customerLabel.trim() ? pluralize(general.customerLabel.trim()) : null,
         identityFieldsConfig,
         defaultDisplayMode: displayMode,
         notificationSettings: notify,
@@ -195,6 +204,7 @@ export default function AdminSettingsPage() {
       }
       setOrganization(updated);
       setSnapshot(current);
+      refreshUser().catch(() => {});
       setMessage({ type: 'success', text: 'Settings saved.' });
     } catch (err: any) {
       setMessage({ type: 'error', text: err.response?.data?.error || err.response?.data?.message || 'Couldn’t save. Try again.' });
@@ -257,7 +267,7 @@ export default function AdminSettingsPage() {
 
   return (
     <Layout>
-      <PageHeader title="Settings" subtitle="How your organization appears to patients and staff." />
+      <PageHeader title="Settings" subtitle={`How your organization appears to ${terms.people} and staff.`} />
 
       <div className="settings">
         <nav className="settings-nav" aria-label="Settings sections">
@@ -294,6 +304,32 @@ export default function AdminSettingsPage() {
                 </label>
               </div>
 
+              <h3>What kind of place is it?</h3>
+              <div className="settings-chips" role="radiogroup" aria-label="Organization type">
+                {INDUSTRIES.map((i) => (
+                  <button
+                    key={i.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={general.industry === i.id}
+                    className="welcome-chip"
+                    onClick={() => setGeneral({ ...general, industry: i.id })}
+                  >
+                    {i.label}
+                  </button>
+                ))}
+              </div>
+              <label className="settings-field settings-narrow-wide">
+                <span>What do you call the people in your queues?</span>
+                <input
+                  value={general.customerLabel}
+                  maxLength={30}
+                  onChange={(e) => setGeneral({ ...general, customerLabel: e.target.value })}
+                  placeholder={defaultPersonFor(general.industry)}
+                />
+                <small>Used on every screen, message and report, e.g. “{terms.People} waiting”. Leave blank for “{defaultPersonFor(general.industry)}”.</small>
+              </label>
+
               <h3>Workspace address</h3>
               <div className="settings-suffix">
                 <input
@@ -308,7 +344,7 @@ export default function AdminSettingsPage() {
               ) : slugChanged ? (
                 <p className="settings-warn"><AlertTriangle size={16} /> Everyone will sign in at <strong>{general.slug}</strong> after you save, and the old address stops working. You’ll be taken there to sign in again.</p>
               ) : (
-                <p className="settings-note">Staff sign in here. Patient QR codes keep working if you change it.</p>
+                <p className="settings-note">Staff sign in here. QR codes keep working if you change it.</p>
               )}
 
               <h3>Organization ID</h3>
@@ -324,8 +360,8 @@ export default function AdminSettingsPage() {
 
           {section === 'patient' && (
             <section aria-labelledby="s-patient">
-              <h2 id="s-patient">Patient details</h2>
-              <p className="settings-lede">Patients fill these in, in this order, when they join a queue. Keep it short; every extra field slows the line at the door.</p>
+              <h2 id="s-patient">{terms.Person} details</h2>
+              <p className="settings-lede">{terms.People} fill these in, in this order, when they join a queue. Keep it short; every extra field slows the line at the door.</p>
               <ol className="settings-fields">
                 {fields.map((f, i) => {
                   const isName = ['firstName', 'name', 'fullName'].includes(f.key);
@@ -351,7 +387,7 @@ export default function AdminSettingsPage() {
                         onClick={() => setFields((list) => list.filter((x) => x.key !== f.key))}
                         disabled={isName}
                         aria-label={`Remove ${f.label}`}
-                        title={isName ? 'Patients are always asked their name' : `Remove ${f.label}`}
+                        title={isName ? `${terms.People} are always asked their name` : `Remove ${f.label}`}
                       >
                         <X size={16} />
                       </button>
@@ -397,7 +433,7 @@ export default function AdminSettingsPage() {
           {section === 'screens' && (
             <section aria-labelledby="s-screens">
               <h2 id="s-screens">Screen privacy</h2>
-              <p className="settings-lede">Choose what the lobby screen shows when a patient is called. Screens are seen by everyone in the room.</p>
+              <p className="settings-lede">Choose what the lobby screen shows when someone is called. Screens are seen by everyone in the room.</p>
               <div className="mode-cards" role="radiogroup" aria-labelledby="s-screens">
                 {DISPLAY_MODES.map((mode) => (
                   <label key={mode.value} className="mode-card" data-selected={displayMode === mode.value}>
@@ -422,9 +458,9 @@ export default function AdminSettingsPage() {
           {section === 'notifications' && (
             <section aria-labelledby="s-notify">
               <h2 id="s-notify">Notifications</h2>
-              <p className="settings-lede">Patients always see live updates on their ticket page. Email and SMS go out as well, using your plan’s message credits.</p>
+              <p className="settings-lede">{terms.People} always see live updates on their ticket page. Email and SMS go out as well, using your plan’s message credits.</p>
               <label className="settings-field settings-narrow">
-                <span>Tell patients when they’re this many places from the front</span>
+                <span>Tell {terms.people} when they’re this many places from the front</span>
                 <input
                   type="number"
                   min={1}
@@ -432,11 +468,11 @@ export default function AdminSettingsPage() {
                   value={notify.turnApproachingAt}
                   onChange={(e) => setNotify({ ...notify, turnApproachingAt: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })}
                 />
-                <small>Each patient is told once. 3 works for most clinics.</small>
+                <small>Each {terms.person} is told once. 3 works for most places.</small>
               </label>
               <div className="settings-switches">
-                <Switch label="Email patients who give an email address" checked={notify.email} onChange={(e) => setNotify({ ...notify, email: e.target.checked })} />
-                <Switch label="Text patients who give a phone number" checked={notify.sms} onChange={(e) => setNotify({ ...notify, sms: e.target.checked })} />
+                <Switch label={`Email ${terms.people} who give an email address`} checked={notify.email} onChange={(e) => setNotify({ ...notify, email: e.target.checked })} />
+                <Switch label={`Text ${terms.people} who give a phone number`} checked={notify.sms} onChange={(e) => setNotify({ ...notify, sms: e.target.checked })} />
               </div>
             </section>
           )}
@@ -444,7 +480,7 @@ export default function AdminSettingsPage() {
           {section === 'branding' && (
             <section aria-labelledby="s-brand">
               <h2 id="s-brand">Branding</h2>
-              <p className="settings-lede">Your logo and colour on the sign-in page, the patient ticket pages and the lobby screen.</p>
+              <p className="settings-lede">Your logo and colour on the sign-in page, the ticket pages and the lobby screen.</p>
               {!hasFeature('customBranding') ? (
                 <p className="settings-locked"><Lock size={18} /> Branding isn’t included in your plan. <a href="/admin/billing">See plans</a></p>
               ) : (
@@ -495,7 +531,7 @@ export default function AdminSettingsPage() {
                       <b style={{ color: accent }}>C014</b>
                       <span className="brand-preview-btn" style={{ background: accent }}>Join queue</span>
                     </div>
-                    <figcaption>Preview of the patient ticket page</figcaption>
+                    <figcaption>Preview of the ticket page</figcaption>
                   </figure>
                 </div>
               )}
@@ -505,7 +541,7 @@ export default function AdminSettingsPage() {
           {section === 'domain' && (
             <section aria-labelledby="s-domain">
               <h2 id="s-domain">Custom domain</h2>
-              <p className="settings-lede">Serve your sign-in and patient pages from your own address, such as queue.yourclinic.com.</p>
+              <p className="settings-lede">Serve your sign-in and ticket pages from your own address, such as queue.yourclinic.com.</p>
               {!hasFeature('customDomain') ? (
                 <p className="settings-locked"><Lock size={18} /> Custom domains aren’t included in your plan. <a href="/admin/billing">See plans</a></p>
               ) : (

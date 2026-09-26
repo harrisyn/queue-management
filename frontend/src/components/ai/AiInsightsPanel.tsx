@@ -148,7 +148,7 @@ export default function AiInsightsPanel({ locationId }: { locationId?: string })
         {header}
         <div className="panel-body muted">
           {canToggle
-            ? 'Turn this on to ask questions about your queues and receive a daily digest. Only aggregated statistics are shared with the AI provider, never patient details.'
+            ? 'Turn this on to ask questions about your queues and receive a daily digest. Only aggregated statistics are shared with the AI provider, never anyone’s personal details.'
             : 'An organization admin can turn on AI insights for your organization.'}
           {error && <div className="inline-alert inline-alert-error" style={{ marginTop: '0.75rem' }}>{error}</div>}
         </div>

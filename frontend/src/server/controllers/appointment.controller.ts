@@ -63,7 +63,7 @@ export const createAppointment = async (req: Request, res: Response, next: NextF
     let patientId: string | undefined = userId;
     if (!patientId) {
       if (!patient?.firstName || !patient?.lastName) {
-        return res.status(400).json({ error: 'Choose a patient or enter their first and last name' });
+        return res.status(400).json({ error: 'Choose someone from the list, or enter their first and last name' });
       }
       const created = await prisma.user.create({
         data: {
@@ -86,7 +86,7 @@ export const createAppointment = async (req: Request, res: Response, next: NextF
       where: { userId: patientId, slotId, status: { in: ACTIVE_STATUSES } },
     });
     if (existing) {
-      return res.status(400).json({ error: 'This patient already has an appointment in that slot' });
+      return res.status(400).json({ error: 'They already have an appointment in that slot' });
     }
 
     if (!(await claimSlot(slotId))) {
@@ -268,10 +268,10 @@ export const checkInAppointment = async (req: Request, res: Response, next: Next
 
     const queue = appointment.slot.queue;
     if (getStartOfDay(queue.date).getTime() !== getStartOfDay().getTime()) {
-      return res.status(400).json({ error: 'Patients can only be checked in on the day of their appointment' });
+      return res.status(400).json({ error: 'Check-in opens on the day of the appointment' });
     }
     if (queue.status !== 'ACTIVE') {
-      return res.status(400).json({ error: 'This queue is not accepting patients right now' });
+      return res.status(400).json({ error: 'This queue isn’t taking anyone right now' });
     }
 
     const { count } = await prisma.appointment.updateMany({

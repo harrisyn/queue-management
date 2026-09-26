@@ -139,7 +139,7 @@ export const getOrganizationByDomain = async (req: Request, res: Response, next:
       select: {
         status: true,
         organization: {
-          select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, hidePoweredBy: true },
+          select: { id: true, name: true, slug: true, logoUrl: true, primaryColor: true, hidePoweredBy: true, industry: true, customerLabel: true, customerLabelPlural: true },
         },
       },
     });

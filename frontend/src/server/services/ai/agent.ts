@@ -1,3 +1,4 @@
+import { termsFor } from '../../../lib/terms';
 import prisma from '../../lib/prisma';
 import { getAiProvider } from './index';
 import type { AiMessage, ToolCall, ToolSpec } from './types';
@@ -65,7 +66,7 @@ export const TOOLS: ToolSpec[] = [
   },
   {
     name: 'get_transfers',
-    description: 'Patient movements between services (e.g. Reception -> Doctor) in a date range, with counts and average wait at the next service.',
+    description: 'Movements of people between services (e.g. Reception -> Doctor) in a date range, with counts and average wait at the next service.',
     parameters: {
       type: 'object',
       properties: { locationId: scopeParams.locationId, startDate: dateParam, endDate: dateParam },
@@ -132,12 +133,12 @@ async function runTool(organizationId: string, call: ToolCall): Promise<unknown>
   }
 }
 
-function systemPrompt(orgName: string, today: string) {
-  return `You are the operations analyst for ${orgName}, which uses a queue and appointment system to serve patients or customers across one or more locations. Today is ${today}.
+function systemPrompt(orgName: string, people: string, today: string) {
+  return `You are the operations analyst for ${orgName}, which uses a queue and appointment system to serve its ${people} across one or more locations. Call them ${people}. Today is ${today}.
 
 Answer the staff member's question using the tools, which return live and historical aggregates for this organization only. Base every number you state on a tool result; if the data can't answer the question, say what's missing rather than estimating. Resolve location and service names with list_sites before filtering by id.
 
-Write for a busy clinic or office manager: lead with the direct answer, then the two to four numbers that support it, then at most three practical suggestions (staffing, opening hours, service flow, reminders) when the data points to one. Keep it under 200 words, use short paragraphs or bullets, and give time periods explicitly. The data contains no patient identities; never speculate about individuals.`;
+Write for a busy manager: lead with the direct answer, then the two to four numbers that support it, then at most three practical suggestions (staffing, opening hours, service flow, reminders) when the data points to one. Keep it under 200 words, use short paragraphs or bullets, and give time periods explicitly. The data contains no personal identities; never speculate about individuals.`;
 }
 
 export interface AgentSource {
@@ -160,8 +161,8 @@ export async function runAnalyticsAgent(organizationId: string, question: string
   const provider = await getAiProvider();
   if (!provider) throw new AiNotConfiguredError('No AI provider is configured');
 
-  const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true } });
-  const system = systemPrompt(org?.name ?? 'this organization', new Date().toISOString().slice(0, 10));
+  const org = await prisma.organization.findUnique({ where: { id: organizationId }, select: { name: true, industry: true, customerLabel: true, customerLabelPlural: true } });
+  const system = systemPrompt(org?.name ?? 'this organization', termsFor(org).people, new Date().toISOString().slice(0, 10));
   const messages: AiMessage[] = [{ role: 'user', content: question }];
   const sources: AgentSource[] = [];
   const usage = { inputTokens: 0, outputTokens: 0 };

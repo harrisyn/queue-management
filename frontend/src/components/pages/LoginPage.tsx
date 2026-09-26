@@ -137,7 +137,7 @@ const LoginPage: React.FC = () => {
         isLookupStep ? (
           <>New here? <Link href="/register">Create an organization</Link></>
         ) : !isAdmin ? (
-          <>Patients don’t need an account. They join from the QR code at your location.</>
+          <>People joining your queues don’t need an account. They scan the QR code at your location.</>
         ) : undefined
       }
     >
