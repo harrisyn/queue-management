@@ -690,7 +690,6 @@ const infoLabel: React.CSSProperties = {
   color: 'var(--gray-400)',
   fontSize: '0.75rem',
   fontWeight: 600,
-  textTransform: 'uppercase' as const,
   letterSpacing: '0.03em',
 };
 

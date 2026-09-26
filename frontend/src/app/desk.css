@@ -304,3 +304,10 @@ kbd {
   .staff-list li { flex-wrap: wrap; }
   .staff-list select, .staff-role { min-width: 0; }
 }
+
+.not-found { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px 16px; background: var(--paper); }
+.not-found > div { max-width: 480px; }
+.not-found-code { margin: 0; font-family: var(--font-display); font-size: 3.5rem; font-weight: 800; color: var(--amber-400); line-height: 1; }
+.not-found h1 { margin: 0.75rem 0 0.5rem; font-size: 1.75rem; }
+.not-found p { color: var(--gray-600); line-height: 1.55; }
+.not-found-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1.5rem; }

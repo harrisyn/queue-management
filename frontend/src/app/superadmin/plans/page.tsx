@@ -756,7 +756,6 @@ const sectionTitle: React.CSSProperties = {
   color: 'var(--gray-500)',
   fontSize: '0.75rem',
   fontWeight: 700,
-  textTransform: 'uppercase' as const,
   letterSpacing: '0.05em',
   marginBottom: '0.75rem',
 };

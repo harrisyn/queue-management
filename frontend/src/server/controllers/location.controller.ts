@@ -1,5 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../lib/prisma';
+import { extractSubdomain, extractCustomDomainCandidate } from '../../lib/subdomain';
 
 export const createLocation = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -99,10 +100,28 @@ export const deleteLocation = async (req: Request, res: Response, next: NextFunc
 };
 
 // Public listing of locations with publicCode for customers
+/** Which organization's address this request came in on, if any. */
+async function tenantOrgIdFromHost(req: Request): Promise<string | null> {
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '');
+  const slug = extractSubdomain(host);
+  if (slug && slug !== 'admin') {
+    return (await prisma.organization.findUnique({ where: { slug }, select: { id: true } }))?.id ?? null;
+  }
+  const domain = extractCustomDomainCandidate(host);
+  if (domain) {
+    return (await prisma.customDomain.findFirst({ where: { domain, status: 'VERIFIED' }, select: { organizationId: true } }))?.organizationId ?? null;
+  }
+  return null;
+}
+
+// Lists the locations of the organization whose address this is. There is
+// no cross-organization directory: on the root domain this is empty.
 export const getPublicLocations = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const organizationId = await tenantOrgIdFromHost(req);
+    if (!organizationId) return res.json([]);
     const locations = await prisma.location.findMany({
-      where: { publicCode: { not: null } },
+      where: { publicCode: { not: null }, organizationId, organization: { status: 'ACTIVE' } },
       select: { id: true, name: true, publicCode: true, organization: { select: { id: true, name: true } }, _count: { select: { services: true } } },
     });
 

@@ -594,7 +594,7 @@ export default function AdminLocationsPage() {
                 </div>
                 
                 <h3 style={cardTitle}>{loc.name}</h3>
-                <p style={cardAddress}>{loc.address || 'No address set'}</p>
+                {loc.address && <p style={cardAddress}>{loc.address}</p>}
                 
                 <div style={cardMeta}>
                   <span style={metaItem}>
@@ -610,7 +610,7 @@ export default function AdminLocationsPage() {
                       <polyline points="2 17 12 22 22 17" />
                       <polyline points="2 12 12 17 22 12" />
                     </svg>
-                    {loc.services?.length || 0} services
+                    {loc.services?.length || 0} {(loc.services?.length || 0) === 1 ? 'service' : 'services'}
                   </span>
                 </div>
 
@@ -620,7 +620,7 @@ export default function AdminLocationsPage() {
                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                     </svg>
-                    Click to view URL
+                    Show the join link
                   </div>
                 )}
 
@@ -676,7 +676,7 @@ const filterLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -736,7 +736,7 @@ const detailLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -780,7 +780,7 @@ const urlRowLabel: React.CSSProperties = {
   fontWeight: 600,
   color: '#166534',
   marginBottom: '0.375rem',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.025em',
 };
 

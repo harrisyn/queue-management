@@ -413,7 +413,6 @@ const th: React.CSSProperties = {
   color: 'var(--gray-400)',
   fontSize: '0.75rem',
   fontWeight: 700,
-  textTransform: 'uppercase' as const,
   letterSpacing: '0.05em',
   borderBottom: '1px solid var(--gray-100)',
   whiteSpace: 'nowrap' as const,

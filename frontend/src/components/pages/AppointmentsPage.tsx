@@ -1,5 +1,6 @@
 'use client';
 
+import { useTerms } from '@/hooks/useTerms';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CalendarPlus, Check, Clock, Search, UserPlus } from 'lucide-react';
 import api, { Appointment, AvailableSlot, PatientSummary } from '@/api/client';
@@ -88,6 +89,7 @@ function BookAppointmentModal({ open, onClose, onBooked, locations, services, de
   services: ServiceOption[];
   defaults: { locationId: string; date: string };
 }) {
+  const terms = useTerms();
   const [locationId, setLocationId] = useState(defaults.locationId);
   const [serviceId, setServiceId] = useState('');
   const [date, setDate] = useState(defaults.date);
@@ -126,7 +128,7 @@ function BookAppointmentModal({ open, onClose, onBooked, locations, services, de
     setError('');
     if (!slotId) return setError('Pick a time.');
     if (!isNew && !patient) return setError('Find the patient, or add them as a new patient.');
-    if (isNew && (!newPatient.firstName.trim() || !newPatient.lastName.trim())) return setError('Enter the patient\'s first and last name.');
+    if (isNew && (!newPatient.firstName.trim() || !newPatient.lastName.trim())) return setError(`Enter the ${terms.person}’s first and last name.`);
     setSaving(true);
     try {
       const appt = await api.createAppointment({
@@ -177,9 +179,9 @@ function BookAppointmentModal({ open, onClose, onBooked, locations, services, de
 
         <div className="field">
           <div className="row" style={{ justifyContent: 'space-between' }}>
-            <span className="field-label">Patient</span>
+            <span className="field-label">{terms.Person}</span>
             <Button variant="ghost" size="sm" onClick={() => { setIsNew(!isNew); setPatient(null); }}>
-              {isNew ? <><Search size={14} /> Find existing patient</> : <><UserPlus size={14} /> New patient</>}
+              {isNew ? <><Search size={14} /> Find an existing {terms.person}</> : <><UserPlus size={14} /> New {terms.person}</>}
             </Button>
           </div>
           {isNew ? (
@@ -205,7 +207,7 @@ function BookAppointmentModal({ open, onClose, onBooked, locations, services, de
                 placeholder="Search by name, phone or email"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                aria-label="Search patients"
+                aria-label={`Search ${terms.people}`}
               />
               {results.length > 0 && (
                 <div className="result-list">
@@ -218,7 +220,7 @@ function BookAppointmentModal({ open, onClose, onBooked, locations, services, de
                 </div>
               )}
               {query.trim().length >= 2 && results.length === 0 && (
-                <p className="field-hint">No match. Use &ldquo;New patient&rdquo; to add them.</p>
+                <p className="field-hint">No match. Use &ldquo;New {terms.person}&rdquo; to add them.</p>
               )}
             </>
           )}
@@ -289,6 +291,7 @@ function RescheduleModal({ appointment, onClose, onDone }: {
 
 export default function AppointmentsPage() {
   const { user } = useAuthContext();
+  const terms = useTerms();
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [services, setServices] = useState<ServiceOption[]>([]);
   const [locationId, setLocationId] = useState('');
@@ -367,7 +370,7 @@ export default function AppointmentsPage() {
       <PageHeader
         icon={CalendarDays}
         title="Appointments"
-        subtitle="Book patients into future slots, reschedule, and check them in when they arrive."
+        subtitle={`Book ${terms.people} into future slots, reschedule, and check them in when they arrive.`}
         actions={
           <Button variant="secondary" onClick={() => setBooking(true)} disabled={!locationId}>
             <CalendarPlus size={18} /> Book appointment
@@ -412,7 +415,7 @@ export default function AppointmentsPage() {
           <div className="data-table-wrap">
             <table className="data-table">
               <thead>
-                <tr><th>Time</th><th>Patient</th><th>Service</th><th>Status</th><th /></tr>
+                <tr><th>Time</th><th>{terms.Person}</th><th>Service</th><th>Status</th><th /></tr>
               </thead>
               <tbody>
                 {visible.map((a) => (

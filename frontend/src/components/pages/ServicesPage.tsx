@@ -525,7 +525,7 @@ const ServicesPage: React.FC = () => {
               </div>
 
               <div style={formFieldFull}>
-                <label style={labelStyle}>Service Points & Desks</label>
+                <label style={labelStyle}>Desks and rooms</label>
                 {editingService && (
                   <ServicePointsDeskPicker
                     organizationId={user?.organizationId || ''}
@@ -611,12 +611,10 @@ const ServicesPage: React.FC = () => {
                       <polyline points="2 12 12 17 22 12" />
                     </svg>
                   </div>
-                  <span style={service.type === 'GENERAL' ? typeBadgeGeneral : typeBadgeIndividual}>
-                    {service.type}
-                  </span>
+                  {service.type === 'INDIVIDUAL' && <span style={typeBadgeIndividual}>Appointments</span>}
                 </div>
                 <h3 style={serviceName}>{service.name}</h3>
-                <p style={serviceDesc}>{service.description || 'No description provided'}</p>
+                {service.description && <p style={serviceDesc}>{service.description}</p>}
                 <div style={serviceDetails}>
                   <div style={detailChip}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -632,7 +630,7 @@ const ServicesPage: React.FC = () => {
                       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                     </svg>
-                    {service.concurrentLimit} concurrent
+                    {service.concurrentLimit} at a time
                   </div>
                   <div style={detailChip}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -651,7 +649,7 @@ const ServicesPage: React.FC = () => {
                     <line x1="12" y1="16" x2="12" y2="12" />
                     <line x1="12" y1="8" x2="12.01" y2="8" />
                   </svg>
-                  Click for details
+                  Details
                 </div>
 
                 <div style={cardActions} onClick={(e) => e.stopPropagation()}>
@@ -722,7 +720,7 @@ const filterLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -804,7 +802,7 @@ const detailLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -1052,7 +1050,7 @@ const typeBadgeGeneral: React.CSSProperties = {
   borderRadius: '20px',
   fontSize: '0.75rem',
   fontWeight: 600,
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -1063,7 +1061,7 @@ const typeBadgeIndividual: React.CSSProperties = {
   borderRadius: '20px',
   fontSize: '0.75rem',
   fontWeight: 600,
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 

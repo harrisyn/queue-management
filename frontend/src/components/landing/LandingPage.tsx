@@ -54,8 +54,8 @@ export default function LandingPage() {
           <div className={styles.heroText}>
             <h1 id="hero-title" className={styles.headline}>Run a calmer waiting room.</h1>
             <p className={styles.lede}>
-              Patients scan a QR code, get a ticket on their phone, and are called to the right desk when it&apos;s
-              their turn, from reception to the consulting room, lab and pharmacy.
+              People scan a QR code, get a ticket on their phone, and are called to the right desk when it&apos;s
+              their turn. Clinics, banks, offices, service centres: anywhere people wait for a desk, room or counter.
             </p>
             <div className={styles.ctaRow}>
               <Link href="/register" className={styles.btnPrimary}>Start free</Link>
@@ -71,7 +71,7 @@ export default function LandingPage() {
         <section id="how-it-works" className={styles.section} aria-labelledby="journey-title">
           <h2 id="journey-title" className={styles.sectionTitle}>One ticket follows the whole visit.</h2>
           <p className={styles.sectionLede}>
-            Most visits aren&apos;t one queue. {APP_NAME} carries each patient from step to step, so nobody has to
+            Most visits aren&apos;t one queue. {APP_NAME} carries each person from step to step, so nobody has to
             line up again or explain where they&apos;ve been.
           </p>
           <ol className={styles.journey}>
@@ -89,7 +89,7 @@ export default function LandingPage() {
           <div className={styles.rows}>
             <div className={styles.row}>
               <div className={styles.rowText}>
-                <p className={styles.rowFor}>For patients</p>
+                <p className={styles.rowFor}>For the people you serve</p>
                 <h3 className={styles.rowTitle}>Sit down, grab a coffee, keep your place.</h3>
                 <ul className={styles.rowList}>
                   <Tick>Live position and wait time on their own phone</Tick>
@@ -113,9 +113,9 @@ export default function LandingPage() {
             <div className={`${styles.row} ${styles.rowFlip}`}>
               <div className={styles.rowText}>
                 <p className={styles.rowFor}>For the front desk</p>
-                <h3 className={styles.rowTitle}>Call the next patient with one tap.</h3>
+                <h3 className={styles.rowTitle}>Call the next person with one tap.</h3>
                 <ul className={styles.rowList}>
-                  <Tick>Each desk or room calls from its own list, with priority for booked patients</Tick>
+                  <Tick>Each desk or room calls from its own list, with priority for booked appointments</Tick>
                   <Tick>Book, reschedule and check in appointments in the same place</Tick>
                   <Tick>Send someone on to the next service without re-registering them</Tick>
                 </ul>
@@ -193,7 +193,7 @@ export default function LandingPage() {
             <ul className={styles.tvPoints}>
               <li><strong>Your media, your schedule</strong>Upload images and videos, set how long each plays and when a campaign starts and ends.</li>
               <li><strong>Calls always come first</strong>A new call interrupts whatever is playing, with a chime and the number in large type.</li>
-              <li><strong>Your brand on screen</strong>Your logo and colours on the board, the patient pages and your own web address.</li>
+              <li><strong>Your brand on screen</strong>Your logo and colours on the board, the ticket pages and your own web address.</li>
             </ul>
           </div>
         </section>
@@ -202,7 +202,7 @@ export default function LandingPage() {
           <div className={styles.closingInner}>
             <div>
               <h2>Set up your first queue this afternoon.</h2>
-              <p>Create your organization, add a location and a service, and print the QR code. Your first patients can join before the end of the day.</p>
+              <p>Create your organization, add a location and a service, and print the QR code. The first people can join before the end of the day.</p>
             </div>
             <Link href="/register" className={styles.btnInverse}>Start free</Link>
           </div>

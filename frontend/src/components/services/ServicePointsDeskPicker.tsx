@@ -110,7 +110,6 @@ export const ServicePointsDeskPicker: React.FC<ServicePointsDeskPickerProps> = (
         .desk-picker-type {
           font-size: 0.7rem;
           color: #6b7280;
-          text-transform: uppercase;
           letter-spacing: 0.04em;
         }
         .desk-picker-capacity {

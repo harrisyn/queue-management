@@ -1,5 +1,6 @@
 'use client';
 
+import { useTerms } from '@/hooks/useTerms';
 import React, { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Plug, Database, FileText, Link2, Package, Search, Pause, Play, Pencil, Trash2 } from 'lucide-react';
@@ -552,7 +553,7 @@ export default function AdminDataSourcesPage() {
                     type="text"
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Patient EMR System"
+                    placeholder="e.g. Records system"
                     required
                   />
                 </div>

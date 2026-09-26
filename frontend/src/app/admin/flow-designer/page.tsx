@@ -1,5 +1,6 @@
 'use client';
 
+import { useTerms } from '@/hooks/useTerms';
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Workflow } from 'lucide-react';
 import api from '@/api/client';
@@ -34,6 +35,7 @@ interface DragState {
 
 const FlowDesignerPage: React.FC = () => {
   const { user } = useAuthContext();
+  const terms = useTerms();
   const [locations, setLocations] = useState<Location[]>([]);
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [services, setServices] = useState<Service[]>([]);
@@ -392,8 +394,8 @@ const FlowDesignerPage: React.FC = () => {
       <div className="flow-designer">
         <PageHeader
           icon={Workflow}
-          title="Patient Flow Designer"
-          subtitle="Design how patients move between services"
+          title={`${terms.Person} flow`}
+          subtitle={`Where ${terms.people} go next after each service. Staff see the next step when they finish, or it happens automatically.`}
           actions={
             <div className="header-actions">
               <div className="selector">
@@ -562,7 +564,7 @@ const FlowDesignerPage: React.FC = () => {
         <div className="flows-list">
           <h2>Flow Connections</h2>
           {flows.length === 0 ? (
-            <p className="no-flows">No flow connections defined. Add connections to define patient journey.</p>
+            <p className="no-flows">Nothing connected yet. Add a connection to send {terms.people} from one service to the next.</p>
           ) : (
             <div className="flows-grid">
               {flows.map(flow => (
@@ -579,7 +581,7 @@ const FlowDesignerPage: React.FC = () => {
                     <button 
                       className={`option-btn ${flow.autoTransfer ? 'active' : ''}`}
                       onClick={() => handleToggleAutoTransfer(flow)}
-                      title="Auto-transfer patients"
+                      title={`Send ${terms.people} on automatically`}
                     >
                       Auto
                     </button>
@@ -611,7 +613,7 @@ const FlowDesignerPage: React.FC = () => {
           <div className="modal-overlay" onClick={() => setShowModal(false)}>
             <div className="modal" onClick={e => e.stopPropagation()}>
               <h2>Add Flow Connection</h2>
-              <p className="modal-desc">Define how patients flow between services</p>
+              <p className="modal-desc">Where {terms.people} go after this service.</p>
 
               <div className="form-group">
                 <label>From Service</label>
@@ -857,7 +859,6 @@ const FlowDesignerPage: React.FC = () => {
 
           .node-type {
             font-size: 0.65rem;
-            text-transform: uppercase;
             padding: 0.125rem 0.375rem;
             border-radius: 4px;
             background: rgba(14, 143, 128, 0.1);
