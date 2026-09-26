@@ -155,9 +155,9 @@ const LoginPage: React.FC = () => {
       <div style={bgGradient} />
 
       {/* Main Container */}
-      <div style={containerStyle}>
+      <div style={containerStyle} className="login-grid">
         {/* Left Side - Branding */}
-        <div style={brandingSection}>
+        <div style={brandingSection} className="login-branding">
           <div style={logoContainer}>
             <div style={logoIcon}>
               {branding?.logoUrl ? (
@@ -380,7 +380,7 @@ const LoginPage: React.FC = () => {
             <p style={signupPrompt}>
               Need an operator account? Contact your organization administrator to create one.
               For customers and patients, use the public join URLs — find your location at {' '}
-              <Link href="/join" style={signupLink}>Public join pages</Link>.
+              <Link href="/locations" style={signupLink}>Public join pages</Link>.
             </p>
           </div>
 
@@ -465,9 +465,7 @@ const heroTitle: React.CSSProperties = {
   fontWeight: 800,
   lineHeight: 1.1,
   marginBottom: '1.5rem',
-  background: 'linear-gradient(135deg, #ffffff 0%, #99f6e4 100%)',
-  WebkitBackgroundClip: 'text',
-  WebkitTextFillColor: 'transparent',
+  color: '#ffffff',
 };
 
 const heroSubtitle: React.CSSProperties = {
@@ -715,6 +713,11 @@ const loginStyles = `
   }
   @media (prefers-reduced-motion: reduce) {
     .qf-spin { animation-duration: 1.6s; }
+  }
+  @media (max-width: 900px) {
+    .login-grid { grid-template-columns: 1fr !important; gap: 2rem !important; }
+    .login-branding { text-align: center; align-items: center; }
+    .login-branding > div:last-child, .login-branding > p { display: none; }
   }
 `;
 

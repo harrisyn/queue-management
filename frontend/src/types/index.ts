@@ -77,6 +77,7 @@ export interface Service {
   displayMode?: string;
   location?: Location;
   practitioners?: Practitioner[];
+  queues?: Queue[];
 }
 
 export interface Practitioner {

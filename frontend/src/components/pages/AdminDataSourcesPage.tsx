@@ -431,7 +431,7 @@ export default function AdminDataSourcesPage() {
                   <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
                     <strong>{testResult.success ? '✓ Success' : '✗ Failed'}</strong>
                     <p>{testResult.message}</p>
-                    {testResult.data && (
+                    {testResult.data != null && (
                       <pre>{JSON.stringify(testResult.data, null, 2)}</pre>
                     )}
                   </div>

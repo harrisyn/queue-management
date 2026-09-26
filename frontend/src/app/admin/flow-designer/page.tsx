@@ -182,8 +182,8 @@ const FlowDesignerPage: React.FC = () => {
   };
 
   // Calculate node positions in a flow layout
-  const calculateLayout = () => {
-    if (services.length === 0) return [];
+  const calculateLayout = (): Record<string, { x: number; y: number; level: number }> => {
+    if (services.length === 0) return {};
 
     // Find entry points (services with no incoming flows)
     const entryPoints = services.filter(svc => {
