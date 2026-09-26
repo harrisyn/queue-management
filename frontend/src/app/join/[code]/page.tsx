@@ -216,9 +216,12 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
     if (orgConfig && Object.keys(orgConfig).length > 0) {
       // Saved configs keep whatever key order they were written in; show
       // names first, then contact details, then org-specific fields.
+      // Settings saves an explicit `order`; older configs get names first.
+      const entries = Object.entries(orgConfig) as [string, IdentityFieldConfig & { order?: number }][];
       const ORDER = ['name', 'fullName', 'firstName', 'lastName', 'phone', 'email'];
       const rank = (key: string) => (ORDER.includes(key) ? ORDER.indexOf(key) : ORDER.length);
-      return Object.fromEntries(Object.entries(orgConfig).sort(([a], [b]) => rank(a) - rank(b)));
+      const hasOrder = entries.every(([, c]) => typeof c.order === 'number');
+      return Object.fromEntries(entries.sort(([a, ca], [b, cb]) => (hasOrder ? ca.order! - cb.order! : rank(a) - rank(b))));
     }
     // Default fallback if no config
     return {
