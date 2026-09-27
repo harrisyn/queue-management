@@ -205,7 +205,7 @@ const errorContainer: React.CSSProperties = {
 
 const pageContainer: React.CSSProperties = {
   maxWidth: '1400px',
-  margin: '0 auto',
+  margin: 0,
 };
 
 const statsGrid: React.CSSProperties = {

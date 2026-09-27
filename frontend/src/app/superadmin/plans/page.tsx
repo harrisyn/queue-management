@@ -304,7 +304,7 @@ export default function PlansPage() {
   };
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1400px' }}>
       <PageHeader
         title="Plans"
         subtitle="What each plan costs and includes."

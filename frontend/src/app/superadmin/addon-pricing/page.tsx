@@ -69,7 +69,7 @@ export default function AddOnPricingPage() {
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '900px' }}>
       <PageHeader
         title="Add-on pricing"
         subtitle="Set the price organizations pay for extra locations and extra users beyond their plan limit."

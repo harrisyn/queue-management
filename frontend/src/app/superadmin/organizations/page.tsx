@@ -339,7 +339,7 @@ export default function OrganizationsPage() {
 // Styles
 const pageContainer: React.CSSProperties = {
   maxWidth: '1400px',
-  margin: '0 auto',
+  margin: 0,
 };
 
 const filtersContainer: React.CSSProperties = {

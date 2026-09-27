@@ -81,7 +81,7 @@ export default function PaymentProvidersPage() {
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '900px' }}>
       <PageHeader
         title="Payment providers"
         subtitle="Configure Stripe and Paystack so tenants can subscribe to a plan."

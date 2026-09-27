@@ -79,7 +79,7 @@ export default function FileStorageProvidersPage() {
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '900px' }}>
       <PageHeader
         title="File storage"
         subtitle="Configure a file storage provider so organizations can upload a logo for white-labeling."

@@ -585,7 +585,7 @@ const errorContainer: React.CSSProperties = {
 
 const pageContainer: React.CSSProperties = {
   maxWidth: '1200px',
-  margin: '0 auto',
+  margin: 0,
 };
 
 const header: React.CSSProperties = {
