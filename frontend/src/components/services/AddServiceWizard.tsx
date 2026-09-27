@@ -217,7 +217,7 @@ export const AddServiceWizard: React.FC<AddServiceWizardProps> = ({ organization
               <div className="form-group checkbox-group">
                 <label>
                   <input type="checkbox" checked={data.isActive} onChange={e => update('isActive', e.target.checked)} />
-                  Active (customers can join this service's queue)
+                  Open: people can join this service&apos;s queue
                 </label>
               </div>
             </div>

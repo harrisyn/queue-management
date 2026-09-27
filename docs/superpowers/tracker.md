@@ -116,7 +116,7 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [x] Lobby screen rebuilt: services view (one service gets the whole screen), desks view, full-screen call flash (+ spoken call when sound is on), "scan to join" QR, auto-hiding controls, light/dark
 - [x] Display media: `DisplayMedia` playlist (image/video, upload ≤4MB or link, per-location or all, order, pause, date window) + per-location `displayConfig` (ticker messages/speed, media on/off, full-screen-when-quiet vs beside-the-queue, quiet interval, call flash). Admin at `/admin/displays`; screens refresh live on change. A new call always interrupts media
 - [x] Files over 4MB upload straight from the browser to Uploadcare (with progress); the server confirms and stores them with the secret key
-- [ ] Display media isn't plan-gated; decide whether adverts are a paid feature
+- [x] Adverts are plan-gated: free-plan trial (14 days, 3 items), paid plans include a capped playlist (5 items, files ≤4MB), lobby media pack add-on for large uploads, streams and +25 items per pack. Numbers editable per plan
 - [x] QR codes generated locally (`qrcode`); the ticket page was sending each private ticket URL to api.qrserver.com
 - [x] Setup checklist on Today (desk, QR poster, test join, invite team) until done or dismissed
 - [x] Dev server served a stale route table (Express app cached on `globalThis`); no longer cached
@@ -132,6 +132,9 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [x] "Not here" recorded NO_SHOW (it was cancelling)
 - [x] Organization type + own word for the people it serves (patient, guest, client…), asked in quick setup and Settings; `termsFor()` used across UI, public pages and the AI prompt. Existing orgs default to healthcare
 - [ ] **Desktop app (to consider/build):** a small Tauri tray app wrapping `/widget/desk` for always-on-top without a browser, a global hotkey for "call next" from any app, start at login, native notifications. Browsers can't do global hotkeys
+- [x] Scheduled playlists: days of the week, time windows (overnight OK), date ranges, per location or all, priority (takes over / normal / filler); one playlist can run on any set of days
+- [x] Streams on lobby screens: YouTube, Vimeo, HLS live (.m3u8)
+- [ ] Lint: 508 warnings to work down (mostly React Compiler advisories: setState in effects, effects calling later-declared functions)
 - [ ] A desk that serves several services at once (sign in once, call from whichever queue is due). Today one desk sign-in = one service
 - [ ] `/my-queue` (PATIENT accounts) is unlinked legacy; decide whether to keep it
 
@@ -146,7 +149,7 @@ Branch: `arch-review-fixes`. Origin: architecture review of 2026-09-25.
 - [x] Removed the legacy `/[orgId]` catch-all; real 404 page; workspace-not-found restyled
 - [x] Platform admin pages share the app shell; titles and copy sentence case and plain language throughout; header buttons were forced white by a leftover rule
 - [ ] AI analytics tools (`ai/metrics.ts`) still bucket hours in the server's timezone (org-wide, can span locations)
-- [ ] Upgrade to Next 16 (clears the remaining postcss advisory)
+- [x] Upgraded to Next 16.3 (Turbopack builds, `middleware.ts` → `proxy.ts`, ESLint 9 flat config replaces `next lint`); `npm audit` clean
 - [ ] Direct Uploadcare uploads not tried with real keys (dev has only the public demo key)
 - [ ] Dev DB clean-up: smoke-test orgs and the Ridgeway test org (plus its sample media) can be deleted
 

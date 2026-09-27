@@ -97,6 +97,8 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
   
   const printRef = useRef<HTMLDivElement>(null);
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const locationRef = useRef<LocationInfo | null>(null);
+  useEffect(() => { locationRef.current = location; }, [location]);
 
   // Load or generate session ID
   useEffect(() => {
@@ -168,16 +170,14 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
       clearInterval(countdownRef.current);
       countdownRef.current = null;
     }
-    setLocation((loc) => {
-      if (loc?.services.length === 1) {
-        setSelectedServiceId(loc.services[0].id);
-        setStep('form');
-      } else {
-        setSelectedServiceId('');
-        setStep('select-service');
-      }
-      return loc;
-    });
+    const loc = locationRef.current;
+    if (loc?.services.length === 1) {
+      setSelectedServiceId(loc.services[0].id);
+      setStep('form');
+    } else {
+      setSelectedServiceId('');
+      setStep('select-service');
+    }
   }, []);
 
   const loadLocationInfo = async () => {
@@ -312,7 +312,7 @@ export default function JoinQueuePage({ params }: { params: Promise<{ code: stri
 
       // On their own phone, go straight to the live ticket page.
       if (mode === 'normal') {
-        window.location.href = `/status/${data.queueId}/${data.entryId}`;
+        window.location.assign(`/status/${data.queueId}/${data.entryId}`);
         return;
       }
       if (mode === 'session') loadSessionEntries();

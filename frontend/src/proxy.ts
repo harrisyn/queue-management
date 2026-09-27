@@ -2,10 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { extractSubdomain, extractCustomDomainCandidate, buildAdminUrl } from '@/lib/subdomain';
 import prisma from '@/server/lib/prisma';
 
-// Runs on the Node.js runtime (stable since Next 15.5) so it can read the
-// tenant straight from the database - no HTTP hop to a separate API server.
+// Next 16 "proxy" (formerly middleware). Always runs on the Node.js
+// runtime, so it can read the tenant straight from the database.
 export const config = {
-  runtime: 'nodejs',
   // Everything except the API, Next internals and static files.
   matcher: ['/((?!api/|_next/static|_next/image|favicon\\.ico|.*\\.(?:png|jpg|jpeg|gif|svg|ico|webp|txt|xml|json|webmanifest|js)$).*)'],
 };
@@ -44,7 +43,7 @@ function notFound(req: NextRequest) {
   return NextResponse.rewrite(url);
 }
 
-export async function middleware(req: NextRequest) {
+export async function proxy(req: NextRequest) {
   const host = req.headers.get('host') || '';
   const subdomain = extractSubdomain(host);
   const { pathname } = req.nextUrl;

@@ -21,4 +21,4 @@ EXPOSE 3000
 
 # Apply migrations, regenerate the client (schema may be volume-mounted and
 # newer than the image), then start the dev server on all interfaces.
-CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma generate && npm run dev -- -p 3000 -H 0.0.0.0"]
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma generate && npx next dev --webpack -p 3000 -H 0.0.0.0"]

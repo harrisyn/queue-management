@@ -11,16 +11,18 @@ const nextConfig: NextConfig = {
   // Server-only packages that must stay as Node requires rather than being
   // bundled (native bindings / dynamic requires).
   serverExternalPackages: ['@prisma/client', 'prisma', 'bcryptjs', 'nodemailer', 'multer', 'express'],
-  // Enable webpack polling for Docker hot reload on Windows/Mac
-  webpack: (config, { dev }) => {
-    if (dev) {
-      config.watchOptions = {
-        poll: 1000,
-        aggregateTimeout: 300,
-      };
-    }
-    return config;
-  },
+  // Docker on Windows/Mac can't see file changes on bind mounts, so dev in
+  // Docker uses webpack with polling (`next dev --webpack`, see
+  // Dockerfile.dev). Builds use Turbopack, which rejects a webpack config,
+  // so it is only added when polling is asked for.
+  ...(process.env.WATCHPACK_POLLING === 'true'
+    ? {
+        webpack: (config: { watchOptions?: unknown }, { dev }: { dev: boolean }) => {
+          if (dev) config.watchOptions = { poll: 1000, aggregateTimeout: 300 };
+          return config;
+        },
+      }
+    : {}),
 };
 
 export default nextConfig;
