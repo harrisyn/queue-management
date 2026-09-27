@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, XCircle, Loader2, ImageIcon } from 'lucide-react';
 import api from '@/api/client';
@@ -53,7 +54,7 @@ export default function FileStorageProvidersPage() {
   const handleSave = async (provider: string) => {
     const form = forms[provider];
     if (!form.secretKey) {
-      alert('Secret key is required to save.');
+      toast.error('Add the secret key to save.');
       return;
     }
     setSaving(provider);
@@ -62,7 +63,7 @@ export default function FileStorageProvidersPage() {
       await loadProviders();
     } catch (err) {
       console.error('Failed to save provider config', err);
-      alert('Failed to save. Check the console for details.');
+      toast.error('Couldn’t save. Check the keys and try again.');
     } finally {
       setSaving(null);
     }
@@ -78,9 +79,9 @@ export default function FileStorageProvidersPage() {
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '900px' }}>
       <PageHeader
-        title="File Storage"
+        title="File storage"
         subtitle="Configure a file storage provider so organizations can upload a logo for white-labeling."
         icon={ImageIcon}
       />

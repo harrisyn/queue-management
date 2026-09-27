@@ -197,71 +197,42 @@ export const LimitGate: React.FC<{
   return <>{children}</>;
 };
 
-// Upgrade prompt component
+// Shown where a plan limit or feature stops an action. Informational, not
+// an error: say what the plan includes and where to get more.
+const FEATURE_NAMES: Record<keyof SubscriptionFeatures, string> = {
+  multiLocation: 'More than one location',
+  maxLocations: 'More locations',
+  maxServices: 'More services',
+  maxUsers: 'More staff',
+  smsNotifications: 'Text message alerts',
+  analytics: 'Analytics',
+  apiAccess: 'API access',
+  customBranding: 'Your own branding',
+  customDomain: 'A custom domain',
+  serviceFlows: 'Journeys between services',
+  servicePoints: 'Desks and rooms',
+};
+const RESOURCE_WORDS = { locations: ['location', 'locations'], services: ['service', 'services'], users: ['staff account', 'staff accounts'] } as const;
+
 export const UpgradePrompt: React.FC<{
   feature?: keyof SubscriptionFeatures;
   resource?: 'locations' | 'services' | 'users';
   className?: string;
 }> = ({ feature, resource, className }) => {
-  const { features, limits } = useSubscription();
+  const { limits } = useSubscription();
 
-  let message = 'Upgrade your plan to access this feature.';
-  
-  if (feature) {
-    const featureNames: Record<keyof SubscriptionFeatures, string> = {
-      multiLocation: 'Multiple Locations',
-      maxLocations: 'More Locations',
-      maxServices: 'More Services',
-      maxUsers: 'More Users',
-      smsNotifications: 'SMS Notifications',
-      analytics: 'Analytics Dashboard',
-      apiAccess: 'API Access',
-      customBranding: 'Custom Branding',
-      customDomain: 'Custom Domain',
-      serviceFlows: 'Service Flows',
-      servicePoints: 'Service Points',
-    };
-    message = `Upgrade to access ${featureNames[feature]}.`;
-  }
-
+  let message = 'Your plan doesn’t include this.';
+  if (feature) message = `${FEATURE_NAMES[feature]} isn’t included in your plan.`;
   if (resource) {
-    const limit = limits[resource];
-    message = `You've reached the limit of ${limit.limit} ${resource}. Upgrade to add more.`;
+    const n = limits[resource].limit;
+    const [one, many] = RESOURCE_WORDS[resource];
+    message = `Your plan includes ${n === 1 ? `one ${one}` : `${n} ${many}`}, and you’re using ${n === 1 ? 'it' : 'them all'}.`;
   }
 
   return (
-    <div 
-      className={className}
-      style={{
-        padding: '16px 20px',
-        background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)',
-        borderRadius: '8px',
-        border: '1px solid #f59e0b',
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-      }}
-    >
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#b45309" strokeWidth="2">
-        <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-      </svg>
-      <div style={{ flex: 1 }}>
-        <p style={{ margin: 0, color: '#92400e', fontWeight: 500 }}>{message}</p>
-      </div>
-      <button
-        onClick={() => window.location.href = '/admin/billing'}
-        style={{
-          padding: '8px 16px',
-          background: '#f59e0b',
-          color: 'white',
-          border: 'none',
-          borderRadius: '6px',
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        Upgrade
-      </button>
+    <div className={`upgrade-note ${className || ''}`} role="note">
+      <span>{message}</span>
+      <a href="/admin/billing">See plans</a>
     </div>
   );
 };

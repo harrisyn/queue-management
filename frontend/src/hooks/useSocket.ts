@@ -1,66 +1,132 @@
 'use client';
 
 import { useEffect, useRef, useCallback } from 'react';
-import { io, Socket } from 'socket.io-client';
+import type Pusher from 'pusher-js';
+import type { Channel } from 'pusher-js';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_SOCKET_URL || 'http://localhost:8004';
+/**
+ * Real-time queue updates over the Pusher Channels protocol (Pusher, Ably,
+ * or Soketi locally - see src/server/lib/realtime.ts). Same API the pages
+ * used with Socket.IO: join a queue/location/user/service, subscribe to
+ * events, get an unsubscribe function back.
+ *
+ * Events only carry IDs and statuses; handlers refetch what they need. When
+ * no realtime key is configured, joined channels get a synthetic
+ * `queue.updated` every POLL_MS so pages still refresh.
+ */
+
+const KEY = process.env.NEXT_PUBLIC_REALTIME_KEY;
+const POLL_MS = 15000;
+
+const EVENTS = ['queue.updated', 'entry.status_changed', 'notification.sent', 'serviceflow.transition', 'slot.released', 'location.updated'] as const;
+type EventName = (typeof EVENTS)[number];
+type Handler = (data: any) => void;
+
+let pusherPromise: Promise<Pusher> | null = null;
+
+function getPusher(): Promise<Pusher> | null {
+  if (!KEY || typeof window === 'undefined') return null;
+  if (!pusherPromise) {
+    pusherPromise = import('pusher-js').then(({ default: PusherClient }) => {
+      const host = process.env.NEXT_PUBLIC_REALTIME_HOST;
+      return new PusherClient(KEY, host
+        ? {
+            cluster: process.env.NEXT_PUBLIC_REALTIME_CLUSTER || 'mt1',
+            wsHost: host,
+            wsPort: Number(process.env.NEXT_PUBLIC_REALTIME_PORT || 6001),
+            wssPort: Number(process.env.NEXT_PUBLIC_REALTIME_PORT || 443),
+            forceTLS: process.env.NEXT_PUBLIC_REALTIME_TLS === 'true',
+            enabledTransports: ['ws', 'wss'],
+            disableStats: true,
+          }
+        : { cluster: process.env.NEXT_PUBLIC_REALTIME_CLUSTER || 'mt1' });
+    });
+  }
+  return pusherPromise;
+}
 
 export const useSocket = () => {
-  const socketRef = useRef<Socket | null>(null);
+  const handlers = useRef(new Map<EventName, Set<Handler>>());
+  const channels = useRef(new Map<string, Channel | null>());
+  const pollTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const dispatch = useCallback((event: EventName, data: unknown) => {
+    handlers.current.get(event)?.forEach((h) => h(data));
+  }, []);
+
+  const join = useCallback((channelName: string, context: Record<string, string>) => {
+    if (channels.current.has(channelName)) return;
+    channels.current.set(channelName, null);
+
+    const pusher = getPusher();
+    if (!pusher) {
+      // Polling fallback: nudge subscribers so they refetch.
+      if (!pollTimer.current) {
+        pollTimer.current = setInterval(() => {
+          channels.current.forEach((_c, name) => {
+            const [kind, ...rest] = name.split('-');
+            const id = rest.join('-');
+            dispatch('queue.updated', { action: 'poll', ...(kind === 'queue' ? { queueId: id } : {}), ...(kind === 'location' ? { locationId: id } : {}) });
+          });
+        }, POLL_MS);
+      }
+      return;
+    }
+
+    pusher.then((client) => {
+      if (!channels.current.has(channelName)) return; // left before connecting
+      const channel = client.subscribe(channelName);
+      EVENTS.forEach((event) => channel.bind(event, (data: unknown) => dispatch(event, { ...context, ...(data as object) })));
+      channels.current.set(channelName, channel);
+    });
+  }, [dispatch]);
+
+  const leave = useCallback((channelName: string) => {
+    const channel = channels.current.get(channelName);
+    channels.current.delete(channelName);
+    if (channel) {
+      channel.unbind_all();
+      getPusher()?.then((client) => client.unsubscribe(channelName));
+    }
+  }, []);
 
   useEffect(() => {
-    socketRef.current = io(SOCKET_URL, {
-      transports: ['websocket'],
-      autoConnect: true,
-    });
-
+    const joined = channels.current;
     return () => {
-      socketRef.current?.disconnect();
+      Array.from(joined.keys()).forEach(leave);
+      if (pollTimer.current) clearInterval(pollTimer.current);
+      pollTimer.current = null;
     };
+  }, [leave]);
+
+  const joinQueue = useCallback((queueId: string) => join(`queue-${queueId}`, { queueId }), [join]);
+  const leaveQueue = useCallback((queueId: string) => leave(`queue-${queueId}`), [leave]);
+  const joinUser = useCallback((userId: string) => join(`user-${userId}`, {}), [join]);
+  const joinService = useCallback((serviceId: string) => join(`service-${serviceId}`, {}), [join]);
+  const joinLocation = useCallback((locationId: string) => join(`location-${locationId}`, { locationId }), [join]);
+
+  const on = useCallback((event: EventName, callback: Handler) => {
+    if (!handlers.current.has(event)) handlers.current.set(event, new Set());
+    handlers.current.get(event)!.add(callback);
+    return () => { handlers.current.get(event)?.delete(callback); };
   }, []);
 
-  const joinQueue = useCallback((queueId: string) => {
-    socketRef.current?.emit('join:queue', queueId);
-  }, []);
-
-  const leaveQueue = useCallback((queueId: string) => {
-    socketRef.current?.emit('leave:queue', queueId);
-  }, []);
-
-  const joinUser = useCallback((userId: string) => {
-    socketRef.current?.emit('join:user', userId);
-  }, []);
-
-  const joinService = useCallback((serviceId: string) => {
-    socketRef.current?.emit('join:service', serviceId);
-  }, []);
-
-  const joinLocation = useCallback((locationId: string) => {
-    socketRef.current?.emit('join:location', locationId);
-  }, []);
-
-  const onQueueUpdated = useCallback((callback: (data: { queueId: string; action: string }) => void) => {
-    socketRef.current?.on('queue.updated', callback);
-    return () => { socketRef.current?.off('queue.updated', callback); };
-  }, []);
-
-  const onEntryStatusChanged = useCallback((callback: (data: { queueId: string; entryId: string; status: string }) => void) => {
-    socketRef.current?.on('entry.status_changed', callback);
-    return () => { socketRef.current?.off('entry.status_changed', callback); };
-  }, []);
-
-  const onNotification = useCallback((callback: (data: { message: string }) => void) => {
-    socketRef.current?.on('notification.sent', callback);
-    return () => { socketRef.current?.off('notification.sent', callback); };
-  }, []);
-
-  const onServiceFlowTransition = useCallback((callback: (data: unknown) => void) => {
-    socketRef.current?.on('serviceflow.transition', callback);
-    return () => { socketRef.current?.off('serviceflow.transition', callback); };
-  }, []);
+  const onQueueUpdated = useCallback(
+    (callback: (data: { queueId: string; action: string }) => void) => on('queue.updated', callback),
+    [on]
+  );
+  const onEntryStatusChanged = useCallback(
+    (callback: (data: { queueId: string; entryId: string; status: string }) => void) => on('entry.status_changed', callback),
+    [on]
+  );
+  const onNotification = useCallback(
+    (callback: (data: { message: string }) => void) => on('notification.sent', callback),
+    [on]
+  );
+  const onServiceFlowTransition = useCallback((callback: (data: unknown) => void) => on('serviceflow.transition', callback), [on]);
+  const onLocationUpdated = useCallback((callback: (data: { locationId?: string; type?: string }) => void) => on('location.updated', callback), [on]);
 
   return {
-    socket: socketRef.current,
     joinQueue,
     leaveQueue,
     joinUser,
@@ -70,6 +136,7 @@ export const useSocket = () => {
     onEntryStatusChanged,
     onNotification,
     onServiceFlowTransition,
+    onLocationUpdated,
   };
 };
 

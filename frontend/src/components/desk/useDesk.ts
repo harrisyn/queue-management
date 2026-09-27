@@ -1,0 +1,309 @@
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import api from '@/api/client';
+import { useAuthContext } from '@/contexts/AuthContext';
+import { useSocket } from '@/hooks/useSocket';
+import { useTerms } from '@/hooks/useTerms';
+
+/**
+ * Everything a staff member needs at a desk: which desk they're signed in
+ * to, who they're serving, who's waiting, and the actions. Shared by the
+ * full console, the pop-out window and the embeddable widget. Windows on
+ * the same origin stay in step through localStorage + BroadcastChannel.
+ */
+
+export interface DeskSelection {
+  instanceId: string;
+  serviceId: string;
+  locationId: string;
+  label: string;
+  serviceName: string;
+  userId: string;
+}
+
+export interface DeskEntry {
+  id: string;
+  ticketNumber: string;
+  status: string;
+  joinedAt: string;
+  calledAt?: string | null;
+  priority?: number;
+  servicePointInstanceId?: string | null;
+  servicePoint?: { id: string; name: string; displayName?: string | null } | null;
+  servicePointInstance?: { instanceNumber?: number; displayName?: string | null } | null;
+  user?: { id: string; firstName: string; lastName: string; phone?: string | null } | null;
+}
+
+export interface NextService {
+  serviceId: string;
+  serviceName: string;
+  displayName: string;
+  isRequired?: boolean;
+  autoTransfer?: boolean;
+}
+
+interface OperatorData {
+  queue: { id: string; status: string };
+  serving: DeskEntry[];
+  waiting: DeskEntry[];
+  nextServices: NextService[];
+}
+
+export interface DeskInstance {
+  id: string;
+  instanceNumber: number;
+  displayName: string | null;
+  servicePointName: string;
+  servicePointCapacity?: number;
+  isOccupied: boolean;
+  occupiedBy?: { id: string; firstName: string; lastName: string } | null;
+  currentService: { id: string; name: string } | null;
+}
+
+const KEY = 'qms_desk';
+const CHANNEL = 'qms-desk';
+
+export const deskLabel = (inst: DeskInstance) =>
+  inst.displayName || ((inst.servicePointCapacity ?? 1) > 1 ? `${inst.servicePointName} ${inst.instanceNumber}` : inst.servicePointName);
+
+export const personName = (e?: DeskEntry | null) =>
+  e?.user ? `${e.user.firstName} ${e.user.lastName}`.trim() : '';
+
+export const minutesAgo = (iso?: string | null) =>
+  iso ? Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000)) : 0;
+
+function readStored(userId?: string): DeskSelection | null {
+  try {
+    const raw = localStorage.getItem(KEY);
+    const desk = raw ? (JSON.parse(raw) as DeskSelection) : null;
+    return desk && (!userId || desk.userId === userId) ? desk : null;
+  } catch {
+    return null;
+  }
+}
+
+function errorText(err: unknown, fallback: string) {
+  const e = err as { response?: { data?: { error?: string; message?: string } } };
+  return e?.response?.data?.error || e?.response?.data?.message || fallback;
+}
+
+export function useDesk() {
+  const { user } = useAuthContext();
+  const terms = useTerms();
+  const { joinQueue, leaveQueue, onQueueUpdated, onEntryStatusChanged } = useSocket();
+
+  const [desk, setDesk] = useState<DeskSelection | null>(null);
+  const [ready, setReady] = useState(false);
+  const [data, setData] = useState<OperatorData | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [afterComplete, setAfterComplete] = useState<{ entry: DeskEntry; nextServices: NextService[] } | null>(null);
+
+  const channel = useRef<BroadcastChannel | null>(null);
+  const queueIdRef = useRef<string | null>(null);
+
+  // Restore the desk this person was signed in to.
+  useEffect(() => {
+    if (!user) return;
+    setDesk(readStored(user.id));
+    setReady(true);
+  }, [user]);
+
+  const refresh = useCallback(async () => {
+    const id = queueIdRef.current;
+    if (!id) return;
+    try {
+      setData(await api.getQueueForOperator(id));
+    } catch (err) {
+      setError(errorText(err, 'Couldn’t refresh the queue.'));
+    }
+  }, []);
+
+  // Load today's queue for the desk's service.
+  useEffect(() => {
+    if (!desk) {
+      setData(null);
+      queueIdRef.current = null;
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const queue = await api.createQueue(desk.serviceId);
+        if (cancelled) return;
+        queueIdRef.current = queue.id;
+        await refresh();
+      } catch (err) {
+        if (!cancelled) setError(errorText(err, 'Couldn’t open today’s queue.'));
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [desk, refresh]);
+
+  // Live updates, plus a nudge from other windows of this app.
+  useEffect(() => {
+    const id = data?.queue.id;
+    if (!id) return;
+    joinQueue(id);
+    const offA = onQueueUpdated(() => refresh());
+    const offB = onEntryStatusChanged(() => refresh());
+    return () => { offA(); offB(); leaveQueue(id); };
+  }, [data?.queue.id, joinQueue, leaveQueue, onQueueUpdated, onEntryStatusChanged, refresh]);
+
+  useEffect(() => {
+    if (typeof BroadcastChannel === 'undefined') return;
+    const bc = new BroadcastChannel(CHANNEL);
+    channel.current = bc;
+    bc.onmessage = (ev) => {
+      if (ev.data === 'refresh') refresh();
+      if (ev.data === 'desk') setDesk(readStored(user?.id));
+    };
+    const onStorage = (e: StorageEvent) => { if (e.key === KEY) setDesk(readStored(user?.id)); };
+    window.addEventListener('storage', onStorage);
+    return () => { bc.close(); window.removeEventListener('storage', onStorage); };
+  }, [refresh, user?.id]);
+
+  const nudge = () => channel.current?.postMessage('refresh');
+
+  const mine = useMemo(
+    () => (data?.serving || []).filter((e) => e.servicePointInstanceId === desk?.instanceId),
+    [data, desk?.instanceId]
+  );
+  const current = mine[0] || null;
+  const waiting = data?.waiting || [];
+  const otherDesks = (data?.serving || []).filter((e) => e.servicePointInstanceId !== desk?.instanceId);
+
+  // Tell people who've switched to another app that someone is waiting.
+  const lastWaiting = useRef<number | null>(null);
+  useEffect(() => {
+    const n = waiting.length;
+    const prev = lastWaiting.current;
+    lastWaiting.current = n;
+    if (prev === null || n <= prev || !desk) return;
+    if (typeof document !== 'undefined' && document.hidden && typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      const note = new Notification(`${n} ${n === 1 ? terms.person : terms.people} waiting`, {
+        body: `${desk.serviceName} · ${desk.label}`,
+        tag: 'qms-desk',
+      });
+      note.onclick = () => { window.focus(); note.close(); };
+    }
+  }, [waiting.length, desk, terms]);
+
+  const run = useCallback(async (name: string, fn: () => Promise<void>) => {
+    setBusy(name);
+    setError('');
+    try {
+      await fn();
+      await refresh();
+      nudge();
+    } catch (err) {
+      setError(errorText(err, 'That didn’t work. Try again.'));
+    } finally {
+      setBusy(null);
+    }
+  }, [refresh]);
+
+  const signIn = useCallback(async (inst: DeskInstance, locationId: string, takeOver = false) => {
+    if (!user || !inst.currentService) return;
+    setBusy('signin');
+    setError('');
+    try {
+      if (desk && desk.instanceId !== inst.id) await api.vacateServicePointInstance(desk.instanceId).catch(() => {});
+      await api.activateServicePointInstance(inst.id, inst.currentService.id, takeOver);
+      const next: DeskSelection = {
+        instanceId: inst.id,
+        serviceId: inst.currentService.id,
+        locationId,
+        label: deskLabel(inst),
+        serviceName: inst.currentService.name,
+        userId: user.id,
+      };
+      localStorage.setItem(KEY, JSON.stringify(next));
+      setDesk(next);
+      channel.current?.postMessage('desk');
+    } catch (err) {
+      const e = err as { response?: { status?: number } };
+      if (e?.response?.status === 409) throw err;
+      setError(errorText(err, 'Couldn’t sign in to that desk.'));
+    } finally {
+      setBusy(null);
+    }
+  }, [desk, user]);
+
+  const leave = useCallback(async () => {
+    if (!desk) return;
+    setBusy('leave');
+    try { await api.vacateServicePointInstance(desk.instanceId); } catch { /* already free */ }
+    localStorage.removeItem(KEY);
+    setDesk(null);
+    setAfterComplete(null);
+    channel.current?.postMessage('desk');
+    setBusy(null);
+  }, [desk]);
+
+  const queueId = data?.queue.id;
+
+  const callNext = useCallback((entryId?: string) => run('call', async () => {
+    if (!queueId || !desk) return;
+    setAfterComplete(null);
+    await api.callNextWithServicePoint(queueId, desk.instanceId, entryId);
+  }), [run, queueId, desk]);
+
+  const recall = useCallback(() => run('recall', async () => {
+    if (!queueId || !current) return;
+    await api.recallEntry(queueId, current.id);
+    setNotice(`Called ${current.ticketNumber} again.`);
+  }), [run, queueId, current]);
+
+  const complete = useCallback(() => run('complete', async () => {
+    if (!queueId || !current) return;
+    const entry = current;
+    const result = await api.completeEntryWithSuggestions(queueId, entry.id);
+    if (result.autoTransferred) {
+      setNotice(`${personName(entry) || entry.ticketNumber} was sent on to ${result.nextTicket?.serviceName} as ${result.nextTicket?.ticketNumber}.`);
+    } else if (result.nextServices?.length) {
+      setAfterComplete({ entry, nextServices: result.nextServices });
+    }
+  }), [run, queueId, current]);
+
+  const sendTo = useCallback((service: NextService) => run('send', async () => {
+    if (!queueId || !afterComplete) return;
+    const result = await api.transferEntry(queueId, afterComplete.entry.id, service.serviceId);
+    setNotice(`${personName(afterComplete.entry) || afterComplete.entry.ticketNumber} is now ${result.ticketNumber} at ${result.serviceName || service.displayName}.`);
+    setAfterComplete(null);
+  }), [run, queueId, afterComplete]);
+
+  const noShow = useCallback(() => run('noshow', async () => {
+    if (!queueId || !current) return;
+    await api.markNoShow(queueId, current.id);
+    setNotice(`${current.ticketNumber} marked as not here.`);
+  }), [run, queueId, current]);
+
+  // Someone served at another desk (or no desk) who was never finished.
+  const finishOther = useCallback((entry: DeskEntry) => run('finish', async () => {
+    if (!queueId) return;
+    await api.completeEntryWithSuggestions(queueId, entry.id);
+    setNotice(`${entry.ticketNumber} marked as done.`);
+  }), [run, queueId]);
+
+  const reorder = useCallback((ids: string[]) => run('reorder', async () => {
+    if (!queueId) return;
+    await api.reorderQueueEntries(queueId, ids.map((id, i) => ({ id, sortOrder: i + 1 })));
+  }), [run, queueId]);
+
+  useEffect(() => {
+    if (!notice) return;
+    const t = setTimeout(() => setNotice(''), 6000);
+    return () => clearTimeout(t);
+  }, [notice]);
+
+  return {
+    ready, desk, data, current, waiting, otherDesks, busy, error, notice, afterComplete, terms,
+    setError, dismissAfterComplete: () => setAfterComplete(null),
+    signIn, leave, callNext, recall, complete, sendTo, noShow, reorder, refresh, finishOther,
+  };
+}
+
+export type Desk = ReturnType<typeof useDesk>;

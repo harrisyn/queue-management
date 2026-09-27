@@ -10,7 +10,8 @@ export interface UsageBarProps {
 
 export const UsageBar: React.FC<UsageBarProps> = ({ label, current, limit }) => {
   const percentage = limit === null ? 0 : limit === 0 ? 100 : Math.min(100, (current / limit) * 100);
-  const tone = limit === null || percentage < 80 ? 'ok' : percentage < 100 ? 'warning' : 'error';
+  // Full is normal (a one-location plan with one location); only over is a problem.
+  const tone = limit === null || percentage < 80 ? 'ok' : limit !== null && current > limit ? 'error' : 'warning';
 
   return (
     <div className="usage-bar">

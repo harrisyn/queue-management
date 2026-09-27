@@ -34,3 +34,8 @@ yarn-error.log*
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+
+# Never bake secrets into the image
+.env
+.env.*
+!.env.example

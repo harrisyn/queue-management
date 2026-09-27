@@ -2,6 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
+import { API_BASE } from '@/lib/apiBase';
+import styles from '../join/[code]/join.module.css';
+
+/**
+ * This organization's locations, for people who arrive without a QR code.
+ * With one location there's nothing to choose, so it goes straight there.
+ */
 
 type LocationItem = {
   id: string;
@@ -12,56 +20,63 @@ type LocationItem = {
 };
 
 export default function LocationsPage() {
-  const [locations, setLocations] = useState<LocationItem[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [locations, setLocations] = useState<LocationItem[] | null>(null);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    const fetchLocations = async () => {
-      try {
-        const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/public/locations`);
-        if (!res.ok) throw new Error('Failed to load');
-        const data = await res.json();
-        setLocations(data);
-      } catch (err) {
-        setError('Failed to load locations');
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchLocations();
+    fetch(`${API_BASE}/public/locations`)
+      .then((res) => (res.ok ? res.json() : Promise.reject()))
+      .then((data: LocationItem[]) => {
+        const joinable = data.filter((l) => l.publicCode);
+        if (joinable.length === 1) {
+          window.location.replace(`/join/${joinable[0].publicCode}`);
+          return;
+        }
+        setLocations(joinable);
+      })
+      .catch(() => setFailed(true));
   }, []);
 
-  if (loading) return <div style={{ padding: 20 }}>Loading locations…</div>;
-  if (error) return <div style={{ padding: 20 }}>{error}</div>;
+  const orgName = locations?.[0]?.organization?.name;
 
   return (
-    <div style={{ padding: '2rem' }}>
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 700 }}>Public Locations</h1>
-      <p style={{ color: '#6b7280' }}>Find a location and use the public join code to join a queue (no account required)</p>
-
-      <div style={{ marginTop: '1rem', display: 'grid', gap: '0.75rem' }}>
-        {locations.length === 0 && <div>No public locations configured.</div>}
-        {locations.map((loc) => (
-          <div key={loc.id} style={{ padding: '1rem', background: '#ffffff', borderRadius: 8, border: '1px solid #eee' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <div style={{ fontWeight: 700 }}>{loc.name}</div>
-                <div style={{ color: '#6b7280', fontSize: 13 }}>{loc.organization?.name}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                {loc.publicCode ? (
-                  <Link href={`/join/${loc.publicCode}`} style={{ display: 'inline-block', padding: '0.5rem 1rem', background: '#14b8a6', color: 'white', borderRadius: 8 }}>Join</Link>
-                ) : (
-                  <span style={{ fontSize: 12, color: '#9ca3af' }}>No join code</span>
-                )}
-                <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 6 }}>{loc._count?.services ?? 0} services</div>
-              </div>
-            </div>
+    <div className={styles.page}>
+      <main className={styles.shell}>
+        {orgName && <header className={styles.brand}><strong>{orgName}</strong></header>}
+        {failed ? (
+          <div className={styles.card}>
+            <h1 className={styles.title}>Something went wrong</h1>
+            <p className={styles.lede}>Refresh to try again, or scan the QR code at the entrance.</p>
           </div>
-        ))}
-      </div>
+        ) : locations === null ? (
+          <div className={styles.center}><span className={styles.spinner} aria-label="Loading" /></div>
+        ) : locations.length === 0 ? (
+          <div className={styles.card}>
+            <h1 className={styles.title}>Scan the code where you are</h1>
+            <p className={styles.lede}>Each location has its own QR code at the entrance or desk. Scan it to join that queue.</p>
+          </div>
+        ) : (
+          <>
+            <div className={styles.intro}>
+              <h1 className={styles.title}>Which location?</h1>
+              <p className={styles.lede}>Choose where you are to join the queue there.</p>
+            </div>
+            <ul className={styles.services}>
+              {locations.map((loc) => (
+                <li key={loc.id}>
+                  <Link className={styles.service} href={`/join/${loc.publicCode}`}>
+                    <span>
+                      <strong>{loc.name}</strong>
+                      <small>{loc._count?.services ?? 0} {(loc._count?.services ?? 0) === 1 ? 'service' : 'services'}</small>
+                    </span>
+                    <ChevronRight size={22} aria-hidden="true" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </main>
     </div>
   );
 }

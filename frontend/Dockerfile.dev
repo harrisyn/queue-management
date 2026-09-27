@@ -1,12 +1,17 @@
-FROM node:20-alpine
+FROM node:20-slim
 
 WORKDIR /app
 
-# Install dependencies (use cached layer for dev iteration)
-COPY package.json package-lock.json* ./
+# OpenSSL for Prisma's query engine
+RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies (cached layer). The schema is needed for the
+# postinstall `prisma generate`.
+COPY package.json package-lock.json* .npmrc ./
+COPY prisma ./prisma
 RUN npm install --silent
 
-# Copy everything (will be overridden by docker-compose volume in dev)
+# Copy everything (overridden by docker-compose volumes in dev)
 COPY . .
 
 ENV NODE_ENV=development
@@ -14,5 +19,6 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 EXPOSE 3000
 
-# Start dev server with host 0.0.0.0 so container is reachable
-CMD ["sh", "-c", "npm run dev -- -p 3000 -H 0.0.0.0"]
+# Apply migrations, regenerate the client (schema may be volume-mounted and
+# newer than the image), then start the dev server on all interfaces.
+CMD ["sh", "-c", "npx prisma migrate deploy && npx prisma generate && npx next dev --webpack -p 3000 -H 0.0.0.0"]

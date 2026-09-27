@@ -4,7 +4,7 @@
  * 2. For first location with publicCode, fetch frontend /join/:code page
  */
 
-const API_BASE = process.env.API_BASE || 'http://localhost:8004/api/v1';
+const API_BASE = process.env.API_BASE || 'http://localhost:8003/api/v1';
 const FRONTEND_BASE = process.env.FRONTEND_BASE || 'http://localhost:8003';
 
 async function run() {

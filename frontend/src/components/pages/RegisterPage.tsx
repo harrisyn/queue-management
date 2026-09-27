@@ -1,1077 +1,266 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { Building2, Zap, QrCode, BarChart3, Mail, Lock, Lightbulb, AlertTriangle } from 'lucide-react';
-import api from '@/api/client';
+import { Loader2, Eye, EyeOff, Check, X } from 'lucide-react';
+import { api } from '@/api/client';
+import AuthLayout from '@/components/auth/AuthLayout';
+import { AuthAlert, apiErrorMessage } from '@/components/auth/AuthShell';
+import { buildTenantUrl, buildRootUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
-import { buildTenantUrl } from '@/lib/subdomain';
-import { Button, Icon } from '@/components/ui';
 
-// ============================================================================
-// MULTI-STEP REGISTRATION COMPONENT
-// ============================================================================
+/**
+ * Organization sign-up in two short steps:
+ *   1. who you are + the organization (workspace address suggested for you)
+ *   2. the 6-digit code we email - entering it creates the workspace
+ * then straight into the new workspace, signed in, at /welcome.
+ */
 
-interface RegistrationData {
-  organizationName: string;
-  slug?: string;
-  email: string;
-  phone: string;
-  countryCode: string;
-  firstName: string;
-  lastName: string;
-  password: string;
-  confirmPassword: string;
-  otpCode: string;
-  emailVerified: boolean;
-}
+const slugify = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
 
-const COUNTRY_CODES = [
-  { code: '+1', country: 'US/CA', flag: '🇺🇸' },
-  { code: '+44', country: 'UK', flag: '🇬🇧' },
-  { code: '+233', country: 'GH', flag: '🇬🇭' },
-  { code: '+234', country: 'NG', flag: '🇳🇬' },
-  { code: '+254', country: 'KE', flag: '🇰🇪' },
-  { code: '+27', country: 'ZA', flag: '🇿🇦' },
-  { code: '+91', country: 'IN', flag: '🇮🇳' },
-  { code: '+86', country: 'CN', flag: '🇨🇳' },
-  { code: '+81', country: 'JP', flag: '🇯🇵' },
-  { code: '+49', country: 'DE', flag: '🇩🇪' },
-  { code: '+33', country: 'FR', flag: '🇫🇷' },
-  { code: '+61', country: 'AU', flag: '🇦🇺' },
-  { code: '+971', country: 'UAE', flag: '🇦🇪' },
-];
+type SlugState = 'idle' | 'checking' | 'free' | 'taken' | 'invalid';
 
-const RegisterPage: React.FC = () => {
-  const router = useRouter();
-  const [step, setStep] = useState(1);
-  const [loading, setLoading] = useState(false);
+export default function RegisterPage() {
+  const [step, setStep] = useState<'details' | 'code' | 'done'>('details');
+  const [form, setForm] = useState({ organizationName: '', firstName: '', lastName: '', email: '', password: '' });
+  const [slug, setSlug] = useState('');
+  const [slugEdited, setSlugEdited] = useState(false);
+  const [editingSlug, setEditingSlug] = useState(false);
+  const [slugState, setSlugState] = useState<SlugState>('idle');
+  const [showPassword, setShowPassword] = useState(false);
+  const [code, setCode] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
-  const [otpResendTimer, setOtpResendTimer] = useState(0);
-  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
-  
-  const [formData, setFormData] = useState<RegistrationData>({
-    organizationName: '',
-    email: '',
-    phone: '',
-    countryCode: '+1',
-    firstName: '',
-    lastName: '',
-    password: '',
-    confirmPassword: '',
-    otpCode: '',
-    emailVerified: false,
-  });
+  const [busy, setBusy] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
+  const checkRef = useRef(0);
 
-  // OTP resend timer
+  const rootHost = buildRootUrl().replace(/^https?:\/\//, '').replace(/\/$/, '');
+  const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  // Suggest the workspace address from the organization name until the
+  // person edits it themselves.
   useEffect(() => {
-    if (otpResendTimer > 0) {
-      const timer = setTimeout(() => setOtpResendTimer(otpResendTimer - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [otpResendTimer]);
+    if (!slugEdited) setSlug(slugify(form.organizationName));
+  }, [form.organizationName, slugEdited]);
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-    setError('');
+  useEffect(() => {
+    if (!slug) return setSlugState('idle');
+    if (slug.length < 3 || isReservedSlug(slug) || slugify(slug) !== slug) return setSlugState('invalid');
+    setSlugState('checking');
+    const id = ++checkRef.current;
+    const t = setTimeout(() => {
+      api.getOrgBySlug(slug)
+        .then((org) => id === checkRef.current && setSlugState(org ? 'taken' : 'free'))
+        .catch(() => id === checkRef.current && setSlugState('free'));
+    }, 350);
+    return () => clearTimeout(t);
+  }, [slug]);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  const sendCode = async () => {
+    await api.sendOTP(form.email.trim());
+    setResendIn(45);
   };
 
-  // Handle OTP input
-  const handleOtpChange = (index: number, value: string) => {
-    if (!/^\d*$/.test(value)) return;
-    
-    const newCode = formData.otpCode.split('');
-    newCode[index] = value;
-    const code = newCode.join('').slice(0, 6);
-    setFormData(prev => ({ ...prev, otpCode: code }));
-
-    // Auto-focus next input
-    if (value && index < 5) {
-      otpInputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent) => {
-    if (e.key === 'Backspace' && !formData.otpCode[index] && index > 0) {
-      otpInputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleOtpPaste = (e: React.ClipboardEvent) => {
+  const submitDetails = async (e: React.FormEvent) => {
     e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
-    setFormData(prev => ({ ...prev, otpCode: pasted }));
-    const focusIndex = Math.min(pasted.length, 5);
-    otpInputRefs.current[focusIndex]?.focus();
-  };
-
-  // Send OTP
-  const sendOTP = async () => {
-    if (!formData.email) {
-      setError('Please enter your email address');
-      return;
-    }
-
-    setLoading(true);
     setError('');
-    
+    if (form.password.length < 8) return setError('Use at least 8 characters for your password.');
+    if (slugState === 'taken') return setError('That workspace address is taken. Choose another.');
+    if (slugState === 'invalid') return setError('Workspace addresses use 3 or more lowercase letters, numbers and dashes.');
+    setBusy(true);
     try {
-      await api.sendOTP(formData.email);
-      setOtpSent(true);
-      setOtpResendTimer(60);
-      setStep(3);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to send verification code');
+      await sendCode();
+      setStep('code');
+    } catch (err) {
+      setError(apiErrorMessage(err, 'We couldn’t send the code. Check the email address and try again.'));
     } finally {
-      setLoading(false);
+      setBusy(false);
     }
   };
 
-  // Verify OTP
-  const verifyOTP = async () => {
-    if (formData.otpCode.length !== 6) {
-      setError('Please enter the complete 6-digit code');
-      return;
-    }
-
-    setLoading(true);
+  const submitCode = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (code.length !== 6) return;
     setError('');
-
+    setBusy(true);
     try {
-      await api.verifyOTP(formData.email, formData.otpCode);
-      setFormData(prev => ({ ...prev, emailVerified: true }));
-      setStep(4);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Invalid verification code');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Complete registration
-  const completeRegistration = async () => {
-    if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
-      return;
-    }
-    if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters');
-      return;
-    }
-
-    setLoading(true);
-    setError('');
-
-    try {
-      const fullPhone = formData.phone ? `${formData.countryCode}${formData.phone.replace(/\D/g, '')}` : undefined;
-      
+      await api.verifyOTP(form.email.trim(), code);
       const { token, organization } = await api.registerOrganization({
-        organizationName: formData.organizationName,
-        email: formData.email,
-        phone: fullPhone,
-        adminFirstName: formData.firstName,
-        adminLastName: formData.lastName,
-        adminPassword: formData.password,
-        emailVerified: formData.emailVerified,
-        slug: formData.slug || undefined,
+        organizationName: form.organizationName.trim(),
+        email: form.email.trim(),
+        adminFirstName: form.firstName.trim(),
+        adminLastName: form.lastName.trim(),
+        adminPassword: form.password,
+        slug: slug || undefined,
       });
-
-      setSuccess(true);
-
-      setTimeout(() => {
-        window.location.href = buildTenantUrl(organization.slug);
-      }, 2000);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
-    } finally {
-      setLoading(false);
+      setStep('done');
+      // Sign-in lives per address, so carry the session over in the URL
+      // fragment (never sent to a server) to the new workspace.
+      window.location.href = `${buildTenantUrl(organization.slug, '/welcome')}#session=${encodeURIComponent(token)}`;
+    } catch (err) {
+      setError(apiErrorMessage(err, 'That code didn’t work. Check it and try again.'));
+      setBusy(false);
     }
   };
 
-  const nextStep = () => {
-    if (step === 1) {
-      if (!formData.organizationName.trim()) {
-        setError('Organization name is required');
-        return;
-      }
-      if (!formData.firstName.trim() || !formData.lastName.trim()) {
-        setError('Your name is required');
-        return;
-      }
-      if (formData.slug && isReservedSlug(formData.slug)) {
-        setError('This workspace name is reserved. Please choose another.');
-        return;
-      }
-    }
-    if (step === 2) {
-      if (!formData.email.trim()) {
-        setError('Email is required');
-        return;
-      }
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        setError('Please enter a valid email address');
-        return;
-      }
-      sendOTP();
-      return;
-    }
-    setError('');
-    setStep(step + 1);
-  };
+  // Submit as soon as six digits are in.
+  useEffect(() => {
+    if (step === 'code' && code.length === 6 && !busy) submitCode();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code]);
 
-  const prevStep = () => {
-    setError('');
-    if (step === 3) {
-      setStep(2);
-    } else {
-      setStep(step - 1);
-    }
-  };
-
-  // Success state
-  if (success) {
-    return (
-      <div style={styles.container}>
-        <div style={styles.bgGradient} />
-        <div style={styles.bgPattern} />
-        <div style={styles.formContainer}>
-          <div style={styles.successCard}>
-            <div style={styles.successIconWrapper}>
-              <svg width="80" height="80" viewBox="0 0 80 80" fill="none">
-                <circle cx="40" cy="40" r="38" stroke="#10b981" strokeWidth="4"/>
-                <path d="M24 40L35 51L56 30" stroke="#10b981" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"/>
-              </svg>
-            </div>
-            <h2 style={styles.successTitle}>Welcome aboard</h2>
-            <p style={styles.successText}>
-              Your organization has been created successfully.
-              <br />Redirecting to your dashboard...
-            </p>
-            <div style={styles.loadingDots}>
-              <span style={styles.dot} />
-              <span style={{ ...styles.dot, animationDelay: '0.2s' }} />
-              <span style={{ ...styles.dot, animationDelay: '0.4s' }} />
-            </div>
-          </div>
-        </div>
-        <style>{keyframes}</style>
-      </div>
-    );
-  }
+  const slugHint =
+    slugState === 'checking' ? <span className="authx-hint">Checking…</span>
+    : slugState === 'taken' ? <span className="authx-hint authx-hint-bad"><X size={13} /> Taken. Try another.</span>
+    : slugState === 'invalid' ? <span className="authx-hint authx-hint-bad"><X size={13} /> 3+ lowercase letters, numbers or dashes</span>
+    : slugState === 'free' ? <span className="authx-hint authx-hint-ok"><Check size={13} /> Available</span>
+    : null;
 
   return (
-    <div style={styles.container}>
-      {/* Background */}
-      <div style={styles.bgGradient} />
-      <div style={styles.bgPattern} />
-
-      {/* Decorative elements */}
-      <div style={styles.floatingOrb1} />
-      <div style={styles.floatingOrb2} />
-      <div style={styles.floatingOrb3} />
-
-      <div style={styles.mainWrapper}>
-        {/* Left side - Info panel */}
-        <div style={styles.infoPanel}>
-          <div style={styles.infoPanelContent}>
-            <Link href="/" style={styles.logoLink}>
-              <Icon icon={Building2} size={28} color="#2dd4bf" />
-              <span style={styles.logoText}>QueueFlow</span>
-            </Link>
-
-            <h1 style={styles.infoTitle}>
-              Streamline your<br />
-              <span style={styles.accentText}>queue management</span>
-            </h1>
-
-            <p style={styles.infoSubtitle}>
-              Join thousands of organizations using QueueFlow to reduce wait times and improve customer satisfaction.
-            </p>
-
-            <div style={styles.featureList}>
-              <div style={styles.featureItem}>
-                <div style={styles.featureIcon}>
-                  <Icon icon={Zap} size={20} color="#2dd4bf" />
-                </div>
-                <div>
-                  <h4 style={styles.featureTitle}>Real-time Updates</h4>
-                  <p style={styles.featureDesc}>Customers get instant notifications</p>
-                </div>
-              </div>
-              <div style={styles.featureItem}>
-                <div style={styles.featureIcon}>
-                  <Icon icon={QrCode} size={20} color="#2dd4bf" />
-                </div>
-                <div>
-                  <h4 style={styles.featureTitle}>QR Check-in</h4>
-                  <p style={styles.featureDesc}>Scan and join in seconds</p>
-                </div>
-              </div>
-              <div style={styles.featureItem}>
-                <div style={styles.featureIcon}>
-                  <Icon icon={BarChart3} size={20} color="#2dd4bf" />
-                </div>
-                <div>
-                  <h4 style={styles.featureTitle}>Analytics</h4>
-                  <p style={styles.featureDesc}>Insights to optimize flow</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Right side - Form */}
-        <div style={styles.formPanel}>
-          <div style={styles.formContainer}>
-            {/* Progress */}
-            <div style={styles.progressContainer}>
-              <div style={styles.progressBar}>
-                <div style={{ ...styles.progressFill, width: `${(step / 4) * 100}%` }} />
-              </div>
-              <div style={styles.stepIndicators}>
-                {[
-                  { num: 1, label: 'Details' },
-                  { num: 2, label: 'Contact' },
-                  { num: 3, label: 'Verify' },
-                  { num: 4, label: 'Secure' },
-                ].map(s => (
-                  <div key={s.num} style={styles.stepItem}>
-                    <div style={{
-                      ...styles.stepDot,
-                      ...(s.num <= step ? styles.stepDotActive : {}),
-                      ...(s.num < step ? styles.stepDotComplete : {}),
-                    }}>
-                      {s.num < step ? '✓' : s.num}
-                    </div>
-                    <span style={s.num <= step ? styles.stepLabelActive : styles.stepLabel}>
-                      {s.label}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Form Card */}
-            <div style={styles.card}>
-              {/* Step 1: Organization & Name */}
-              {step === 1 && (
-                <div style={styles.stepContent}>
-                  <h2 style={styles.stepTitle}>Let&apos;s get started</h2>
-                  <p style={styles.stepSubtitle}>Tell us about your organization</p>
-
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>Organization Name</label>
-                    <input
-                      type="text"
-                      name="organizationName"
-                      value={formData.organizationName}
-                      onChange={handleChange}
-                      placeholder="e.g., City General Hospital"
-                      style={styles.input}
-                      autoFocus
-                    />
-                  </div>
-
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>Workspace URL</label>
-                    <input
-                      type="text"
-                      name="slug"
-                      value={formData.slug || ''}
-                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                      placeholder="your-org"
-                      style={styles.input}
-                    />
-                    <p style={styles.hint}>
-                      {formData.slug && isReservedSlug(formData.slug)
-                        ? <span style={{ color: '#dc2626' }}>This name is reserved — pick another.</span>
-                        : <>Your workspace will be at <strong>{buildTenantUrl(formData.slug || 'your-org').replace(/^https?:\/\//, '')}</strong></>}
-                    </p>
-                  </div>
-
-                  <div style={styles.formRow}>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Your First Name</label>
-                      <input
-                        type="text"
-                        name="firstName"
-                        value={formData.firstName}
-                        onChange={handleChange}
-                        placeholder="John"
-                        style={styles.input}
-                      />
-                    </div>
-                    <div style={styles.formGroup}>
-                      <label style={styles.label}>Your Last Name</label>
-                      <input
-                        type="text"
-                        name="lastName"
-                        value={formData.lastName}
-                        onChange={handleChange}
-                        placeholder="Doe"
-                        style={styles.input}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 2: Contact Info */}
-              {step === 2 && (
-                <div style={styles.stepContent}>
-                  <h2 style={styles.stepTitle}>Contact Information</h2>
-                  <p style={styles.stepSubtitle}>We&apos;ll send a verification code to your email</p>
-
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>Email Address</label>
-                    <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
-                      onChange={handleChange}
-                      placeholder="you@organization.com"
-                      style={styles.input}
-                      autoFocus
-                    />
-                  </div>
-
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>Phone Number (Optional)</label>
-                    <div style={styles.phoneInput}>
-                      <select
-                        name="countryCode"
-                        value={formData.countryCode}
-                        onChange={handleChange}
-                        style={styles.countrySelect}
-                      >
-                        {COUNTRY_CODES.map(c => (
-                          <option key={c.code} value={c.code}>
-                            {c.flag} {c.code}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="tel"
-                        name="phone"
-                        value={formData.phone}
-                        onChange={handleChange}
-                        placeholder="123 456 7890"
-                        style={styles.phoneNumber}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 3: OTP Verification */}
-              {step === 3 && (
-                <div style={styles.stepContent}>
-                  <div style={styles.iconLarge}><Icon icon={Mail} size={56} color="#2dd4bf" /></div>
-                  <h2 style={styles.stepTitle}>Check your email</h2>
-                  <p style={styles.stepSubtitle}>
-                    We sent a 6-digit code to<br />
-                    <strong style={{ color: '#2dd4bf' }}>{formData.email}</strong>
-                  </p>
-
-                  <div style={styles.otpContainer} onPaste={handleOtpPaste}>
-                    {[0, 1, 2, 3, 4, 5].map(i => (
-                      <input
-                        key={i}
-                        ref={el => { otpInputRefs.current[i] = el; }}
-                        type="text"
-                        maxLength={1}
-                        value={formData.otpCode[i] || ''}
-                        onChange={e => handleOtpChange(i, e.target.value)}
-                        onKeyDown={e => handleOtpKeyDown(i, e)}
-                        style={{
-                          ...styles.otpInput,
-                          borderColor: formData.otpCode[i] ? '#14b8a6' : 'rgba(255,255,255,0.2)',
-                        }}
-                        autoFocus={i === 0}
-                      />
-                    ))}
-                  </div>
-
-                  <div style={styles.resendSection}>
-                    {otpResendTimer > 0 ? (
-                      <span style={styles.resendTimer}>
-                        Resend code in {otpResendTimer}s
-                      </span>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={sendOTP}
-                        style={styles.resendButton}
-                        disabled={loading}
-                      >
-                        Resend verification code
-                      </button>
-                    )}
-                  </div>
-
-                  <div style={styles.devNote}>
-                    <Icon icon={Lightbulb} size={16} color="rgba(255,255,255,0.6)" />
-                    <span>In development mode, check your console for the OTP code.</span>
-                  </div>
-                </div>
-              )}
-
-              {/* Step 4: Create Password */}
-              {step === 4 && (
-                <div style={styles.stepContent}>
-                  <div style={styles.iconLarge}><Icon icon={Lock} size={56} color="#2dd4bf" /></div>
-                  <h2 style={styles.stepTitle}>Secure your account</h2>
-                  <p style={styles.stepSubtitle}>Create a strong password</p>
-
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>Password</label>
-                    <input
-                      type="password"
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      placeholder="At least 8 characters"
-                      style={styles.input}
-                      autoFocus
-                    />
-                  </div>
-
-                  <div style={styles.formGroup}>
-                    <label style={styles.label}>Confirm Password</label>
-                    <input
-                      type="password"
-                      name="confirmPassword"
-                      value={formData.confirmPassword}
-                      onChange={handleChange}
-                      placeholder="Re-enter your password"
-                      style={styles.input}
-                    />
-                  </div>
-
-                  <div style={styles.passwordHints}>
-                    <div style={formData.password.length >= 8 ? styles.hintValid : styles.hint}>
-                      ✓ At least 8 characters
-                    </div>
-                    <div style={formData.password === formData.confirmPassword && formData.confirmPassword ? styles.hintValid : styles.hint}>
-                      ✓ Passwords match
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Error message */}
-              {error && (
-                <div style={styles.errorBox}>
-                  <Icon icon={AlertTriangle} size={18} color="#fca5a5" />
-                  {error}
-                </div>
-              )}
-
-              {/* Navigation buttons */}
-              <div style={styles.buttonRow}>
-                {step > 1 && (
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="lg"
-                    onClick={prevStep}
-                    disabled={loading}
-                  >
-                    ← Back
-                  </Button>
-                )}
-
-                <Button
-                  type="button"
-                  variant="primary"
-                  size="lg"
-                  onClick={step === 3 ? verifyOTP : step === 4 ? completeRegistration : nextStep}
-                  disabled={loading}
-                  style={{ flex: 1 }}
-                >
-                  {loading ? (
-                    <span className="spinner" style={{ width: 20, height: 20 }} />
-                  ) : step === 3 ? (
-                    'Verify Email'
-                  ) : step === 4 ? (
-                    'Create Account'
-                  ) : (
-                    'Continue →'
-                  )}
-                </Button>
-              </div>
-
-              {/* Footer */}
-              <div style={styles.footer}>
-                Already have an account?{' '}
-                <Link href="/login" style={styles.loginLink}>Sign in</Link>
-              </div>
-            </div>
-          </div>
-        </div>
+    <AuthLayout
+      panelTitle="Your queue, live today."
+      panelText="Create your workspace, add a location and a service, and people can scan in and join before the end of the day. The free plan covers one location."
+      footer={<>Already use it? <Link href="/login">Sign in</Link></>}
+    >
+      <div className="authx-steps" aria-hidden="true">
+        <span data-done="true" />
+        <span data-done={step !== 'details'} />
+        <span data-done={step === 'done'} />
       </div>
-      <style>{keyframes}</style>
-    </div>
+
+      {step === 'details' && (
+        <>
+          <h1>Create your workspace</h1>
+          <p className="authx-sub">Takes about a minute. No card needed.</p>
+          {error && <AuthAlert tone="error">{error}</AuthAlert>}
+          <form className="authx-fields" onSubmit={submitDetails}>
+            <div className="field">
+              <label htmlFor="org" className="field-label">Organization</label>
+              <input id="org" value={form.organizationName} onChange={set('organizationName')} placeholder="e.g. Ridge Family Clinic" autoComplete="organization" autoFocus required />
+              {slug && !editingSlug && (
+                <p className="authx-hint">
+                  Your address: <strong>{slug}.{rootHost}</strong>{' '}
+                  <button type="button" className="authx-linkbtn" onClick={() => setEditingSlug(true)}>Change</button>{' '}
+                  {slugHint}
+                </p>
+              )}
+            </div>
+            {editingSlug && (
+              <div className="field">
+                <label htmlFor="slug" className="field-label">Workspace address</label>
+                <div className="authx-suffix">
+                  <input
+                    id="slug"
+                    value={slug}
+                    onChange={(e) => { setSlugEdited(true); setSlug(e.target.value.toLowerCase()); }}
+                    autoCapitalize="off"
+                    spellCheck={false}
+                  />
+                  <span>.{rootHost}</span>
+                </div>
+                {slugHint && <p className="authx-hint" style={{ marginTop: 6 }}>{slugHint}</p>}
+              </div>
+            )}
+            <div className="authx-row">
+              <div className="field">
+                <label htmlFor="first" className="field-label">First name</label>
+                <input id="first" value={form.firstName} onChange={set('firstName')} autoComplete="given-name" required />
+              </div>
+              <div className="field">
+                <label htmlFor="last" className="field-label">Last name</label>
+                <input id="last" value={form.lastName} onChange={set('lastName')} autoComplete="family-name" required />
+              </div>
+            </div>
+            <div className="field">
+              <label htmlFor="email" className="field-label">Work email</label>
+              <input id="email" type="email" value={form.email} onChange={set('email')} autoComplete="email" required />
+            </div>
+            <div className="field">
+              <label htmlFor="password" className="field-label">Password</label>
+              <div className="authx-password">
+                <input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={form.password}
+                  onChange={set('password')}
+                  autoComplete="new-password"
+                  minLength={8}
+                  required
+                />
+                <button type="button" onClick={() => setShowPassword(!showPassword)} aria-label={showPassword ? 'Hide password' : 'Show password'}>
+                  {showPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+              <p className="authx-hint">At least 8 characters.</p>
+            </div>
+            <button type="submit" className="authx-submit" disabled={busy}>
+              {busy && <Loader2 className="qf-spin" size={18} />}
+              {busy ? 'Sending code…' : 'Continue'}
+            </button>
+            <p style={{ margin: 0, textAlign: 'center', fontSize: '0.8125rem', color: 'var(--gray-500)' }}>
+              By continuing you agree to the <Link href="/terms">terms</Link> and <Link href="/privacy">privacy policy</Link>.
+            </p>
+          </form>
+        </>
+      )}
+
+      {step !== 'details' && (
+        <>
+          <h1>Check your email</h1>
+          <p className="authx-sub">
+            We sent a 6-digit code to <strong>{form.email}</strong>. Enter it to create {form.organizationName || 'your workspace'}.
+          </p>
+          {error && <AuthAlert tone="error">{error}</AuthAlert>}
+          {step === 'done' && <AuthAlert tone="success">Workspace created. Opening it now…</AuthAlert>}
+          <form className="authx-fields authx-code" onSubmit={submitCode}>
+            <div className="field">
+              <label htmlFor="code" className="field-label">Code</label>
+              <input
+                id="code"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                pattern="[0-9]{6}"
+                maxLength={6}
+                value={code}
+                onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                autoFocus
+                disabled={busy}
+              />
+            </div>
+            <button type="submit" className="authx-submit" disabled={busy || code.length !== 6}>
+              {busy && <Loader2 className="qf-spin" size={18} />}
+              {busy ? 'Creating your workspace…' : 'Create workspace'}
+            </button>
+            <div className="authx-label-row" style={{ fontSize: '0.875rem' }}>
+              <button type="button" className="authx-linkbtn" onClick={() => { setStep('details'); setCode(''); setError(''); }} disabled={busy}>
+                Change email
+              </button>
+              <button
+                type="button"
+                className="authx-linkbtn"
+                disabled={resendIn > 0 || busy}
+                onClick={() => sendCode().catch((err) => setError(apiErrorMessage(err, 'Couldn’t resend the code.')))}
+              >
+                {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
+              </button>
+            </div>
+          </form>
+        </>
+      )}
+    </AuthLayout>
   );
-};
-
-// ============================================================================
-// KEYFRAMES
-// ============================================================================
-
-const keyframes = `
-  @keyframes float {
-    0%, 100% { transform: translateY(0px) rotate(0deg); }
-    50% { transform: translateY(-20px) rotate(5deg); }
-  }
-  @keyframes pulse {
-    0%, 100% { opacity: 0.5; }
-    50% { opacity: 0.8; }
-  }
-  @keyframes bounce {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
-`;
-
-// ============================================================================
-// STYLES
-// ============================================================================
-
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    minHeight: '100vh',
-    position: 'relative',
-    overflow: 'hidden',
-    background: '#0a0a0f',
-  },
-  bgGradient: {
-    position: 'absolute',
-    inset: 0,
-    background: 'radial-gradient(ellipse at 30% 20%, rgba(20, 184, 166, 0.15) 0%, transparent 50%), radial-gradient(ellipse at 80% 80%, rgba(13, 148, 136, 0.1) 0%, transparent 40%)',
-    zIndex: 0,
-  },
-  bgPattern: {
-    position: 'absolute',
-    inset: 0,
-    backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%2314b8a6' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
-    zIndex: 0,
-  },
-  floatingOrb1: {
-    position: 'absolute',
-    top: '10%',
-    left: '5%',
-    width: '300px',
-    height: '300px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(20, 184, 166, 0.2) 0%, transparent 70%)',
-    filter: 'blur(40px)',
-    animation: 'float 8s ease-in-out infinite',
-    zIndex: 0,
-  },
-  floatingOrb2: {
-    position: 'absolute',
-    bottom: '20%',
-    right: '10%',
-    width: '250px',
-    height: '250px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(13, 148, 136, 0.15) 0%, transparent 70%)',
-    filter: 'blur(40px)',
-    animation: 'float 10s ease-in-out infinite reverse',
-    zIndex: 0,
-  },
-  floatingOrb3: {
-    position: 'absolute',
-    top: '50%',
-    left: '50%',
-    width: '400px',
-    height: '400px',
-    borderRadius: '50%',
-    background: 'radial-gradient(circle, rgba(16, 185, 129, 0.08) 0%, transparent 70%)',
-    filter: 'blur(60px)',
-    animation: 'pulse 6s ease-in-out infinite',
-    zIndex: 0,
-  },
-  mainWrapper: {
-    display: 'flex',
-    minHeight: '100vh',
-    position: 'relative',
-    zIndex: 1,
-  },
-  infoPanel: {
-    display: 'none',
-    width: '50%',
-    padding: '3rem',
-    background: 'linear-gradient(135deg, rgba(20, 184, 166, 0.05) 0%, rgba(13, 148, 136, 0.05) 100%)',
-    borderRight: '1px solid rgba(255,255,255,0.05)',
-  },
-  infoPanelContent: {
-    maxWidth: '480px',
-    marginLeft: 'auto',
-    marginRight: '3rem',
-    height: '100%',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-  },
-  logoLink: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    textDecoration: 'none',
-    marginBottom: '3rem',
-  },
-  logoText: {
-    fontSize: '1.5rem',
-    fontWeight: 700,
-    color: 'white',
-  },
-  infoTitle: {
-    fontSize: '2.5rem',
-    fontWeight: 800,
-    color: 'white',
-    lineHeight: 1.2,
-    marginBottom: '1.5rem',
-  },
-  accentText: {
-    color: '#2dd4bf',
-  },
-  infoSubtitle: {
-    fontSize: '1.1rem',
-    color: 'rgba(255,255,255,0.6)',
-    lineHeight: 1.7,
-    marginBottom: '2.5rem',
-  },
-  featureList: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '1.25rem',
-    marginBottom: '3rem',
-  },
-  featureItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    gap: '1rem',
-  },
-  featureIcon: {
-    width: '44px',
-    height: '44px',
-    borderRadius: '12px',
-    background: 'rgba(20, 184, 166, 0.1)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexShrink: 0,
-  },
-  featureTitle: {
-    color: 'white',
-    fontWeight: 600,
-    fontSize: '0.95rem',
-    marginBottom: '0.25rem',
-  },
-  featureDesc: {
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: '0.85rem',
-    margin: 0,
-  },
-  formPanel: {
-    flex: 1,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: '2rem',
-  },
-  formContainer: {
-    width: '100%',
-    maxWidth: '460px',
-  },
-  progressContainer: {
-    marginBottom: '2rem',
-  },
-  progressBar: {
-    height: '4px',
-    background: 'rgba(255,255,255,0.1)',
-    borderRadius: '2px',
-    overflow: 'hidden',
-    marginBottom: '1.5rem',
-  },
-  progressFill: {
-    height: '100%',
-    background: '#14b8a6',
-    borderRadius: '2px',
-    transition: 'width 0.4s ease',
-  },
-  stepIndicators: {
-    display: 'flex',
-    justifyContent: 'space-between',
-  },
-  stepItem: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'center',
-    gap: '0.5rem',
-  },
-  stepDot: {
-    width: '36px',
-    height: '36px',
-    borderRadius: '50%',
-    background: 'rgba(255,255,255,0.1)',
-    color: 'rgba(255,255,255,0.3)',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: '0.85rem',
-    fontWeight: 600,
-    transition: 'all 0.3s ease',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: 'transparent',
-  },
-  stepDotActive: {
-    background: '#14b8a6',
-    color: 'white',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(20, 184, 166, 0.3)',
-  },
-  stepDotComplete: {
-    background: '#10b981',
-    color: 'white',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-  },
-  stepLabel: {
-    fontSize: '0.75rem',
-    color: 'rgba(255,255,255,0.3)',
-  },
-  stepLabelActive: {
-    fontSize: '0.75rem',
-    color: 'rgba(255,255,255,0.7)',
-  },
-  card: {
-    background: 'rgba(255,255,255,0.03)',
-    backdropFilter: 'blur(20px)',
-    borderRadius: '24px',
-    border: '1px solid rgba(255,255,255,0.08)',
-    padding: '2.5rem',
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
-  },
-  stepContent: {
-    marginBottom: '1.5rem',
-  },
-  stepTitle: {
-    fontSize: '1.5rem',
-    fontWeight: 700,
-    color: 'white',
-    marginBottom: '0.5rem',
-    textAlign: 'center',
-  },
-  stepSubtitle: {
-    color: 'rgba(255,255,255,0.6)',
-    textAlign: 'center',
-    marginBottom: '2rem',
-    lineHeight: 1.6,
-  },
-  iconLarge: {
-    fontSize: '3.5rem',
-    textAlign: 'center',
-    marginBottom: '1rem',
-  },
-  formGroup: {
-    marginBottom: '1.25rem',
-  },
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '1rem',
-  },
-  label: {
-    display: 'block',
-    marginBottom: '0.5rem',
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: '0.9rem',
-    fontWeight: 500,
-  },
-  input: {
-    width: '100%',
-    padding: '0.875rem 1rem',
-    background: 'rgba(255,255,255,0.05)',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: '12px',
-    color: 'white',
-    fontSize: '1rem',
-    transition: 'all 0.2s ease',
-    outline: 'none',
-    boxSizing: 'border-box',
-  },
-  phoneInput: {
-    display: 'flex',
-    gap: '0.5rem',
-  },
-  countrySelect: {
-    width: '120px',
-    padding: '0.875rem 0.75rem',
-    background: 'rgba(255,255,255,0.05)',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: '12px',
-    color: 'white',
-    fontSize: '0.9rem',
-    cursor: 'pointer',
-    outline: 'none',
-  },
-  phoneNumber: {
-    flex: 1,
-    padding: '0.875rem 1rem',
-    background: 'rgba(255,255,255,0.05)',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(255,255,255,0.1)',
-    borderRadius: '12px',
-    color: 'white',
-    fontSize: '1rem',
-    outline: 'none',
-    boxSizing: 'border-box',
-  },
-  otpContainer: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '0.75rem',
-    marginBottom: '1.5rem',
-  },
-  otpInput: {
-    width: '52px',
-    height: '60px',
-    textAlign: 'center',
-    fontSize: '1.5rem',
-    fontWeight: 700,
-    background: 'rgba(255,255,255,0.05)',
-    borderWidth: '2px',
-    borderStyle: 'solid',
-    borderColor: 'rgba(255,255,255,0.2)',
-    borderRadius: '12px',
-    color: 'white',
-    outline: 'none',
-    transition: 'all 0.2s ease',
-  },
-  resendSection: {
-    textAlign: 'center',
-    marginBottom: '1rem',
-  },
-  resendTimer: {
-    color: 'rgba(255,255,255,0.4)',
-    fontSize: '0.9rem',
-  },
-  resendButton: {
-    background: 'none',
-    border: 'none',
-    color: '#2dd4bf',
-    fontSize: '0.9rem',
-    cursor: 'pointer',
-    textDecoration: 'underline',
-  },
-  devNote: {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: '0.5rem',
-    padding: '0.75rem',
-    background: 'rgba(20, 184, 166, 0.1)',
-    borderRadius: '8px',
-    fontSize: '0.8rem',
-    color: 'rgba(255,255,255,0.6)',
-  },
-  passwordHints: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '0.5rem',
-    marginTop: '0.5rem',
-  },
-  hint: {
-    fontSize: '0.85rem',
-    color: 'rgba(255,255,255,0.3)',
-  },
-  hintValid: {
-    fontSize: '0.85rem',
-    color: '#10b981',
-  },
-  errorBox: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '0.5rem',
-    padding: '0.875rem 1rem',
-    background: 'rgba(239, 68, 68, 0.1)',
-    border: '1px solid rgba(239, 68, 68, 0.3)',
-    borderRadius: '12px',
-    color: '#fca5a5',
-    fontSize: '0.9rem',
-    marginBottom: '1.5rem',
-  },
-  buttonRow: {
-    display: 'flex',
-    gap: '1rem',
-  },
-  footer: {
-    textAlign: 'center',
-    marginTop: '2rem',
-    color: 'rgba(255,255,255,0.5)',
-    fontSize: '0.9rem',
-  },
-  loginLink: {
-    color: '#2dd4bf',
-    textDecoration: 'none',
-    fontWeight: 500,
-  },
-  successCard: {
-    background: 'rgba(255,255,255,0.03)',
-    backdropFilter: 'blur(20px)',
-    borderRadius: '24px',
-    border: '1px solid rgba(16, 185, 129, 0.3)',
-    padding: '3rem',
-    textAlign: 'center',
-    maxWidth: '400px',
-    margin: '0 auto',
-  },
-  successIconWrapper: {
-    marginBottom: '1.5rem',
-  },
-  successTitle: {
-    fontSize: '1.75rem',
-    fontWeight: 700,
-    color: 'white',
-    marginBottom: '0.75rem',
-  },
-  successText: {
-    color: 'rgba(255,255,255,0.7)',
-    lineHeight: 1.6,
-    marginBottom: '1.5rem',
-  },
-  loadingDots: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '0.5rem',
-  },
-  dot: {
-    width: '10px',
-    height: '10px',
-    borderRadius: '50%',
-    background: '#10b981',
-    animation: 'bounce 1.4s ease-in-out infinite',
-  },
-};
-
-// Add media query styles via inline check
-if (typeof window !== 'undefined' && window.innerWidth >= 1024) {
-  styles.infoPanel = { ...styles.infoPanel, display: 'flex' };
 }
-
-export default RegisterPage;

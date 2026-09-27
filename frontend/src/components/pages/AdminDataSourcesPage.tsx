@@ -1,5 +1,7 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
+import { useTerms } from '@/hooks/useTerms';
 import React, { useEffect, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Plug, Database, FileText, Link2, Package, Search, Pause, Play, Pencil, Trash2 } from 'lucide-react';
@@ -193,7 +195,7 @@ export default function AdminDataSourcesPage() {
       loadDataSources();
     } catch (err) {
       console.error('Failed to save data source:', err);
-      alert('Failed to save data source');
+      toast.error('Couldn’t save the data source.');
     }
   };
 
@@ -208,7 +210,7 @@ export default function AdminDataSourcesPage() {
       }
     } catch (err) {
       console.error('Failed to delete data source:', err);
-      alert('Failed to delete data source');
+      toast.error('Couldn’t delete the data source.');
     }
   };
 
@@ -254,7 +256,7 @@ export default function AdminDataSourcesPage() {
       setSelectedSource(updated);
     } catch (err) {
       console.error('Failed to add mapping:', err);
-      alert('Failed to add field mapping');
+      toast.error('Couldn’t add the field mapping.');
     }
   };
 
@@ -334,8 +336,8 @@ export default function AdminDataSourcesPage() {
       <div className="page-container">
         <PageHeader
           icon={Database}
-          title="Data Sources"
-          subtitle="Connect external systems (EMR, EHR, databases) to enrich customer data"
+          title="Data sources"
+          subtitle="Look people up in your own systems (records, CRM, databases) from the desk."
           actions={
             <button className="btn-primary" onClick={() => setShowForm(true)}>
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -354,7 +356,7 @@ export default function AdminDataSourcesPage() {
             <div className="sources-list">
               {dataSources.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon"><Icon icon={Plug} size={40} color="#14b8a6" strokeWidth={1.5} /></div>
+                  <div className="empty-icon"><Icon icon={Plug} size={40} color="#0e8f80" strokeWidth={1.5} /></div>
                   <h3>No data sources configured</h3>
                   <p>Add a data source to connect external systems and enrich customer data.</p>
                 </div>
@@ -367,7 +369,7 @@ export default function AdminDataSourcesPage() {
                   >
                     <div className="source-header">
                       <span className="source-icon">
-                        <Icon icon={DATA_SOURCE_TYPES.find(t => t.value === source.type)?.icon || Package} size={22} color="#14b8a6" />
+                        <Icon icon={DATA_SOURCE_TYPES.find(t => t.value === source.type)?.icon || Package} size={22} color="#0e8f80" />
                       </span>
                       <div className="source-info">
                         <h3>{source.name}</h3>
@@ -431,7 +433,7 @@ export default function AdminDataSourcesPage() {
                   <div className={`test-result ${testResult.success ? 'success' : 'error'}`}>
                     <strong>{testResult.success ? '✓ Success' : '✗ Failed'}</strong>
                     <p>{testResult.message}</p>
-                    {testResult.data && (
+                    {testResult.data != null && (
                       <pre>{JSON.stringify(testResult.data, null, 2)}</pre>
                     )}
                   </div>
@@ -552,7 +554,7 @@ export default function AdminDataSourcesPage() {
                     type="text"
                     value={formData.name}
                     onChange={e => setFormData({ ...formData, name: e.target.value })}
-                    placeholder="e.g., Patient EMR System"
+                    placeholder="e.g. Records system"
                     required
                   />
                 </div>
@@ -785,12 +787,12 @@ export default function AdminDataSourcesPage() {
           }
 
           .source-card:hover {
-            border-color: #3b82f6;
+            border-color: var(--primary-500);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
           }
 
           .source-card.selected {
-            border-color: #3b82f6;
+            border-color: var(--primary-500);
             background: #f0f7ff;
           }
 
@@ -983,7 +985,7 @@ export default function AdminDataSourcesPage() {
 
           .btn-add {
             padding: 0.5rem 1rem;
-            background: #3b82f6;
+            background: var(--primary-500);
             color: white;
             border: none;
             border-radius: 8px;
@@ -1167,7 +1169,7 @@ export default function AdminDataSourcesPage() {
           }
 
           .type-option.selected {
-            border-color: #3b82f6;
+            border-color: var(--primary-500);
             background: #eff6ff;
           }
 

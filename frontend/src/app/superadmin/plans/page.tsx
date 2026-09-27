@@ -18,7 +18,7 @@ interface SubscriptionPlan {
   maxServicesPerLoc: number | null;
   maxUsersPerOrg: number | null;
   maxQueueEntriesPerDay: number | null;
-  features: Record<string, boolean>;
+  features: Record<string, boolean | number>;
   displayOrder: number;
   tierRank: number;
   isActive: boolean;
@@ -28,7 +28,7 @@ interface SubscriptionPlan {
   expiredFallbackPlanId: string | null;
   upgradePlanId: string | null;
   creditAllowances?: { creditType: 'AI' | 'EMAIL' | 'SMS'; monthlyAllowance: number | null }[];
-  addOnPricingOverrides?: { resourceType: 'LOCATIONS' | 'USERS'; pricePerUnitMonthly: string; pricePerUnitOneOff: string }[];
+  addOnPricingOverrides?: { resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA'; pricePerUnitMonthly: string; pricePerUnitOneOff: string }[];
   _count: {
     subscriptions: number;
   };
@@ -55,13 +55,14 @@ const EMPTY_ADDON_OVERRIDES: AddOnOverrideForm = {
 function addOnOverridesToForm(rows: SubscriptionPlan['addOnPricingOverrides']): AddOnOverrideForm {
   const form: AddOnOverrideForm = { LOCATIONS: { monthly: '', oneOff: '' }, USERS: { monthly: '', oneOff: '' } };
   for (const row of rows || []) {
+    if (row.resourceType === 'DISPLAY_MEDIA') continue; // priced globally under Add-on pricing
     form[row.resourceType] = { monthly: row.pricePerUnitMonthly, oneOff: row.pricePerUnitOneOff };
   }
   return form;
 }
 
 interface AddOnPricingRow {
-  resourceType: 'LOCATIONS' | 'USERS';
+  resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA';
   pricePerUnitMonthly: string;
   pricePerUnitOneOff: string;
 }
@@ -79,17 +80,17 @@ function formToAddOnOverridesPayload(form: AddOnOverrideForm) {
 }
 
 const defaultFeatures = [
-  { key: 'analytics', label: 'Analytics Dashboard' },
-  { key: 'customBranding', label: 'Custom Branding' },
-  { key: 'customDomain', label: 'Custom Domain' },
-  { key: 'apiAccess', label: 'API Access' },
-  { key: 'smsNotifications', label: 'SMS Notifications' },
-  { key: 'emailNotifications', label: 'Email Notifications' },
-  { key: 'multipleLocations', label: 'Multiple Locations' },
-  { key: 'serviceFlows', label: 'Service Flows' },
-  { key: 'dataIntegration', label: 'Data Integration' },
-  { key: 'prioritySupport', label: 'Priority Support' },
-  { key: 'whiteLabel', label: 'White Label' },
+  // Keys must match what the server enforces (subscription.middleware.ts).
+  { key: 'analytics', label: 'Analytics' },
+  { key: 'ai', label: 'AI-assisted analytics' },
+  { key: 'multiLocation', label: 'More than one location' },
+  { key: 'servicePoints', label: 'Desks and rooms' },
+  { key: 'serviceFlows', label: 'Journeys between services' },
+  { key: 'smsNotifications', label: 'Text message alerts' },
+  { key: 'customBranding', label: 'Own logo and colour' },
+  { key: 'customDomain', label: 'Custom domain' },
+  { key: 'apiAccess', label: 'API and integrations' },
+  { key: 'displayMedia', label: 'Adverts on lobby screens' },
 ];
 
 export default function PlansPage() {
@@ -113,7 +114,7 @@ export default function PlansPage() {
     maxServicesPerLoc: null as number | null,
     maxUsersPerOrg: null as number | null,
     maxQueueEntriesPerDay: null as number | null,
-    features: {} as Record<string, boolean>,
+    features: {} as Record<string, boolean | number>,
     displayOrder: 0,
     tierRank: 0,
     isActive: true,
@@ -303,10 +304,10 @@ export default function PlansPage() {
   };
 
   return (
-    <div style={{ maxWidth: '1400px', margin: '0 auto' }}>
+    <div style={{ maxWidth: '1400px' }}>
       <PageHeader
-        title="Subscription Plans"
-        subtitle="Define pricing tiers and feature limits"
+        title="Plans"
+        subtitle="What each plan costs and includes."
         icon={CreditCard}
         actions={
           <Button variant="primary" onClick={openCreateModal}>
@@ -620,10 +621,30 @@ export default function PlansPage() {
               <Checkbox
                 key={f.key}
                 label={f.label}
-                checked={form.features[f.key] || false}
+                checked={!!form.features[f.key]}
                 onChange={() => toggleFeature(f.key)}
               />
             ))}
+          </div>
+          <div style={formRow}>
+            <Input
+              label={form.features.displayMedia ? 'Lobby playlist items included' : 'Lobby playlist items (not included)'}
+              type="number"
+              min="0"
+              disabled={!form.features.displayMedia}
+              placeholder="5"
+              value={typeof form.features.displayMediaItems === 'number' ? String(form.features.displayMediaItems) : ''}
+              onChange={(e) => setForm({ ...form, features: { ...form.features, displayMediaItems: e.target.value === '' ? (undefined as unknown as number) : Math.max(0, parseInt(e.target.value) || 0) } })}
+            />
+            <Input
+              label="Free adverts trial (days) when not included"
+              type="number"
+              min="0"
+              disabled={!!form.features.displayMedia}
+              placeholder="14"
+              value={typeof form.features.displayMediaTrialDays === 'number' ? String(form.features.displayMediaTrialDays) : ''}
+              onChange={(e) => setForm({ ...form, features: { ...form.features, displayMediaTrialDays: e.target.value === '' ? (undefined as unknown as number) : Math.max(0, parseInt(e.target.value) || 0) } })}
+            />
           </div>
 
           <div style={formRow}>
@@ -757,7 +778,6 @@ const sectionTitle: React.CSSProperties = {
   color: 'var(--gray-500)',
   fontSize: '0.75rem',
   fontWeight: 700,
-  textTransform: 'uppercase' as const,
   letterSpacing: '0.05em',
   marginBottom: '0.75rem',
 };

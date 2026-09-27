@@ -1,5 +1,6 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
 import React, { useEffect, useState, useCallback } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import { Building2, Syringe, Stethoscope, Wallet, Pill, FlaskConical, Camera, MapPin } from 'lucide-react';
@@ -167,13 +168,7 @@ const ServicePointsPage: React.FC = () => {
   }
 
   if (!user?.organizationId) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
+    return <NoOrganization />;
   }
 
   return (
@@ -181,8 +176,8 @@ const ServicePointsPage: React.FC = () => {
       <div className="service-points-page">
         <PageHeader
           icon={Building2}
-          title="Service Points"
-          subtitle="Manage reception desks, consultation rooms, and more"
+          title="Desks & rooms"
+          subtitle="Where staff sit to call people: counters, desks and rooms. Link each to the services it handles."
           actions={
             <div className="header-actions">
               <button className="add-btn" onClick={() => handleOpenModal()}>
@@ -226,7 +221,7 @@ const ServicePointsPage: React.FC = () => {
                   className={`point-card ${!point.isActive ? 'inactive' : ''}`}
                 >
                   <div className="point-header">
-                    <span className="point-icon"><Icon icon={typeInfo.icon} size={28} color="#14b8a6" /></span>
+                    <span className="point-icon"><Icon icon={typeInfo.icon} size={28} color="#0e8f80" /></span>
                     <div className="point-title">
                       <h3>{point.name}</h3>
                       {point.displayName && point.displayName !== point.name && (
@@ -539,7 +534,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .edit-btn:hover {
-            background: rgba(20, 184, 166, 0.1);
+            background: rgba(14, 143, 128, 0.1);
             color: var(--primary);
           }
 
@@ -672,7 +667,7 @@ const ServicePointsPage: React.FC = () => {
           }
 
           .type-option.selected {
-            background: rgba(20, 184, 166, 0.1);
+            background: rgba(14, 143, 128, 0.1);
             border-color: var(--primary);
             color: var(--primary);
           }

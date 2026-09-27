@@ -1,5 +1,7 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState, useCallback } from 'react';
 import { Layers } from 'lucide-react';
 import api from '@/api/client';
@@ -49,13 +51,16 @@ interface ServiceFormData {
 
 const ServicesPage: React.FC = () => {
   const { user, isAdmin } = useAuthContext();
-  const { canCreate, limits, refresh: refreshSubscription } = useSubscription();
+  const { canCreate, limits, refresh: refreshSubscription, loading: subscriptionLoading } = useSubscription();
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [locations, setLocations] = useState<Location[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [selectedOrg, setSelectedOrg] = useState<string>('');
   const [selectedLocation, setSelectedLocation] = useState<string>('');
   const [loading, setLoading] = useState(true);
+  // Services for the selected location have been fetched at least once; until
+  // then show the spinner, not the "No Services Yet" / "No locations" states.
+  const [dataLoaded, setDataLoaded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [showWizard, setShowWizard] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -102,9 +107,11 @@ const ServicesPage: React.FC = () => {
       } else {
         setSelectedLocation('');
         setServices([]);
+        setDataLoaded(true);
       }
     } catch (err) {
       console.error(err);
+      setDataLoaded(true);
     }
   }, []);
 
@@ -114,6 +121,8 @@ const ServicesPage: React.FC = () => {
       setServices(svcs);
     } catch (err) {
       console.error(err);
+    } finally {
+      setDataLoaded(true);
     }
   }, []);
 
@@ -169,7 +178,7 @@ const ServicesPage: React.FC = () => {
       await loadServices(selectedLocation);
       resetForm();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to update service');
+      toast.error(errorMessage(err, 'Couldn’t save the service.'));
     }
   };
 
@@ -184,7 +193,7 @@ const ServicesPage: React.FC = () => {
       setShowDetails(false);
       setSelectedService(null);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete service');
+      toast.error(errorMessage(err, 'Couldn’t delete the service.'));
     }
   };
 
@@ -245,13 +254,7 @@ const ServicesPage: React.FC = () => {
   };
 
   if (!loading && !user?.organizationId) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
+    return <NoOrganization />;
   }
 
   return (
@@ -260,7 +263,7 @@ const ServicesPage: React.FC = () => {
         <PageHeader
           icon={Layers}
           title="Services"
-          subtitle={`Configure and manage your queue services (${limits.services.current}/${limits.services.limit} used)`}
+          subtitle="What people queue for. Each service has its own queue, hours and ticket letter."
           actions={
             <button
               onClick={() => setShowWizard(true)}
@@ -324,7 +327,7 @@ const ServicesPage: React.FC = () => {
               style={filterSelect}
             >
               {locations.length === 0 ? (
-                <option value="">No locations available</option>
+                <option value="">{dataLoaded ? 'No locations available' : 'Loading…'}</option>
               ) : (
                 locations.map(loc => (
                   <option key={loc.id} value={loc.id}>{loc.name}</option>
@@ -518,7 +521,7 @@ const ServicesPage: React.FC = () => {
               </div>
 
               <div style={formFieldFull}>
-                <label style={labelStyle}>Service Points & Desks</label>
+                <label style={labelStyle}>Desks and rooms</label>
                 {editingService && (
                   <ServicePointsDeskPicker
                     organizationId={user?.organizationId || ''}
@@ -544,7 +547,7 @@ const ServicesPage: React.FC = () => {
         )}
 
         {/* Services Grid */}
-        {loading ? (
+        {loading || (user?.organizationId && !dataLoaded) ? (
           <div style={{ padding: '2rem', textAlign: 'center' }}>
             <div className="spinner" />
           </div>
@@ -604,12 +607,10 @@ const ServicesPage: React.FC = () => {
                       <polyline points="2 12 12 17 22 12" />
                     </svg>
                   </div>
-                  <span style={service.type === 'GENERAL' ? typeBadgeGeneral : typeBadgeIndividual}>
-                    {service.type}
-                  </span>
+                  {service.type === 'INDIVIDUAL' && <span style={typeBadgeIndividual}>Appointments</span>}
                 </div>
                 <h3 style={serviceName}>{service.name}</h3>
-                <p style={serviceDesc}>{service.description || 'No description provided'}</p>
+                {service.description && <p style={serviceDesc}>{service.description}</p>}
                 <div style={serviceDetails}>
                   <div style={detailChip}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -625,7 +626,7 @@ const ServicesPage: React.FC = () => {
                       <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                       <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                     </svg>
-                    {service.concurrentLimit} concurrent
+                    {service.concurrentLimit} at a time
                   </div>
                   <div style={detailChip}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -644,7 +645,7 @@ const ServicesPage: React.FC = () => {
                     <line x1="12" y1="16" x2="12" y2="12" />
                     <line x1="12" y1="8" x2="12.01" y2="8" />
                   </svg>
-                  Click for details
+                  Details
                 </div>
 
                 <div style={cardActions} onClick={(e) => e.stopPropagation()}>
@@ -715,7 +716,7 @@ const filterLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -797,7 +798,7 @@ const detailLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -838,12 +839,12 @@ const statCard: React.CSSProperties = {
 const statIcon: React.CSSProperties = {
   width: '40px',
   height: '40px',
-  background: 'rgba(20, 184, 166, 0.1)',
+  background: 'rgba(14, 143, 128, 0.1)',
   borderRadius: '10px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#14b8a6',
+  color: '#0e8f80',
 };
 
 const statValue: React.CSSProperties = {
@@ -870,7 +871,7 @@ const editButtonLarge: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '8px',
@@ -977,7 +978,7 @@ const submitButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '10px',
@@ -1016,8 +1017,8 @@ const serviceCard: React.CSSProperties = {
 };
 
 const serviceCardActive: React.CSSProperties = {
-  borderColor: '#14b8a6',
-  boxShadow: '0 8px 30px rgba(20, 184, 166, 0.2)',
+  borderColor: '#0e8f80',
+  boxShadow: '0 8px 30px rgba(14, 143, 128, 0.2)',
 };
 
 const cardHeader: React.CSSProperties = {
@@ -1030,12 +1031,12 @@ const cardHeader: React.CSSProperties = {
 const cardIcon: React.CSSProperties = {
   width: '48px',
   height: '48px',
-  background: 'rgba(20, 184, 166, 0.1)',
+  background: 'rgba(14, 143, 128, 0.1)',
   borderRadius: '12px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#14b8a6',
+  color: '#0e8f80',
 };
 
 const typeBadgeGeneral: React.CSSProperties = {
@@ -1045,7 +1046,7 @@ const typeBadgeGeneral: React.CSSProperties = {
   borderRadius: '20px',
   fontSize: '0.75rem',
   fontWeight: 600,
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -1056,7 +1057,7 @@ const typeBadgeIndividual: React.CSSProperties = {
   borderRadius: '20px',
   fontSize: '0.75rem',
   fontWeight: 600,
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -1097,7 +1098,7 @@ const cardClickHint: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   fontSize: '0.75rem',
-  color: '#0d9488',
+  color: '#0b7a6d',
   marginBottom: '1rem',
 };
 
@@ -1143,13 +1144,13 @@ const emptyState: React.CSSProperties = {
 const emptyIcon: React.CSSProperties = {
   width: '100px',
   height: '100px',
-  background: 'rgba(20, 184, 166, 0.1)',
+  background: 'rgba(14, 143, 128, 0.1)',
   borderRadius: '50%',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   margin: '0 auto 1.5rem',
-  color: '#14b8a6',
+  color: '#0e8f80',
 };
 
 const emptyTitle: React.CSSProperties = {
@@ -1168,7 +1169,7 @@ const emptyButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '10px',
@@ -1182,7 +1183,7 @@ const emptyLink: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   borderRadius: '10px',
   fontSize: '0.95rem',
@@ -1352,7 +1353,7 @@ const linkButton: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   padding: '0.5rem 1rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '8px',

@@ -1,9 +1,10 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { CheckCircle2, XCircle, Loader2, Wallet } from 'lucide-react';
 import api from '@/api/client';
-import { Icon } from '@/components/ui';
+import { Icon, PageHeader, Card, Badge, Button, Switch, Input } from '@/components/ui';
 
 interface ProviderConfig {
   provider: 'stripe' | 'paystack';
@@ -55,7 +56,7 @@ export default function PaymentProvidersPage() {
   const handleSave = async (provider: 'stripe' | 'paystack') => {
     const form = forms[provider];
     if (!form.secretKey || !form.webhookSecret) {
-      alert('Secret key and webhook secret are required to save.');
+      toast.error('Add the secret key and webhook secret to save.');
       return;
     }
     setSaving(provider);
@@ -64,7 +65,7 @@ export default function PaymentProvidersPage() {
       await loadProviders();
     } catch (err) {
       console.error('Failed to save provider config', err);
-      alert('Failed to save. Check the console for details.');
+      toast.error('Couldn’t save. Check the keys and try again.');
     } finally {
       setSaving(null);
     }
@@ -79,94 +80,86 @@ export default function PaymentProvidersPage() {
     }
   };
 
-  if (loading) {
-    return <div style={{ color: '#94a3b8', padding: '2rem' }}>Loading...</div>;
-  }
-
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto' }}>
-      <header style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '2rem', fontWeight: 700, color: '#fff', marginBottom: '0.5rem' }}>Payment Providers</h1>
-        <p style={{ color: '#94a3b8' }}>Configure Stripe and Paystack so tenants can subscribe to a plan.</p>
-      </header>
+    <div style={{ maxWidth: '900px' }}>
+      <PageHeader
+        title="Payment providers"
+        subtitle="Configure Stripe and Paystack so tenants can subscribe to a plan."
+        icon={Wallet}
+      />
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-        {providers.map(p => {
-          const form = forms[p.provider] || { publicKey: '', secretKey: '', webhookSecret: '', isActive: false };
-          const result = testResult[p.provider];
-          return (
-            <div key={p.provider} style={{ background: '#1e293b', borderRadius: '12px', border: '1px solid rgba(20, 184, 166, 0.2)', padding: '1.5rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-                <h2 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#fff' }}>{PROVIDER_LABELS[p.provider]}</h2>
-                <span style={{ fontSize: '0.75rem', fontWeight: 600, padding: '0.25rem 0.625rem', borderRadius: '9999px', background: p.isActive ? 'rgba(20, 184, 166, 0.2)' : 'rgba(100, 116, 139, 0.2)', color: p.isActive ? '#5eead4' : '#94a3b8' }}>
-                  {p.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </div>
+      {loading ? (
+        <div style={{ padding: '3rem', textAlign: 'center' }}>
+          <div className="spinner" style={{ margin: '0 auto 1rem' }} />
+          <p style={{ color: 'var(--gray-500)' }}>Loading...</p>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+          {providers.map(p => {
+            const form = forms[p.provider] || { publicKey: '', secretKey: '', webhookSecret: '', isActive: false };
+            const result = testResult[p.provider];
+            return (
+              <Card key={p.provider} style={{ padding: '1.75rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+                  <h2 style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--gray-900)' }}>{PROVIDER_LABELS[p.provider]}</h2>
+                  <Badge tone={p.isActive ? 'success' : 'neutral'}>{p.isActive ? 'Active' : 'Inactive'}</Badge>
+                </div>
 
-              {p.configured && (
-                <p style={{ color: '#64748b', fontSize: '0.8125rem', marginBottom: '1rem' }}>
-                  Current secret key: <code>{p.secretKeyMasked}</code>
-                </p>
-              )}
+                {p.configured && (
+                  <p style={{ color: 'var(--gray-400)', fontSize: '0.8125rem', marginBottom: '1.25rem' }}>
+                    Current secret key: <code style={{ background: 'var(--gray-100)', padding: '0.125rem 0.375rem', borderRadius: 'var(--radius-sm)' }}>{p.secretKeyMasked}</code>
+                  </p>
+                )}
 
-              <div style={{ display: 'grid', gap: '0.75rem', marginBottom: '1rem' }}>
-                <input
-                  placeholder="Public key (optional)"
-                  value={form.publicKey}
-                  onChange={e => setForms(prev => ({ ...prev, [p.provider]: { ...form, publicKey: e.target.value } }))}
-                  style={{ padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid rgba(20, 184, 166, 0.2)', background: '#0f172a', color: '#fff' }}
-                />
-                <input
-                  placeholder="Secret key"
-                  type="password"
-                  value={form.secretKey}
-                  onChange={e => setForms(prev => ({ ...prev, [p.provider]: { ...form, secretKey: e.target.value } }))}
-                  style={{ padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid rgba(20, 184, 166, 0.2)', background: '#0f172a', color: '#fff' }}
-                />
-                <input
-                  placeholder="Webhook secret"
-                  type="password"
-                  value={form.webhookSecret}
-                  onChange={e => setForms(prev => ({ ...prev, [p.provider]: { ...form, webhookSecret: e.target.value } }))}
-                  style={{ padding: '0.625rem 0.875rem', borderRadius: '8px', border: '1px solid rgba(20, 184, 166, 0.2)', background: '#0f172a', color: '#fff' }}
-                />
-                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: '#94a3b8', fontSize: '0.875rem' }}>
-                  <input
-                    type="checkbox"
+                <div style={{ display: 'grid', gap: '0.9rem', marginBottom: '1.25rem' }}>
+                  <Input
+                    label="Public key"
+                    placeholder="Public key (optional)"
+                    value={form.publicKey}
+                    onChange={e => setForms(prev => ({ ...prev, [p.provider]: { ...form, publicKey: e.target.value } }))}
+                  />
+                  <Input
+                    label="Secret key"
+                    placeholder="Secret key"
+                    type="password"
+                    value={form.secretKey}
+                    onChange={e => setForms(prev => ({ ...prev, [p.provider]: { ...form, secretKey: e.target.value } }))}
+                  />
+                  <Input
+                    label="Webhook secret"
+                    placeholder="Webhook secret"
+                    type="password"
+                    value={form.webhookSecret}
+                    onChange={e => setForms(prev => ({ ...prev, [p.provider]: { ...form, webhookSecret: e.target.value } }))}
+                  />
+                  <Switch
+                    label="Active (tenants can pay with this provider)"
                     checked={form.isActive}
                     onChange={e => setForms(prev => ({ ...prev, [p.provider]: { ...form, isActive: e.target.checked } }))}
                   />
-                  Active (tenants can pay with this provider)
-                </label>
-              </div>
+                </div>
 
-              <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                <button
-                  onClick={() => handleSave(p.provider)}
-                  disabled={saving === p.provider}
-                  style={{ padding: '0.625rem 1.25rem', background: '#14b8a6', color: 'white', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
-                >
-                  {saving === p.provider ? <Icon icon={Loader2} size={16} /> : 'Save'}
-                </button>
-                {p.configured && (
-                  <button
-                    onClick={() => handleTest(p.provider)}
-                    style={{ padding: '0.625rem 1.25rem', background: 'rgba(20, 184, 166, 0.15)', color: '#2dd4bf', border: 'none', borderRadius: '8px', fontWeight: 600, cursor: 'pointer' }}
-                  >
-                    Test Connection
-                  </button>
-                )}
-                {result && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.875rem', color: result.ok ? '#5eead4' : '#f87171' }}>
-                    <Icon icon={result.ok ? CheckCircle2 : XCircle} size={16} />
-                    {result.ok ? 'Key is valid' : result.error}
-                  </span>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                  <Button variant="primary" onClick={() => handleSave(p.provider)} disabled={saving === p.provider}>
+                    {saving === p.provider ? <Icon icon={Loader2} size={16} className="animate-spin" /> : 'Save'}
+                  </Button>
+                  {p.configured && (
+                    <Button variant="secondary" onClick={() => handleTest(p.provider)}>
+                      Test Connection
+                    </Button>
+                  )}
+                  {result && (
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', fontSize: '0.875rem', color: result.ok ? 'var(--success-600)' : 'var(--error-600)' }}>
+                      <Icon icon={result.ok ? CheckCircle2 : XCircle} size={16} />
+                      {result.ok ? 'Key is valid' : result.error}
+                    </span>
+                  )}
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

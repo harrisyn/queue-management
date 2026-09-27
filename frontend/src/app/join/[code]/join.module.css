@@ -1,0 +1,88 @@
+/* The public join page: mostly used one-handed on a phone at the door,
+   sometimes on a lobby kiosk. Big targets, one decision per screen. */
+
+.page {
+  --brand: #0e8f80;
+  min-height: 100vh;
+  background: var(--paper, #f3f5f2);
+  color: var(--ink, #1c2733);
+  font-family: var(--font-sans);
+}
+.shell { max-width: 480px; margin: 0 auto; padding: 20px 16px 40px; display: flex; flex-direction: column; gap: 16px; }
+.page[data-kiosk='true'] .shell { max-width: 720px; padding-top: 40px; }
+
+.brand { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 4px 2px 8px; border-bottom: 3px solid var(--brand); }
+.brand img { max-height: 40px; max-width: 70%; object-fit: contain; }
+.brand strong { font-family: var(--font-display); font-size: 1.25rem; font-weight: 700; }
+.brand span { color: var(--gray-500, #6b7a86); font-size: 0.9375rem; }
+
+.intro { padding: 4px 2px; }
+.title { margin: 0; font-family: var(--font-display); font-size: 1.75rem; line-height: 1.1; letter-spacing: -0.02em; color: var(--ink, #1c2733); }
+.page[data-kiosk='true'] .title { font-size: 2.5rem; }
+.lede { margin: 8px 0 0; color: var(--gray-600, #4f5d69); font-size: 1rem; line-height: 1.5; }
+
+.card { display: flex; flex-direction: column; gap: 16px; padding: 20px; border-radius: 18px; background: white; border: 1px solid var(--gray-200, #e2e6e3); }
+.card > .title + .lede { margin-top: -8px; }
+
+.services { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.service {
+  width: 100%; display: flex; align-items: center; gap: 12px; padding: 18px 16px; border-radius: 16px;
+  background: white; border: 1.5px solid var(--gray-200, #e2e6e3); color: inherit; font: inherit; text-align: left; cursor: pointer;
+}
+.service:hover, .service:focus-visible { border-color: var(--brand); }
+.service:active { transform: scale(0.99); }
+.service > span { flex: 1; display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.service strong { font-size: 1.1875rem; font-weight: 700; }
+.service small { color: var(--gray-500, #6b7a86); font-size: 0.9063rem; }
+.service em { font-style: normal; color: var(--brand); font-weight: 600; font-size: 0.9063rem; }
+.service svg { color: var(--gray-400, #97a3ad); flex-shrink: 0; }
+.page[data-kiosk='true'] .service { padding: 28px 24px; }
+.page[data-kiosk='true'] .service strong { font-size: 1.625rem; }
+
+.back { align-self: flex-start; display: inline-flex; align-items: center; gap: 2px; margin: -4px 0 -6px -6px; padding: 6px; border: 0; background: none; color: var(--gray-600, #4f5d69); font: 600 0.9375rem var(--font-sans); cursor: pointer; }
+.fields { display: flex; flex-direction: column; gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 6px; }
+.field > span { font-weight: 600; font-size: 0.9375rem; }
+.field > span small { font-weight: 400; color: var(--gray-500, #6b7a86); }
+.field input, .field textarea {
+  width: 100%; padding: 14px; border-radius: 12px; border: 1.5px solid var(--gray-300, #cdd4d0); background: white;
+  font: 400 1.0625rem var(--font-sans); color: inherit;
+}
+.field input:focus, .field textarea:focus { outline: none; border-color: var(--brand); box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand) 22%, transparent); }
+.page[data-kiosk='true'] .field input { padding: 20px; font-size: 1.375rem; }
+.hint { color: var(--gray-500, #6b7a86); font-size: 0.8125rem; }
+.error { margin: 0; padding: 10px 12px; border-radius: 10px; background: #fdeee9; color: #a3371f; font-size: 0.9375rem; }
+
+.primary, .secondary {
+  display: flex; align-items: center; justify-content: center; width: 100%; min-height: 54px; padding: 0 20px; border-radius: 14px;
+  font: 700 1.0625rem var(--font-sans); text-decoration: none; cursor: pointer;
+}
+.primary { border: 0; background: var(--brand); color: white; }
+.primary:disabled { opacity: 0.6; cursor: default; }
+.secondary { border: 1.5px solid var(--gray-300, #cdd4d0); background: white; color: var(--ink, #1c2733); }
+.page[data-kiosk='true'] .primary, .page[data-kiosk='true'] .secondary { min-height: 72px; font-size: 1.375rem; }
+.fine { margin: 0; color: var(--gray-500, #6b7a86); font-size: 0.8125rem; line-height: 1.5; text-align: center; }
+.linkish { align-self: flex-start; padding: 0; border: 0; background: none; color: var(--brand); font: 600 0.9375rem var(--font-sans); cursor: pointer; }
+
+.kicker { margin: 0; color: var(--brand); font-weight: 700; }
+.ticket { display: flex; flex-direction: column; align-items: center; padding: 22px 16px 18px; border-radius: 16px; background: var(--ink, #1c2733); color: #dfe6ea; text-align: center; }
+.ticket span { font-size: 0.875rem; color: #9fb0bd; }
+.ticket b { font-family: var(--font-display); font-size: 4.5rem; line-height: 1; letter-spacing: -0.03em; color: #f5c451; margin: 6px 0; }
+.ticket small { font-size: 1rem; color: white; }
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 0; }
+.stats div { padding: 12px; border-radius: 12px; background: var(--gray-50, #f7f8f7); }
+.stats dt { color: var(--gray-500, #6b7a86); font-size: 0.8125rem; }
+.stats dd { margin: 2px 0 0; font-weight: 700; font-size: 1.125rem; }
+
+.tickets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.tickets a { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--gray-50, #f7f8f7); color: inherit; text-decoration: none; }
+.tickets b { font-family: var(--font-display); font-size: 1.5rem; }
+.tickets span { flex: 1; display: flex; flex-direction: column; font-weight: 600; }
+.tickets small { font-weight: 400; color: var(--gray-500, #6b7a86); }
+
+.center { display: flex; justify-content: center; padding: 60px 0; }
+.spinner { width: 36px; height: 36px; border-radius: 50%; border: 3px solid var(--gray-200, #e2e6e3); border-top-color: var(--brand); animation: spin 0.9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.powered { margin: 8px 0 0; text-align: center; color: var(--gray-400, #97a3ad); font-size: 0.8125rem; }
+
+@media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 2.5s; } .service:active { transform: none; } }

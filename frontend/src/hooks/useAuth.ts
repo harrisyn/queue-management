@@ -26,8 +26,11 @@ export const useAuth = () => {
     try {
       const userData = await api.getMe();
       setUser(userData);
-    } catch {
-      if (typeof window !== 'undefined') {
+    } catch (err: unknown) {
+      // Only an explicit 401 means the session is gone. A 500 or network
+      // error (e.g. a brief database outage) must not sign everyone out.
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401 && typeof window !== 'undefined') {
         localStorage.removeItem('token');
       }
     } finally {
@@ -88,6 +91,7 @@ export const useAuth = () => {
     isSuperAdmin,
     isAdmin,
     isStaff,
+    refreshUser: fetchUser,
   };
 };
 

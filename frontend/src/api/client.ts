@@ -1,7 +1,150 @@
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import type { Service } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
+import { API_BASE as API_BASE_URL } from '@/lib/apiBase';
+
+export interface DisplayConfig {
+  ticker: { enabled: boolean; messages: string[]; speed: 'slow' | 'normal' | 'fast' };
+  media: { enabled: boolean; mode: 'interstitial' | 'split'; everySeconds: number };
+  callFlash: boolean;
+}
+
+export interface DisplayPlaylist {
+  id: string;
+  name: string;
+  locationId: string | null;
+  days: string;
+  startTime: string | null;
+  endTime: string | null;
+  priority: number;
+  isActive: boolean;
+  startsAt: string | null;
+  endsAt: string | null;
+  items: { mediaId: string; sortOrder: number }[];
+}
+
+export interface DisplayEntitlement {
+  status: 'pack' | 'included' | 'trial' | 'trial_available' | 'trial_ended';
+  allowed: boolean;
+  maxItems: number;
+  maxUploadBytes: number;
+  streaming: boolean;
+  packs: number;
+  trialDays: number;
+  trialEndsAt: string | null;
+  itemsUsed: number;
+}
+
+export interface DisplayMediaItem {
+  id: string;
+  kind: 'IMAGE' | 'VIDEO' | 'STREAM';
+  url: string;
+  title: string;
+  durationSeconds: number;
+  locationId?: string | null;
+  isActive?: boolean;
+  sortOrder?: number;
+  startsAt?: string | null;
+  endsAt?: string | null;
+}
+
+export interface AvailableSlot {
+  id: string;
+  startTime: string;
+  endTime: string;
+  available: number;
+  capacity: number;
+}
+
+export interface PatientSummary {
+  id: string;
+  firstName: string;
+  lastName: string;
+  phone: string | null;
+  email: string | null;
+}
+
+export interface Appointment {
+  id: string;
+  status: 'SCHEDULED' | 'CONFIRMED' | 'CHECKED_IN' | 'CANCELLED' | 'COMPLETED';
+  notes: string | null;
+  rescheduledAt: string | null;
+  serviceId: string;
+  user: { id: string; firstName: string; lastName: string; email: string; phone: string | null };
+  service: { id: string; name: string; location: { id: string; name: string } };
+  slot: { id: string; startTime: string; endTime: string };
+}
+
+export interface NotificationSettings {
+  turnApproachingAt: number;
+  email: boolean;
+  sms: boolean;
+}
+
+export interface WebhookEndpoint {
+  id: string;
+  url: string;
+  description: string | null;
+  events: string[];
+  isActive: boolean;
+  createdAt: string;
+  lastDelivery?: { status: string; responseCode: number | null; createdAt: string } | null;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  event: string;
+  status: 'PENDING' | 'SUCCEEDED' | 'FAILED';
+  attempts: number;
+  responseCode: number | null;
+  lastError: string | null;
+  createdAt: string;
+  nextAttemptAt: string | null;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  createdAt: string;
+  data: Record<string, unknown> | null;
+  actor: { id: string; firstName: string; lastName: string; role: string } | null;
+  entry: { ticketNumber: string; serviceName: string } | null;
+}
+
+export interface AiStatus {
+  planIncludesAi: boolean;
+  enabled: boolean;
+  providerConfigured: boolean;
+  provider: string | null;
+}
+
+export interface AiInsight {
+  id: string;
+  kind: 'ASK' | 'DIGEST';
+  question: string | null;
+  answer: string;
+  sources: { tool: string; input: Record<string, unknown>; output: unknown }[] | null;
+  model: string | null;
+  createdAt: string;
+}
+
+export interface WaitAlert {
+  serviceId: string;
+  service: string;
+  severity: 'warning' | 'critical' | 'info';
+  message: string;
+}
+
+export interface AiProviderConfig {
+  provider: 'anthropic' | 'openai' | 'gemini' | 'openai_compatible';
+  configured: boolean;
+  isActive: boolean;
+  model: string | null;
+  defaultModel: string | null;
+  baseUrl: string | null;
+  apiKeyMasked: string | null;
+  updatedAt: string | null;
+}
 
 export interface CustomDomainInfo {
   domain: string;
@@ -37,7 +180,10 @@ class ApiClient {
     this.client.interceptors.response.use(
       (response) => response,
       (error: AxiosError) => {
-        if (error.response?.status === 401) {
+        // A 401 from /auth/* is a failed sign-in, not an expired session -
+        // let the form show the error instead of reloading the page.
+        const isAuthRequest = error.config?.url?.startsWith('/auth/');
+        if (error.response?.status === 401 && !isAuthRequest) {
           if (typeof window !== 'undefined') {
             localStorage.removeItem('token');
             window.location.href = '/login';
@@ -56,6 +202,31 @@ class ApiClient {
 
   async register(userData: { email: string; password: string; firstName: string; lastName: string }) {
     const { data } = await this.client.post('/auth/register', userData);
+    return data;
+  }
+
+  async previewInvite(code: string): Promise<{
+    role: string;
+    email?: string | null;
+    status: 'valid' | 'used' | 'expired';
+    organization: { name: string; slug: string | null; logoUrl: string | null };
+  }> {
+    const { data } = await this.client.get(`/public/invites/${encodeURIComponent(code)}`);
+    return data;
+  }
+
+  async acceptInvite(payload: { inviteToken: string; email: string; password: string; firstName: string; lastName: string; phone?: string }): Promise<{ organizationSlug: string | null }> {
+    const { data } = await this.client.post('/auth/register', payload);
+    return data;
+  }
+
+  async forgotPassword(email: string) {
+    const { data } = await this.client.post('/auth/forgot-password', { email });
+    return data;
+  }
+
+  async resetPassword(token: string, password: string) {
+    const { data } = await this.client.post('/auth/reset-password', { token, password });
     return data;
   }
 
@@ -192,13 +363,34 @@ class ApiClient {
   }
 
   // Appointments
-  async createAppointment(appointment: { userId: string; serviceId: string; slotId: string; notes?: string }) {
+  async createAppointment(appointment: {
+    serviceId: string;
+    slotId: string;
+    userId?: string;
+    patient?: { firstName: string; lastName: string; phone?: string; email?: string };
+    notes?: string;
+  }): Promise<Appointment> {
     const { data } = await this.client.post('/appointments', appointment);
     return data;
   }
 
-  async getAppointments(params?: { userId?: string; serviceId?: string; date?: string }) {
+  async getAppointments(params?: { userId?: string; serviceId?: string; locationId?: string; date?: string; status?: string }): Promise<Appointment[]> {
     const { data } = await this.client.get('/appointments', { params });
+    return data;
+  }
+
+  async rescheduleAppointment(id: string, newSlotId: string): Promise<Appointment> {
+    const { data } = await this.client.patch(`/appointments/${id}/reschedule`, { newSlotId });
+    return data;
+  }
+
+  async cancelAppointment(id: string): Promise<Appointment> {
+    const { data } = await this.client.patch(`/appointments/${id}/cancel`);
+    return data;
+  }
+
+  async searchPatients(q: string): Promise<PatientSummary[]> {
+    const { data } = await this.client.get('/appointments/patients/search', { params: { q } });
     return data;
   }
 
@@ -208,9 +400,8 @@ class ApiClient {
     return data;
   }
 
-  async getAvailableSlots(serviceId: string, date?: string) {
-    const params = date ? `?date=${date}` : '';
-    const { data } = await this.client.get(`/appointments/service/${serviceId}/slots${params}`);
+  async getAvailableSlots(serviceId: string, date?: string): Promise<{ slots: AvailableSlot[]; message?: string; queueId?: string }> {
+    const { data } = await this.client.get(`/appointments/service/${serviceId}/slots`, { params: date ? { date } : undefined });
     return data;
   }
 
@@ -252,7 +443,7 @@ class ApiClient {
     return data;
   }
 
-  async createAddOnCheckout(payload: { resourceType: 'LOCATIONS' | 'USERS'; quantity: number; billingMode: 'recurring' | 'one_off'; provider: 'stripe' | 'paystack' }) {
+  async createAddOnCheckout(payload: { resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA'; quantity: number; billingMode: 'recurring' | 'one_off'; provider: 'stripe' | 'paystack' }) {
     const { data } = await this.client.post('/tenant/addons/checkout', payload);
     return data;
   }
@@ -272,7 +463,7 @@ class ApiClient {
     return data;
   }
 
-  async updateAddOnPricing(resourceType: 'LOCATIONS' | 'USERS', payload: { pricePerUnitMonthly: number; pricePerUnitOneOff: number; currency?: string }) {
+  async updateAddOnPricing(resourceType: 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA', payload: { pricePerUnitMonthly: number; pricePerUnitOneOff: number; currency?: string }) {
     const { data } = await this.client.put(`/superadmin/addon-pricing/${resourceType}`, payload);
     return data;
   }
@@ -400,8 +591,17 @@ class ApiClient {
   }
 
   // Invites (admin)
-  async createInvite(payload: { role?: string; organizationId?: string; expiresAt?: string }) {
+  async createInvite(payload: { role?: string; organizationId?: string; expiresAt?: string; email?: string }) {
     const { data } = await this.client.post('/invites', payload);
+    return data as { invite: { id: string; code: string; role: string; email?: string | null; used: boolean; expiresAt: string | null; createdAt: string }; emailed?: boolean };
+  }
+
+  async revokeInvite(id: string) {
+    await this.client.delete(`/invites/${id}`);
+  }
+
+  async updateUser(id: string, patch: { role?: string; isActive?: boolean; firstName?: string; lastName?: string; phone?: string }) {
+    const { data } = await this.client.put(`/users/${id}`, patch);
     return data;
   }
 
@@ -448,6 +648,93 @@ class ApiClient {
   async getDisplayData(locationId: string) {
     const { data } = await this.client.get(`/public/display/${locationId}`);
     return data;
+  }
+
+  async getDisplayContent(locationId: string) {
+    const { data } = await this.client.get(`/public/display/${locationId}/content`);
+    return data as { config: DisplayConfig; media: DisplayMediaItem[] };
+  }
+
+  async getDisplayConfig(locationId: string) {
+    const { data } = await this.client.get(`/display/locations/${locationId}/config`);
+    return data as DisplayConfig;
+  }
+
+  async updateDisplayConfig(locationId: string, config: DisplayConfig) {
+    const { data } = await this.client.put(`/display/locations/${locationId}/config`, config);
+    return data as DisplayConfig;
+  }
+
+  async listDisplayMedia() {
+    const { data } = await this.client.get('/display/media');
+    return data as DisplayMediaItem[];
+  }
+
+  async createDisplayMedia(item: Partial<DisplayMediaItem>) {
+    const { data } = await this.client.post('/display/media', item);
+    return data as DisplayMediaItem;
+  }
+
+  async uploadDisplayMedia(file: File, fields: { title?: string; durationSeconds?: number; locationId?: string | null }) {
+    const form = new FormData();
+    if (fields.locationId) form.append('locationId', fields.locationId);
+    if (fields.title) form.append('title', fields.title);
+    if (fields.durationSeconds) form.append('durationSeconds', String(fields.durationSeconds));
+    form.append('file', file);
+    const { data } = await this.client.post('/display/media/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } });
+    return data as DisplayMediaItem;
+  }
+
+  async updateDisplayMedia(id: string, patch: Partial<DisplayMediaItem>) {
+    const { data } = await this.client.patch(`/display/media/${id}`, patch);
+    return data as DisplayMediaItem;
+  }
+
+  async listDisplayPlaylists() {
+    const { data } = await this.client.get('/display/playlists');
+    return data as DisplayPlaylist[];
+  }
+
+  async createDisplayPlaylist(body: Partial<DisplayPlaylist>) {
+    const { data } = await this.client.post('/display/playlists', body);
+    return data as DisplayPlaylist;
+  }
+
+  async updateDisplayPlaylist(id: string, body: Partial<DisplayPlaylist>) {
+    const { data } = await this.client.patch(`/display/playlists/${id}`, body);
+    return data as DisplayPlaylist;
+  }
+
+  async deleteDisplayPlaylist(id: string) {
+    await this.client.delete(`/display/playlists/${id}`);
+  }
+
+  async setDisplayPlaylistItems(id: string, mediaIds: string[]) {
+    const { data } = await this.client.put(`/display/playlists/${id}/items`, { mediaIds });
+    return data as DisplayPlaylist;
+  }
+
+  async getDisplayEntitlement() {
+    const { data } = await this.client.get('/display/entitlement');
+    return data as DisplayEntitlement;
+  }
+
+  async getDisplayUploadConfig() {
+    const { data } = await this.client.get('/display/upload-config');
+    return data as { serverMaxBytes: number; direct: { provider: 'uploadcare'; publicKey: string; maxBytes: number } | null; largeFilesNeedPack?: boolean };
+  }
+
+  async registerDirectUpload(body: { fileId: string; mimeType?: string; size?: number; title?: string; durationSeconds?: number; locationId?: string | null }) {
+    const { data } = await this.client.post('/display/media/direct', body);
+    return data as DisplayMediaItem;
+  }
+
+  async reorderDisplayMedia(ids: string[]) {
+    await this.client.put('/display/media/order', { items: ids.map((id) => ({ id })) });
+  }
+
+  async deleteDisplayMedia(id: string) {
+    await this.client.delete(`/display/media/${id}`);
   }
 
   // Get queue swimlanes for a location (for display boards)
@@ -541,8 +828,13 @@ class ApiClient {
     return data;
   }
 
-  async activateServicePointInstance(instanceId: string, serviceId?: string) {
-    const { data } = await this.client.post(`/service-points/instances/${instanceId}/activate`, { serviceId });
+  async activateServicePointInstance(instanceId: string, serviceId?: string, takeOver = false) {
+    const { data } = await this.client.post(`/service-points/instances/${instanceId}/activate`, { serviceId, takeOver });
+    return data;
+  }
+
+  async markNoShow(queueId: string, entryId: string) {
+    const { data } = await this.client.patch(`/queues/${queueId}/entry/${entryId}/no-show`);
     return data;
   }
 
@@ -616,10 +908,112 @@ class ApiClient {
     return data;
   }
 
-  async callNextWithServicePoint(queueId: string, servicePointInstanceId?: string) {
+  async callNextWithServicePoint(queueId: string, servicePointInstanceId?: string, entryId?: string) {
     const { data } = await this.client.post(`/queues/${queueId}/call-next-sp`, {
-      servicePointInstanceId
+      servicePointInstanceId,
+      entryId,
     });
+    return data;
+  }
+
+  async recallEntry(queueId: string, entryId: string) {
+    const { data } = await this.client.post(`/queues/${queueId}/entry/${entryId}/recall`);
+    return data;
+  }
+
+  async transferEntry(queueId: string, entryId: string, serviceId: string): Promise<{ ticketNumber: string; serviceName: string; queueId: string }> {
+    const { data } = await this.client.post(`/queues/${queueId}/entry/${entryId}/transfer`, { serviceId });
+    return data;
+  }
+
+  // Integrations: outbound webhooks + audit log
+  async getWebhookEvents(): Promise<string[]> {
+    const { data } = await this.client.get('/webhook-events');
+    return data;
+  }
+
+  async getWebhooks(organizationId: string): Promise<WebhookEndpoint[]> {
+    const { data } = await this.client.get(`/orgs/${organizationId}/webhooks`);
+    return data;
+  }
+
+  async createWebhook(organizationId: string, payload: { url: string; description?: string; events: string[] }): Promise<WebhookEndpoint & { secret: string }> {
+    const { data } = await this.client.post(`/orgs/${organizationId}/webhooks`, payload);
+    return data;
+  }
+
+  async updateWebhook(id: string, payload: { url?: string; description?: string; events?: string[]; isActive?: boolean }): Promise<WebhookEndpoint> {
+    const { data } = await this.client.patch(`/webhooks/${id}`, payload);
+    return data;
+  }
+
+  async rotateWebhookSecret(id: string): Promise<WebhookEndpoint & { secret: string }> {
+    const { data } = await this.client.post(`/webhooks/${id}/rotate-secret`);
+    return data;
+  }
+
+  async testWebhook(id: string): Promise<{ status: string; responseCode: number | null; error: string | null }> {
+    const { data } = await this.client.post(`/webhooks/${id}/test`);
+    return data;
+  }
+
+  async deleteWebhook(id: string) {
+    await this.client.delete(`/webhooks/${id}`);
+  }
+
+  async getWebhookDeliveries(id: string): Promise<WebhookDelivery[]> {
+    const { data } = await this.client.get(`/webhooks/${id}/deliveries`);
+    return data;
+  }
+
+  async getAuditLogs(organizationId: string, params?: { action?: string; before?: string; limit?: number }): Promise<{ logs: AuditLogEntry[]; nextCursor: string | null }> {
+    const { data } = await this.client.get(`/orgs/${organizationId}/audit-logs`, { params });
+    return data;
+  }
+
+  // AI-assisted analytics (provider-agnostic)
+  async getAiStatus(): Promise<AiStatus> {
+    const { data } = await this.client.get('/ai/status');
+    return data;
+  }
+
+  async updateAiSettings(enabled: boolean): Promise<{ enabled: boolean }> {
+    const { data } = await this.client.put('/ai/settings', { enabled });
+    return data;
+  }
+
+  async askAi(question: string, locationId?: string): Promise<AiInsight & { creditsRemaining: number | null }> {
+    const { data } = await this.client.post('/ai/ask', { question, locationId });
+    return data;
+  }
+
+  async getAiInsights(kind?: 'ASK' | 'DIGEST', limit = 10): Promise<AiInsight[]> {
+    const { data } = await this.client.get('/ai/insights', { params: { kind, limit } });
+    return data;
+  }
+
+  async getWaitForecast(serviceId: string) {
+    const { data } = await this.client.get(`/ai/forecast/${serviceId}`);
+    return data;
+  }
+
+  async getWaitAlerts(locationId: string): Promise<WaitAlert[]> {
+    const { data } = await this.client.get('/ai/alerts', { params: { locationId } });
+    return data;
+  }
+
+  async getAiProviders(): Promise<AiProviderConfig[]> {
+    const { data } = await this.client.get('/superadmin/ai-providers');
+    return data;
+  }
+
+  async saveAiProvider(provider: string, payload: { apiKey?: string; model?: string; baseUrl?: string; isActive: boolean }) {
+    const { data } = await this.client.put(`/superadmin/ai-providers/${provider}`, payload);
+    return data;
+  }
+
+  async testAiProvider(provider: string): Promise<{ ok: boolean; model?: string; reply?: string; error?: string }> {
+    const { data } = await this.client.post(`/superadmin/ai-providers/${provider}/test`);
     return data;
   }
 
@@ -640,6 +1034,31 @@ class ApiClient {
     slug?: string;
   }) {
     const { data } = await this.client.post('/public/register-org', payload);
+    return data;
+  }
+
+  async listSmsProviders() {
+    const { data } = await this.client.get('/superadmin/sms-providers');
+    return data;
+  }
+
+  async saveSmsProvider(provider: string, body: { accountId: string; secret?: string; senderId?: string; isActive: boolean }) {
+    const { data } = await this.client.put(`/superadmin/sms-providers/${provider}`, body);
+    return data;
+  }
+
+  async testSmsProvider(provider: string, to: string) {
+    const { data } = await this.client.post(`/superadmin/sms-providers/${provider}/test`, { to });
+    return data;
+  }
+
+  async getOnboardingStatus(): Promise<{ locations: number; services: number; desks: number; entries: number; needsSetup: boolean; firstLocation: { id: string; name: string; publicCode: string | null } | null }> {
+    const { data } = await this.client.get('/onboarding/status');
+    return data;
+  }
+
+  async quickStart(payload: { locationName: string; services: string[]; startTime: string; endTime: string; activeDays: string; timezone?: string; industry?: string }): Promise<{ location: { id: string; name: string; publicCode: string }; services: { id: string; name: string; desk: string }[] }> {
+    const { data } = await this.client.post('/onboarding/quick-start', payload);
     return data;
   }
 
@@ -680,6 +1099,7 @@ class ApiClient {
     defaultDisplayMode?: string;
     primaryColor?: string | null;
     hidePoweredBy?: boolean;
+    notificationSettings?: NotificationSettings;
   }) {
     const { data } = await this.client.put(`/orgs/${id}`, payload);
     return data;
@@ -888,7 +1308,7 @@ class ApiClient {
     maxServicesPerLoc?: number | null;
     maxUsersPerOrg?: number | null;
     maxQueueEntriesPerDay?: number | null;
-    features?: Record<string, boolean>;
+    features?: Record<string, boolean | number>;
     displayOrder?: number;
     tierRank?: number;
     isDefault?: boolean;
@@ -914,7 +1334,7 @@ class ApiClient {
     maxServicesPerLoc?: number | null;
     maxUsersPerOrg?: number | null;
     maxQueueEntriesPerDay?: number | null;
-    features?: Record<string, boolean>;
+    features?: Record<string, boolean | number>;
     displayOrder?: number;
     tierRank?: number;
     isActive?: boolean;

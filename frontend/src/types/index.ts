@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   organizationId?: string;
   isActive: boolean;
+  organization?: { id: string; name: string; industry?: string | null; customerLabel?: string | null; customerLabelPlural?: string | null } | null;
 }
 
 export interface AuthResponse {
@@ -24,6 +25,9 @@ export interface Organization {
   email?: string;
   phone?: string;
   locations?: Location[];
+  industry?: string | null;
+  customerLabel?: string | null;
+  customerLabelPlural?: string | null;
 }
 
 export interface Location {
@@ -77,6 +81,7 @@ export interface Service {
   displayMode?: string;
   location?: Location;
   practitioners?: Practitioner[];
+  queues?: Queue[];
 }
 
 export interface Practitioner {

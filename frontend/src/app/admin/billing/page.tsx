@@ -1,5 +1,6 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
 import { CheckCircle2, CreditCard, XCircle } from 'lucide-react';
 import api from '@/api/client';
@@ -64,7 +65,7 @@ const CREDIT_LABELS: Record<'AI' | 'EMAIL' | 'SMS', string> = {
 };
 
 interface AddOnPricingRow {
-  resourceType: 'LOCATIONS' | 'USERS';
+  resourceType: AddOnKind;
   pricePerUnitMonthly: string;
   pricePerUnitOneOff: string;
   currency: string;
@@ -72,30 +73,43 @@ interface AddOnPricingRow {
 
 interface OrganizationAddOn {
   id: string;
-  resourceType: 'LOCATIONS' | 'USERS';
+  resourceType: AddOnKind;
   quantity: number;
   billingMode: 'RECURRING' | 'ONE_OFF';
   status: 'ACTIVE' | 'CANCELLED';
   currentPeriodEnd: string | null;
 }
 
-const ADDON_LABELS: Record<'LOCATIONS' | 'USERS', string> = {
-  LOCATIONS: 'Extra Locations',
-  USERS: 'Extra Users',
+type AddOnKind = 'LOCATIONS' | 'USERS' | 'DISPLAY_MEDIA';
+
+const ADDON_LABELS: Record<AddOnKind, string> = {
+  LOCATIONS: 'Extra locations',
+  USERS: 'Extra staff',
+  DISPLAY_MEDIA: 'Lobby media pack',
+};
+const ADDON_NOTES: Partial<Record<AddOnKind, string>> = {
+  DISPLAY_MEDIA: 'Large videos (up to 500MB), YouTube, Vimeo and live streams on your lobby screens, and 25 more playlist items per pack.',
 };
 
 type BillingCycle = 'monthly' | 'quarterly' | 'yearly';
 
 const CYCLE_MONTHS: Record<BillingCycle, number> = { monthly: 1, quarterly: 3, yearly: 12 };
 
+// Only keys the server enforces are listed; anything else is not shown.
 const FEATURE_LABELS: Record<string, string> = {
-  multiLocation: 'Multiple locations',
-  smsNotifications: 'SMS notifications',
-  analytics: 'Analytics dashboard',
-  apiAccess: 'API access',
-  customBranding: 'Custom branding',
-  serviceFlows: 'Service flows',
-  servicePoints: 'Service points',
+  analytics: 'Analytics',
+  ai: 'AI-assisted analytics',
+  multiLocation: 'More than one location',
+  servicePoints: 'Desks and rooms',
+  serviceFlows: 'Journeys between services',
+  smsNotifications: 'Text message alerts',
+  customBranding: 'Own logo and colour',
+  customDomain: 'Custom domain',
+  apiAccess: 'API and integrations',
+  displayMedia: 'Adverts on lobby screens',
+  // legacy keys from the old plan editor
+  multipleLocations: 'More than one location',
+  whiteLabel: 'Own logo and colour',
 };
 
 function priceForCycle(plan: Plan, cycle: BillingCycle): number {
@@ -122,11 +136,12 @@ export default function BillingPage() {
   const [billingCycle, setBillingCycle] = useState<BillingCycle>('monthly');
   const [addOnPricing, setAddOnPricing] = useState<AddOnPricingRow[]>([]);
   const [myAddOns, setMyAddOns] = useState<OrganizationAddOn[]>([]);
-  const [addOnForms, setAddOnForms] = useState<Record<'LOCATIONS' | 'USERS', { quantity: number; billingMode: 'recurring' | 'one_off' }>>({
+  const [addOnForms, setAddOnForms] = useState<Record<AddOnKind, { quantity: number; billingMode: 'recurring' | 'one_off' }>>({
     LOCATIONS: { quantity: 1, billingMode: 'recurring' },
     USERS: { quantity: 1, billingMode: 'recurring' },
+    DISPLAY_MEDIA: { quantity: 1, billingMode: 'one_off' },
   });
-  const [addOnCheckoutPending, setAddOnCheckoutPending] = useState<'LOCATIONS' | 'USERS' | null>(null);
+  const [addOnCheckoutPending, setAddOnCheckoutPending] = useState<AddOnKind | null>(null);
 
   useEffect(() => {
     load();
@@ -152,11 +167,11 @@ export default function BillingPage() {
     }
   };
 
-  const handlePurchaseAddOn = (resourceType: 'LOCATIONS' | 'USERS') => {
+  const handlePurchaseAddOn = (resourceType: AddOnKind) => {
     setAddOnCheckoutPending(resourceType);
   };
 
-  const handleAddOnCheckout = async (resourceType: 'LOCATIONS' | 'USERS', provider: 'stripe' | 'paystack') => {
+  const handleAddOnCheckout = async (resourceType: AddOnKind, provider: 'stripe' | 'paystack') => {
     const form = addOnForms[resourceType];
     try {
       const { redirectUrl } = await api.createAddOnCheckout({
@@ -168,7 +183,7 @@ export default function BillingPage() {
       window.location.href = redirectUrl;
     } catch (err) {
       console.error('Add-on checkout failed', err);
-      alert('Could not start checkout. Please try again.');
+      toast.error('Checkout didn’t start. Try again.');
     }
   };
 
@@ -179,7 +194,7 @@ export default function BillingPage() {
       await load();
     } catch (err) {
       console.error('Failed to cancel add-on', err);
-      alert('Could not cancel add-on. Please try again.');
+      toast.error('Couldn’t cancel the add-on. Try again.');
     }
   };
 
@@ -192,7 +207,7 @@ export default function BillingPage() {
         await load();
       } catch (err) {
         console.error('Failed to switch plan', err);
-        alert('Could not switch plans. Please try again.');
+        toast.error('Couldn’t switch plans. Try again.');
       }
       return;
     }
@@ -210,7 +225,7 @@ export default function BillingPage() {
       window.location.href = redirectUrl;
     } catch (err) {
       console.error('Checkout failed', err);
-      alert('Could not start checkout. Please try again.');
+      toast.error('Checkout didn’t start. Try again.');
     }
   };
 
@@ -235,7 +250,7 @@ export default function BillingPage() {
           title="Billing"
           subtitle={
             data?.subscription
-              ? `Current plan: ${data.subscription.planName} (${data.subscription.status})`
+              ? `You’re on the ${data.subscription.planName} plan${data.subscription.status && data.subscription.status !== 'ACTIVE' ? ` (${data.subscription.status.toLowerCase().replace('_', ' ')})` : ''}.`
               : 'No active subscription'
           }
         />
@@ -245,10 +260,10 @@ export default function BillingPage() {
             <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--gray-900)' }}>Usage</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1.25rem' }}>
               <UsageBar label="Locations" current={data.limits.locations.current} limit={data.limits.locations.limit} />
-              <UsageBar label="Users" current={data.limits.users.current} limit={data.limits.users.limit} />
+              <UsageBar label="Staff" current={data.limits.users.current} limit={data.limits.users.limit} />
               <UsageBar label="Services" current={data.limits.services.current} limit={data.limits.services.limit} />
-              <UsageBar label="Queue entries today" current={data.limits.queueEntriesDaily.current} limit={data.limits.queueEntriesDaily.limit} />
-              <UsageBar label="Queue entries this period" current={data.limits.queueEntriesPeriod.current} limit={data.limits.queueEntriesPeriod.limit} />
+              <UsageBar label="Joins today" current={data.limits.queueEntriesDaily.current} limit={data.limits.queueEntriesDaily.limit} />
+              <UsageBar label="Joins this billing period" current={data.limits.queueEntriesPeriod.current} limit={data.limits.queueEntriesPeriod.limit} />
               {data.credits && (['AI', 'EMAIL', 'SMS'] as const)
                 .filter(type => data.credits![type].limit !== null)
                 .map(type => (
@@ -263,7 +278,7 @@ export default function BillingPage() {
             <h3 style={{ fontSize: '0.9375rem', fontWeight: 700, marginBottom: '1rem', color: 'var(--gray-900)' }}>Add-Ons</h3>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: '1rem', marginBottom: myAddOns.length > 0 ? '1.25rem' : 0 }}>
               {addOnPricing.map(pricing => {
-                const form = addOnForms[pricing.resourceType];
+                const form = addOnForms[pricing.resourceType] || { quantity: 1, billingMode: 'one_off' as const };
                 const unitPrice = form.billingMode === 'recurring' ? Number(pricing.pricePerUnitMonthly) : Number(pricing.pricePerUnitOneOff);
                 const total = unitPrice * form.quantity;
                 return (
@@ -271,6 +286,9 @@ export default function BillingPage() {
                     <h4 style={{ fontSize: '0.875rem', fontWeight: 600, marginBottom: '0.75rem', color: 'var(--gray-900)' }}>
                       {ADDON_LABELS[pricing.resourceType]}
                     </h4>
+                    {ADDON_NOTES[pricing.resourceType] && (
+                      <p style={{ fontSize: '0.8125rem', color: 'var(--gray-600)', margin: '-0.375rem 0 0.75rem', lineHeight: 1.5 }}>{ADDON_NOTES[pricing.resourceType]}</p>
+                    )}
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginBottom: '0.75rem' }}>
                       <Input
                         label="Quantity"
@@ -280,12 +298,12 @@ export default function BillingPage() {
                         onChange={e => setAddOnForms(prev => ({ ...prev, [pricing.resourceType]: { ...form, quantity: Math.max(1, parseInt(e.target.value) || 1) } }))}
                       />
                       <Select
-                        label="Billing"
+                        label="Pay"
                         value={form.billingMode}
                         onChange={e => setAddOnForms(prev => ({ ...prev, [pricing.resourceType]: { ...form, billingMode: e.target.value as 'recurring' | 'one_off' } }))}
                       >
-                        <option value="recurring">Recurring (monthly)</option>
-                        <option value="one_off">One-off (permanent)</option>
+                        <option value="recurring">Every month</option>
+                        <option value="one_off">Once, keep forever</option>
                       </Select>
                     </div>
                     <p style={{ fontSize: '0.8125rem', color: 'var(--gray-500)', marginBottom: '0.75rem' }}>
@@ -351,7 +369,7 @@ export default function BillingPage() {
           const upgradeDisabled = !upgradeTargetIsFree && activeProviders.length === 0;
           return (
             <Card style={{ padding: '1rem 1.25rem', marginBottom: '1.5rem', background: '#f0fdfa', border: '1px solid #99f6e4', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: '#0f766e', fontSize: '0.875rem' }}>
+              <span style={{ color: '#0a655a', fontSize: '0.875rem' }}>
                 Need more room to grow? <strong>Upgrade to {data.upgradePlan.name}</strong> for higher limits and more features.
               </span>
               <Button variant="primary" size="sm" disabled={upgradeDisabled} onClick={() => handleChoosePlan(data.upgradePlan!.id)}>Upgrade to {data.upgradePlan.name}</Button>
@@ -369,7 +387,7 @@ export default function BillingPage() {
                 key={cycle}
                 onClick={() => setBillingCycle(cycle)}
                 className="btn btn-sm"
-                style={{ background: billingCycle === cycle ? '#14b8a6' : '#f3f4f6', color: billingCycle === cycle ? 'white' : '#374151', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
+                style={{ background: billingCycle === cycle ? '#0e8f80' : '#f3f4f6', color: billingCycle === cycle ? 'white' : '#374151', display: 'flex', alignItems: 'center', gap: '0.375rem' }}
               >
                 {cycle === 'monthly' ? 'Monthly' : cycle === 'quarterly' ? 'Quarterly' : 'Yearly'}
                 {bestSavings > 0 && (
@@ -393,21 +411,22 @@ export default function BillingPage() {
 
             const limitRows: { label: string; value: number | null }[] = [
               { label: 'Locations', value: plan.maxLocations },
-              { label: 'Services/loc', value: plan.maxServicesPerLoc },
-              { label: 'Users', value: plan.maxUsersPerOrg },
-              { label: 'Entries/day', value: plan.maxQueueEntriesPerDay },
+              { label: 'Services each', value: plan.maxServicesPerLoc },
+              { label: 'Staff', value: plan.maxUsersPerOrg },
+              { label: 'Joins a day', value: plan.maxQueueEntriesPerDay },
             ];
             const featureBullets = Object.entries(plan.features)
               .filter(([, enabled]) => enabled)
-              .map(([key]) => FEATURE_LABELS[key] || key)
-              .slice(0, 3);
+              .filter(([key]) => FEATURE_LABELS[key]).map(([key]) => FEATURE_LABELS[key])
+              .filter((label, i, all) => all.indexOf(label) === i)
+              .slice(0, 4);
 
             return (
               <Card
                 key={plan.id}
                 style={{
                   padding: '1rem',
-                  border: showRecommended ? '2px solid #14b8a6' : undefined,
+                  border: showRecommended ? '2px solid #0e8f80' : undefined,
                   position: 'relative',
                 }}
               >

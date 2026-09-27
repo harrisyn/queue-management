@@ -1,0 +1,14 @@
+{
+  "name": "Desk",
+  "short_name": "Desk",
+  "description": "Call the next person from your desk without keeping the full app open.",
+  "start_url": "/widget/desk",
+  "scope": "/widget/",
+  "display": "standalone",
+  "background_color": "#f3f5f2",
+  "theme_color": "#0e8f80",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

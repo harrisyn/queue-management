@@ -1,89 +1,123 @@
+# Local development: the Next.js app (web + API in one process), Soketi for
+# real-time updates (Pusher protocol - Pusher/Ably in production), and
+# Mailpit to catch outgoing email. Postgres runs on the host by default;
+# for a self-contained stack (faster than host.docker.internal on some
+# machines) start the optional database too:
+#   docker compose --profile localdb up -d
+# and set DATABASE_URL=postgresql://postgres:postgres@db:5432/qms_db in .env.
 services:
-  redis:
-    image: redis:7-alpine
-    container_name: qms-redis
-    ports:
-      - "6380:6379"
-    networks:
-      - qms-network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile.dev
-    container_name: qms-backend
-    environment:
-      PORT: 9000
-      # Default to the host Postgres (use host.docker.internal -> host port 5432)
-      # In production override DATABASE_URL in environment or .env
-      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/qms_db}
-      JWT_SECRET: ${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
-      # Encrypts payment provider secret keys at rest — override in production
-      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-dev-only-master-encryption-key-change-in-production}
-      REDIS_URL: redis://redis:6379
-      FRONTEND_URL: http://localhost:8003
-      # Enable polling for file changes in Docker
-      CHOKIDAR_USEPOLLING: "true"
-      # SMTP settings — by default point to the Mailpit service in this compose setup
-      SMTP_HOST: ${SMTP_HOST:-mailpit}
-      SMTP_PORT: ${SMTP_PORT:-1025}
-      SMTP_SECURE: ${SMTP_SECURE:-false}
-      SMTP_FROM: ${SMTP_FROM:-"\"QMS\" <noreply@qms.local>"}
-    ports:
-      - "8004:9000"
-    depends_on:
-      redis:
-        condition: service_healthy
-    volumes:
-      - ./backend/src:/app/src
-      - ./backend/prisma:/app/prisma
-      - ./backend/package.json:/app/package.json
-    networks:
-      - qms-network
-
-  # mailpit:
-  #   image: axllent/mailpit:latest
-  #   container_name: qms-mailpit
-  #   # SMTP (1025) and web UI (8025) exported for local testing
-  #   ports:
-  #     - "1025:1025" # SMTP (in container and exposed to host)
-  #     - "8025:8025" # Web UI
-  #   volumes:
-  #     - mailpit_data:/data
-  #   networks:
-  #     - qms-network
-
-  frontend:
+  app:
     build:
       context: ./frontend
       dockerfile: Dockerfile.dev
-    container_name: qms-frontend
+    container_name: qms-app
     environment:
-      NEXT_PUBLIC_API_URL: http://localhost:8004/api/v1
-      NEXT_PUBLIC_SOCKET_URL: http://localhost:8004
-      NEXT_PUBLIC_APP_DOMAIN: ${NEXT_PUBLIC_APP_DOMAIN:-localhost:8003}
-      API_INTERNAL_URL: ${API_INTERNAL_URL:-http://backend:9000/api/v1}
       NODE_ENV: development
       HOST: 0.0.0.0
+      # Default to the host Postgres (host.docker.internal -> host port 5432).
+      # Override DATABASE_URL in the repo-root .env.
+      DATABASE_URL: ${DATABASE_URL:-postgresql://postgres:postgres@host.docker.internal:5432/qms_db}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-jwt-secret}
+      # Encrypts payment/integration secrets at rest - override in production
+      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY:-dev-only-master-encryption-key-change-in-production}
+      # Public base URL (root domain); tenant URLs are <slug>.<host>
+      APP_URL: http://localhost:8003
+      # Product name shown across the UI and in emails - the single place to
+      # rebrand the app is APP_NAME in the repo-root .env.
+      APP_NAME: ${APP_NAME:-BetaPosition}
+      NEXT_PUBLIC_APP_NAME: ${APP_NAME:-BetaPosition}
+      NEXT_PUBLIC_APP_DOMAIN: ${NEXT_PUBLIC_APP_DOMAIN:-localhost:8003}
+      # SMTP -> Mailpit in this compose setup
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      # Left unset by default so the APP_NAME-derived fallback applies
+      # (see src/server/utils/email.ts) - set this to override it.
+      SMTP_FROM: ${SMTP_FROM:-}
+      # Real-time (Soketi below). Server publishes to soketi:6001; the
+      # browser connects to localhost:6001.
+      REALTIME_APP_ID: app-id
+      REALTIME_KEY: app-key
+      REALTIME_SECRET: app-secret
+      REALTIME_HOST: soketi
+      REALTIME_PORT: "6001"
+      REALTIME_TLS: "false"
+      NEXT_PUBLIC_REALTIME_KEY: app-key
+      NEXT_PUBLIC_REALTIME_HOST: localhost
+      NEXT_PUBLIC_REALTIME_PORT: "6001"
+      NEXT_PUBLIC_REALTIME_TLS: "false"
+      # AI-assisted analytics fallback config (normally set by the superadmin
+      # under AI Providers). AI_PROVIDER: anthropic | openai | gemini | openai_compatible
+      AI_PROVIDER: ${AI_PROVIDER:-anthropic}
+      AI_MODEL: ${AI_MODEL:-}
+      AI_BASE_URL: ${AI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Dev conveniences - never set these in production
+      ALLOW_PRIVATE_OUTBOUND_URLS: "true"
+      CRON_SECRET: ${CRON_SECRET:-dev-cron-secret}
       # Enable polling for file changes in Docker (needed for Windows/Mac)
       WATCHPACK_POLLING: "true"
       CHOKIDAR_USEPOLLING: "true"
-    # Mount local sources for development so changes are reflected immediately
+    # Mount sources so edits hot-reload
     volumes:
       - ./frontend/src:/app/src
       - ./frontend/public:/app/public
+      - ./frontend/prisma:/app/prisma
       - ./frontend/package.json:/app/package.json
       - ./frontend/next.config.ts:/app/next.config.ts
       - ./frontend/tsconfig.json:/app/tsconfig.json
     ports:
       - "8003:3000"
     depends_on:
-      - backend
+      - soketi
+      - mailpit
+    networks:
+      - qms-network
+
+  soketi:
+    image: quay.io/soketi/soketi:1.6-16-debian
+    container_name: qms-soketi
+    environment:
+      SOKETI_DEFAULT_APP_ID: app-id
+      SOKETI_DEFAULT_APP_KEY: app-key
+      SOKETI_DEFAULT_APP_SECRET: app-secret
+    ports:
+      - "6001:6001"
+    networks:
+      - qms-network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: qms-mailpit
+    # SMTP (1025) and web UI (8025) exported for local testing
+    ports:
+      - "2025:1025" # SMTP
+      - "9025:8025" # Web UI
+    volumes:
+      - mailpit_data:/data
+    networks:
+      - qms-network
+
+  # Optional: only starts with `--profile localdb`.
+  db:
+    image: postgres:16-alpine
+    container_name: qms-db
+    profiles: ["localdb"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qms_db
+    ports:
+      - "5433:5432" # host port 5433 so it doesn't clash with a host Postgres
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d qms_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
     networks:
       - qms-network
 
@@ -93,4 +127,6 @@ networks:
 
 volumes:
   mailpit_data:
+    driver: local
+  db_data:
     driver: local

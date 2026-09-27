@@ -1,8 +1,11 @@
 'use client';
 
+import { toast, errorMessage } from '@/lib/toast';
+import QrCode from '@/components/QrCode';
 import React, { useState, useEffect, useCallback, useRef, use } from 'react';
 import Link from 'next/link';
 import { useSocket } from '@/hooks/useSocket';
+import { APP_NAME } from '@/lib/appConfig';
 
 interface QueueStatus {
   ticketNumber: string;
@@ -28,7 +31,7 @@ interface QueueStatus {
   } | null;
 }
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8004/api/v1';
+import { API_BASE } from '@/lib/apiBase';
 
 export default function QueueStatusPage({ 
   params 
@@ -291,7 +294,7 @@ export default function QueueStatusPage({
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'WAITING': return '#14b8a6';
+      case 'WAITING': return '#0e8f80';
       case 'SERVING': return '#f59e0b';
       case 'SERVED': return '#10b981';
       case 'CANCELLED': case 'NO_SHOW': return '#ef4444';
@@ -301,7 +304,7 @@ export default function QueueStatusPage({
 
   const getStatusText = (status: string) => {
     switch (status) {
-      case 'WAITING': return 'Waiting in Queue';
+      case 'WAITING': return 'Waiting';
       case 'SERVING': return "It's Your Turn!";
       case 'SERVED': return 'Completed';
       case 'CANCELLED': return 'Cancelled';
@@ -352,7 +355,7 @@ export default function QueueStatusPage({
   const isCalled = status.status === 'SERVING';
   const isCompleted = status.status === 'SERVED' || status.status === 'CANCELLED' || status.status === 'NO_SHOW';
 
-  const brandColor = status.organization?.primaryColor || '#14b8a6';
+  const brandColor = status.organization?.primaryColor || '#0e8f80';
 
   const renderLogo = () => (
     status.organization?.logoUrl ? (
@@ -406,7 +409,7 @@ export default function QueueStatusPage({
         <div style={statusCard}>
           {/* Ticket Number */}
           <div style={ticketSection}>
-            <span style={ticketLabel}>YOUR TICKET</span>
+            <span style={ticketLabel}>Your ticket</span>
             <span style={ticketNumber}>{status.ticketNumber}</span>
             {status.userName && (
               <span style={userName}>{status.userName}</span>
@@ -490,7 +493,7 @@ export default function QueueStatusPage({
                   <path d="M12 6v6l4 2" />
                 </svg>
                 <div>
-                  <span style={infoLabel}>Estimated Wait</span>
+                  <span style={infoLabel}>Estimated wait</span>
                   <span style={infoValue}>~{status.estimatedWaitTime} min</span>
                 </div>
               </div>
@@ -499,7 +502,7 @@ export default function QueueStatusPage({
                   <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
                 </svg>
                 <div>
-                  <span style={infoLabel}>Now Serving</span>
+                  <span style={infoLabel}>Now serving</span>
                   <span style={infoValue}>{status.currentlyServing || 'Starting...'}</span>
                 </div>
               </div>
@@ -527,7 +530,7 @@ export default function QueueStatusPage({
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                   <circle cx="12" cy="7" r="4" />
                 </svg>
-                <span>Update Your Information</span>
+                <span>Add or change your details</span>
                 <svg 
                   width="20" 
                   height="20" 
@@ -662,7 +665,7 @@ export default function QueueStatusPage({
             <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
               <path d="M10 2a6 6 0 00-6 6v3.586l-.707.707A1 1 0 004 14h12a1 1 0 00.707-1.707L16 11.586V8a6 6 0 00-6-6zM10 18a3 3 0 01-3-3h6a3 3 0 01-3 3z" />
             </svg>
-            <span>Enable Notifications</span>
+            <span>Tell me when I’m nearly up</span>
           </button>
         )}
 
@@ -690,7 +693,7 @@ export default function QueueStatusPage({
                 <svg width="20" height="20" viewBox="0 0 20 20" fill="currentColor">
                   <path fillRule="evenodd" d="M9.383 3.076A1 1 0 0110 4v12a1 1 0 01-1.707.707L4.586 13H2a1 1 0 01-1-1V8a1 1 0 011-1h2.586l3.707-3.707a1 1 0 011.09-.217zM12.293 7.293a1 1 0 011.414 0L15 8.586l1.293-1.293a1 1 0 111.414 1.414L16.414 10l1.293 1.293a1 1 0 01-1.414 1.414L15 11.414l-1.293 1.293a1 1 0 01-1.414-1.414L13.586 10l-1.293-1.293a1 1 0 010-1.414z" clipRule="evenodd" />
                 </svg>
-                <span>Enable audio alerts</span>
+                <span>Play a sound when I’m called</span>
               </>
             )}
           </button>
@@ -721,14 +724,10 @@ export default function QueueStatusPage({
                   <path d="M18 6L6 18M6 6l12 12" />
                 </svg>
               </button>
-              <h3 style={qrTitle}>Share Your Ticket</h3>
+              <h3 style={qrTitle}>Open this ticket on another phone</h3>
               <p style={qrSubtitle}>Scan this QR code to view ticket status</p>
               <div style={qrCodeContainer}>
-                <img 
-                  src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(typeof window !== 'undefined' ? window.location.href : '')}`}
-                  alt="QR Code"
-                  style={qrImage}
-                />
+                <QrCode value={typeof window !== 'undefined' ? window.location.href : ''} size={200} label="QR code for this ticket" />
               </div>
               <div style={qrTicketInfo}>
                 <span style={{ ...qrTicketLabel, color: brandColor }}>Ticket #{status.ticketNumber}</span>
@@ -743,7 +742,7 @@ export default function QueueStatusPage({
                     });
                   } else {
                     navigator.clipboard.writeText(window.location.href);
-                    alert('Link copied to clipboard!');
+                    toast.success('Link copied.');
                   }
                 }}
                 style={{ ...shareUrlButton, background: brandColor }}
@@ -764,12 +763,12 @@ export default function QueueStatusPage({
 
         {/* Help text */}
         <p style={helpText}>
-          This page updates automatically via real-time connection. Please stay nearby when your number approaches.
+          This page updates by itself. You don’t need to stay in the waiting area; come back when you’re nearly up.
         </p>
 
         {!status.organization?.hidePoweredBy && (
           <p style={footerText}>
-            Powered by <strong>QueueFlow</strong>
+            Powered by <strong>{APP_NAME}</strong>
           </p>
         )}
       </div>
@@ -795,15 +794,13 @@ const spinnerKeyframes = `
 // Styles
 const pageStyle: React.CSSProperties = {
   minHeight: '100vh',
-  background: 'linear-gradient(135deg, #1f2937 0%, #111827 100%)',
+  background: 'var(--paper, #f3f5f2)',
   position: 'relative',
   overflow: 'hidden',
 };
 
 const bgPattern: React.CSSProperties = {
-  position: 'absolute',
-  inset: 0,
-  backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+  display: 'none',
 };
 
 const contentStyle: React.CSSProperties = {
@@ -813,8 +810,7 @@ const contentStyle: React.CSSProperties = {
   flexDirection: 'column',
   alignItems: 'center',
   minHeight: '100vh',
-  padding: '2rem',
-  paddingTop: '3rem',
+  padding: '1.25rem 1rem 2.5rem',
 };
 
 const loadingContainer: React.CSSProperties = {
@@ -829,17 +825,17 @@ const loadingContainer: React.CSSProperties = {
 };
 
 const spinner: React.CSSProperties = {
-  width: '48px',
-  height: '48px',
-  border: '4px solid rgba(255, 255, 255, 0.2)',
-  borderTopColor: '#14b8a6',
+  width: '40px',
+  height: '40px',
+  border: '3px solid #e2e6e3',
+  borderTopColor: '#0e8f80',
   borderRadius: '50%',
   animation: 'spin 1s linear infinite',
 };
 
 const loadingText: React.CSSProperties = {
-  color: '#9ca3af',
-  fontSize: '1.125rem',
+  color: '#6b7a86',
+  fontSize: '1rem',
 };
 
 const errorContainer: React.CSSProperties = {
@@ -857,19 +853,20 @@ const errorContainer: React.CSSProperties = {
 const errorTitle: React.CSSProperties = {
   fontSize: '1.5rem',
   fontWeight: 700,
-  color: 'white',
+  color: '#1c2733',
   marginBottom: '0.5rem',
 };
 
 const errorSubtitle: React.CSSProperties = {
-  color: '#9ca3af',
+  color: '#4f5d69',
   marginBottom: '2rem',
-  maxWidth: '300px',
+  maxWidth: '320px',
+  lineHeight: 1.5,
 };
 
 const homeButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   borderRadius: '0.75rem',
   textDecoration: 'none',
@@ -880,32 +877,35 @@ const calledBanner: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   gap: '0.75rem',
-  padding: '1rem 2rem',
-  background: 'white',
+  padding: '0.875rem 1.5rem',
+  background: '#1c2733',
   borderRadius: '9999px',
-  marginBottom: '2rem',
-  boxShadow: '0 10px 40px rgba(0, 0, 0, 0.3)',
+  marginBottom: '1.25rem',
 };
 
 const pulsingCircle: React.CSSProperties = {
   width: '12px',
   height: '12px',
   borderRadius: '50%',
-  background: '#f59e0b',
+  background: '#f5c451',
   animation: 'pulse 1s infinite',
 };
 
 const calledText: React.CSSProperties = {
   fontWeight: 700,
-  fontSize: '1.125rem',
-  color: '#111827',
+  fontSize: '1.0625rem',
+  color: 'white',
 };
 
 const headerStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
-  gap: '1rem',
-  marginBottom: '2rem',
+  gap: '0.875rem',
+  width: '100%',
+  maxWidth: '440px',
+  marginBottom: '1rem',
+  paddingBottom: '0.75rem',
+  borderBottom: '3px solid #0e8f80',
 };
 
 const logoBox: React.CSSProperties = {
@@ -917,31 +917,31 @@ const headerInfo: React.CSSProperties = {
 };
 
 const serviceName: React.CSSProperties = {
-  fontWeight: 600,
-  color: 'white',
+  fontWeight: 700,
+  color: '#1c2733',
   fontSize: '1.125rem',
   margin: 0,
 };
 
 const locationName: React.CSSProperties = {
-  color: 'rgba(255, 255, 255, 0.7)',
+  color: '#4f5d69',
   fontSize: '0.875rem',
   margin: 0,
 };
 
 const locationAddress: React.CSSProperties = {
-  color: 'rgba(255, 255, 255, 0.5)',
+  color: '#6b7a86',
   fontSize: '0.75rem',
   margin: 0,
 };
 
 const statusCard: React.CSSProperties = {
   width: '100%',
-  maxWidth: '400px',
+  maxWidth: '440px',
   background: 'white',
-  borderRadius: '1.5rem',
-  padding: '2rem',
-  boxShadow: '0 25px 50px rgba(0, 0, 0, 0.3)',
+  borderRadius: '1.25rem',
+  padding: '1.5rem',
+  border: '1px solid #e2e6e3',
 };
 
 const ticketSection: React.CSSProperties = {
@@ -1115,14 +1115,15 @@ const notifyButton: React.CSSProperties = {
   justifyContent: 'center',
   gap: '0.5rem',
   width: '100%',
-  maxWidth: '400px',
-  padding: '1rem',
-  marginTop: '1.5rem',
-  background: 'white',
-  color: '#111827',
+  maxWidth: '440px',
+  minHeight: '52px',
+  marginTop: '1rem',
+  background: '#0e8f80',
+  color: 'white',
   border: 'none',
-  borderRadius: '0.75rem',
-  fontWeight: 600,
+  borderRadius: '14px',
+  fontWeight: 700,
+  fontSize: '1rem',
   cursor: 'pointer',
 };
 
@@ -1147,17 +1148,17 @@ const audioButton: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: '0.5rem',
-  width: '100%',
-  maxWidth: '400px',
-  padding: '0.875rem',
-  marginTop: '0.75rem',
-  background: 'rgba(255, 255, 255, 0.1)',
-  color: 'white',
-  border: '1px solid rgba(255, 255, 255, 0.2)',
-  borderRadius: '0.75rem',
-  fontWeight: 500,
-  cursor: 'pointer',
+  minHeight: '48px',
+  background: 'white',
+  color: '#1c2733',
+  border: '1.5px solid #cdd4d0',
+  borderRadius: '14px',
+  fontWeight: 600,
   fontSize: '0.9375rem',
+  cursor: 'pointer',
+  width: '100%',
+  maxWidth: '440px',
+  marginTop: '0.625rem',
 };
 
 const actionButtons: React.CSSProperties = {
@@ -1173,14 +1174,15 @@ const refreshButton: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: '0.5rem',
-  flex: 1,
-  padding: '0.875rem',
-  background: 'rgba(255, 255, 255, 0.1)',
-  color: 'white',
-  border: '1px solid rgba(255, 255, 255, 0.2)',
-  borderRadius: '0.75rem',
-  fontWeight: 500,
+  minHeight: '48px',
+  background: 'white',
+  color: '#1c2733',
+  border: '1.5px solid #cdd4d0',
+  borderRadius: '14px',
+  fontWeight: 600,
+  fontSize: '0.9375rem',
   cursor: 'pointer',
+  flex: 1,
 };
 
 const shareButton: React.CSSProperties = {
@@ -1188,14 +1190,15 @@ const shareButton: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: '0.5rem',
-  flex: 1,
-  padding: '0.875rem',
-  background: 'rgba(20, 184, 166, 0.2)',
-  color: 'white',
-  border: '1px solid rgba(20, 184, 166, 0.3)',
-  borderRadius: '0.75rem',
-  fontWeight: 500,
+  minHeight: '48px',
+  background: 'white',
+  color: '#1c2733',
+  border: '1.5px solid #cdd4d0',
+  borderRadius: '14px',
+  fontWeight: 600,
+  fontSize: '0.9375rem',
   cursor: 'pointer',
+  flex: 1,
 };
 
 const qrModal: React.CSSProperties = {
@@ -1263,7 +1266,7 @@ const qrTicketInfo: React.CSSProperties = {
 const qrTicketLabel: React.CSSProperties = {
   fontSize: '1.125rem',
   fontWeight: 600,
-  color: '#14b8a6',
+  color: '#0e8f80',
 };
 
 const shareUrlButton: React.CSSProperties = {
@@ -1273,7 +1276,7 @@ const shareUrlButton: React.CSSProperties = {
   gap: '0.5rem',
   width: '100%',
   padding: '0.875rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '0.75rem',
@@ -1282,26 +1285,24 @@ const shareUrlButton: React.CSSProperties = {
 };
 
 const joinedAtText: React.CSSProperties = {
-  color: 'rgba(255, 255, 255, 0.6)',
-  fontSize: '0.8125rem',
-  textAlign: 'center',
-  marginTop: '1.5rem',
+  color: '#6b7a86',
+  fontSize: '0.875rem',
+  marginTop: '1.25rem',
 };
 
 const helpText: React.CSSProperties = {
-  color: 'rgba(255, 255, 255, 0.5)',
+  color: '#6b7a86',
   fontSize: '0.8125rem',
   textAlign: 'center',
-  marginTop: '0.75rem',
   maxWidth: '320px',
   lineHeight: 1.5,
+  marginTop: '0.25rem',
 };
 
 const footerText: React.CSSProperties = {
-  color: '#6b7280',
+  color: '#97a3ad',
   fontSize: '0.8125rem',
-  textAlign: 'center',
-  marginTop: '2rem',
+  marginTop: '1rem',
 };
 
 // Identity Form Styles
@@ -1402,7 +1403,7 @@ const identitySaveButton: React.CSSProperties = {
   width: '100%',
   marginTop: '1rem',
   padding: '0.75rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '0.5rem',

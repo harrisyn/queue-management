@@ -1,15 +1,21 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { Info, Settings, Upload, Lock, Globe, CheckCircle2, RefreshCw } from 'lucide-react';
+import NoOrganization from '@/components/NoOrganization';
+import React, { useEffect, useMemo, useState } from 'react';
+import {
+  Building2, ContactRound, MonitorSmartphone, Bell, Palette, Globe, Lock, Upload, ArrowUp, ArrowDown, X, Plus,
+  CheckCircle2, RefreshCw, Copy, AlertTriangle,
+} from 'lucide-react';
 import api from '@/api/client';
 import type { CustomDomainInfo } from '@/api/client';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import Layout from '@/components/Layout';
-import { Icon, PageHeader, Button } from '@/components/ui';
+import { PageHeader, Button, Switch } from '@/components/ui';
 import { buildTenantUrl } from '@/lib/subdomain';
 import { isReservedSlug } from '@/lib/reservedSlugs';
+import { APP_NAME } from '@/lib/appConfig';
+import { INDUSTRIES, termsFor, defaultPersonFor, pluralize, type Terms } from '@/lib/terms';
 
 interface IdentityField {
   key: string;
@@ -18,1018 +24,599 @@ interface IdentityField {
   required: boolean;
 }
 
+type FieldConfig = Record<string, { required: boolean; label: string; type?: string; order?: number }>;
+
 interface Organization {
   id: string;
   name: string;
   slug?: string;
   email?: string;
   phone?: string;
-  identityFieldsConfig?: Record<string, { required: boolean; label: string; type?: string }>;
+  identityFieldsConfig?: FieldConfig;
   defaultDisplayMode?: string;
   logoUrl?: string | null;
   primaryColor?: string | null;
   hidePoweredBy?: boolean;
+  notificationSettings?: { turnApproachingAt: number; email: boolean; sms: boolean };
+  industry?: string | null;
+  customerLabel?: string | null;
+  customerLabelPlural?: string | null;
 }
 
-const DEFAULT_IDENTITY_FIELDS: IdentityField[] = [
-  { key: 'firstName', label: 'First Name', type: 'text', required: false },
-  { key: 'lastName', label: 'Last Name', type: 'text', required: false },
-  { key: 'phone', label: 'Phone Number', type: 'tel', required: false },
-  { key: 'mrNumber', label: 'MR Number', type: 'text', required: false },
-  { key: 'patientId', label: 'Patient ID', type: 'text', required: false },
+type Section = 'general' | 'patient' | 'screens' | 'notifications' | 'branding' | 'domain';
+
+const sectionsFor = (t: Terms): { id: Section; label: string; hint: string; icon: typeof Building2 }[] => [
+  { id: 'general', label: 'Organization', hint: 'Name, type, contact and workspace address', icon: Building2 },
+  { id: 'patient', label: `${t.Person} details`, hint: 'What people are asked when they join', icon: ContactRound },
+  { id: 'screens', label: 'Screen privacy', hint: `How ${t.people} appear on lobby screens`, icon: MonitorSmartphone },
+  { id: 'notifications', label: 'Notifications', hint: 'Turn-approaching alerts by email and SMS', icon: Bell },
+  { id: 'branding', label: 'Branding', hint: 'Logo and colour on public pages', icon: Palette },
+  { id: 'domain', label: 'Custom domain', hint: 'Use your own web address', icon: Globe },
+];
+
+const STANDARD_FIELDS: IdentityField[] = [
+  { key: 'firstName', label: 'First name', type: 'text', required: true },
+  { key: 'lastName', label: 'Last name', type: 'text', required: false },
+  { key: 'phone', label: 'Phone number', type: 'tel', required: false },
+  { key: 'email', label: 'Email address', type: 'email', required: false },
+  { key: 'mrNumber', label: 'MR number', type: 'text', required: false },
+  { key: 'patientId', label: 'Reference number', type: 'text', required: false },
   { key: 'nationalId', label: 'National ID', type: 'text', required: false },
-  { key: 'dateOfBirth', label: 'Date of Birth', type: 'date', required: false },
+  { key: 'dateOfBirth', label: 'Date of birth', type: 'date', required: false },
   { key: 'gender', label: 'Gender', type: 'select', required: false },
-  { key: 'email', label: 'Email Address', type: 'email', required: false },
   { key: 'insuranceId', label: 'Insurance ID', type: 'text', required: false },
 ];
-
-const COLOR_PRESETS = [
-  { name: 'Teal', value: '#14b8a6' },
-  { name: 'Blue', value: '#2563eb' },
-  { name: 'Purple', value: '#7c3aed' },
-  { name: 'Orange', value: '#f97316' },
-  { name: 'Green', value: '#16a34a' },
-];
+const TYPE_LABEL: Record<string, string> = { text: 'Text', tel: 'Phone', email: 'Email', date: 'Date', number: 'Number', select: 'Choice' };
+const NAME_ORDER = ['name', 'fullName', 'firstName', 'lastName', 'phone', 'email'];
 
 const DISPLAY_MODES = [
-  { value: 'TICKET_ONLY', label: 'Ticket Number Only', description: 'Display only the ticket number on queue boards' },
-  { value: 'NAME_AND_TICKET', label: 'Name & Ticket', description: 'Show patient name with ticket number' },
-  { value: 'FULL_INFO', label: 'Full Information', description: 'Display name, ticket and additional info' },
+  { value: 'TICKET_ONLY', label: 'Ticket number only', note: 'Most private. Recommended for clinics.' },
+  { value: 'NAME_AND_TICKET', label: 'Number and short name', note: 'First name and initial, so people spot their call faster.' },
+  { value: 'FULL_INFO', label: 'Number, full name and service', note: 'Only where names on a screen are acceptable.' },
 ];
 
+const COLOR_PRESETS = ['#0e8f80', '#2563eb', '#7c3aed', '#c2410c', '#15803d', '#be123c', '#1c2733'];
+
+function fieldsFromConfig(config?: FieldConfig): IdentityField[] {
+  if (!config || Object.keys(config).length === 0) {
+    return STANDARD_FIELDS.slice(0, 3).map((f) => ({ ...f }));
+  }
+  const entries = Object.entries(config);
+  const hasOrder = entries.every(([, c]) => typeof c.order === 'number');
+  const rank = (k: string) => (NAME_ORDER.includes(k) ? NAME_ORDER.indexOf(k) : NAME_ORDER.length);
+  entries.sort(([a, ca], [b, cb]) => (hasOrder ? (ca.order! - cb.order!) : rank(a) - rank(b)));
+  return entries.map(([key, c]) => ({ key, label: c.label || key, type: c.type || 'text', required: !!c.required }));
+}
+
+const toKey = (label: string) =>
+  label
+    .trim()
+    .replace(/[^a-zA-Z0-9 ]/g, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((w, i) => (i === 0 ? w.toLowerCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()))
+    .join('');
+
 export default function AdminSettingsPage() {
-  const { user, isAdmin } = useAuthContext();
+  const { user, isAdmin, loading: authLoading, refreshUser } = useAuthContext();
   const { hasFeature } = useSubscription();
   const [organization, setOrganization] = useState<Organization | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'general' | 'identity' | 'display' | 'branding' | 'domain'>('general');
+  const [section, setSection] = useState<Section>('general');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [formData, setFormData] = useState({
-    name: '',
-    slug: '',
-    email: '',
-    phone: '',
-    primaryColor: '',
-    hidePoweredBy: false,
-  });
+
+  const [general, setGeneral] = useState({ name: '', slug: '', email: '', phone: '', industry: 'HEALTHCARE', customerLabel: '' });
+  const [fields, setFields] = useState<IdentityField[]>([]);
+  const [newField, setNewField] = useState({ label: '', type: 'text' });
+  const [displayMode, setDisplayMode] = useState('TICKET_ONLY');
+  const [notify, setNotify] = useState({ turnApproachingAt: 3, email: true, sms: false });
+  const [brand, setBrand] = useState({ primaryColor: '', hidePoweredBy: false });
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [uploadingLogo, setUploadingLogo] = useState(false);
+  const [snapshot, setSnapshot] = useState('');
 
-  // Custom domain configuration
-  const [customDomain, setCustomDomainState] = useState<CustomDomainInfo | null>(null);
+  const [customDomain, setCustomDomain] = useState<CustomDomainInfo | null>(null);
   const [domainInput, setDomainInput] = useState('');
-  const [domainLoading, setDomainLoading] = useState(true);
-  const [domainSaving, setDomainSaving] = useState(false);
-  const [domainVerifying, setDomainVerifying] = useState(false);
+  const [domainBusy, setDomainBusy] = useState(false);
   const [domainMessage, setDomainMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // Identity fields configuration
-  const [identityFields, setIdentityFields] = useState<IdentityField[]>([]);
-  const [customField, setCustomField] = useState({ key: '', label: '', type: 'text' });
-  const [displayMode, setDisplayMode] = useState('TICKET_ONLY');
+  const current = useMemo(
+    () => JSON.stringify({ general, fields, displayMode, notify, brand }),
+    [general, fields, displayMode, notify, brand]
+  );
+  const dirty = snapshot !== '' && current !== snapshot;
 
   useEffect(() => {
-    if (isAdmin && user?.organizationId) {
-      loadOrganization();
-      loadCustomDomain(user.organizationId);
-    } else {
+    if (authLoading) return;
+    if (!isAdmin || !user?.organizationId) {
       setLoading(false);
-      setDomainLoading(false);
-    }
-  }, [isAdmin, user]);
-
-  const loadCustomDomain = async (organizationId: string) => {
-    setDomainLoading(true);
-    try {
-      const domain = await api.getCustomDomain(organizationId);
-      setCustomDomainState(domain);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setDomainLoading(false);
-    }
-  };
-
-  const loadOrganization = async () => {
-    try {
-      const org = await api.getOrganization(user!.organizationId!);
-      setOrganization(org);
-      setFormData({
-        name: org.name || '',
-        slug: org.slug || '',
-        email: org.email || '',
-        phone: org.phone || '',
-        primaryColor: org.primaryColor || '',
-        hidePoweredBy: org.hidePoweredBy || false,
-      });
-      
-      // Load identity fields config
-      if (org.identityFieldsConfig) {
-        const fields = Object.entries(org.identityFieldsConfig).map(([key, config]: [string, any]) => ({
-          key,
-          label: config.label || key,
-          type: config.type || 'text',
-          required: config.required || false,
-        }));
-        setIdentityFields(fields);
-      } else {
-        // Use defaults - all fields optional by default
-        setIdentityFields(DEFAULT_IDENTITY_FIELDS.slice(0, 3).map(f => ({
-          ...f,
-          required: false,
-        })));
-      }
-      
-      setDisplayMode(org.defaultDisplayMode || 'TICKET_ONLY');
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!organization) return;
-
-    if (formData.slug && isReservedSlug(formData.slug)) {
-      setMessage({ type: 'error', text: 'This slug is reserved and cannot be used.' });
       return;
     }
+    setLoading(true);
+    (async () => {
+      try {
+        const org: Organization = await api.getOrganization(user.organizationId!);
+        setOrganization(org);
+        const g = { name: org.name || '', slug: org.slug || '', email: org.email || '', phone: org.phone || '', industry: org.industry || 'OTHER', customerLabel: org.customerLabel || '' };
+        const f = fieldsFromConfig(org.identityFieldsConfig);
+        const d = org.defaultDisplayMode || 'TICKET_ONLY';
+        const n = { turnApproachingAt: 3, email: true, sms: false, ...(org.notificationSettings || {}) };
+        const b = { primaryColor: org.primaryColor || '', hidePoweredBy: !!org.hidePoweredBy };
+        setGeneral(g); setFields(f); setDisplayMode(d); setNotify(n); setBrand(b);
+        setSnapshot(JSON.stringify({ general: g, fields: f, displayMode: d, notify: n, brand: b }));
+      } catch {
+        setMessage({ type: 'error', text: 'Couldn’t load your settings. Refresh to try again.' });
+      } finally {
+        setLoading(false);
+      }
+      api.getCustomDomain(user.organizationId!).then(setCustomDomain).catch(() => {});
+    })();
+  }, [authLoading, isAdmin, user?.organizationId]);
 
+  // Warn before leaving with unsaved changes.
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => e.preventDefault();
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  const terms = termsFor(general);
+  const SECTIONS = sectionsFor(terms);
+  const slugChanged = !!organization && (organization.slug || '') !== general.slug;
+  const slugProblem =
+    general.slug && isReservedSlug(general.slug) ? 'That address is reserved.'
+    : general.slug && general.slug.length < 3 ? 'Use at least 3 characters.'
+    : '';
+
+  const save = async () => {
+    if (!organization) return;
+    if (slugProblem) return setMessage({ type: 'error', text: slugProblem });
+    if (!fields.some((f) => ['firstName', 'name', 'fullName'].includes(f.key))) {
+      return setMessage({ type: 'error', text: `Keep a name field so staff can call ${terms.people}.` });
+    }
     setSaving(true);
     setMessage(null);
-
     try {
-      // Build identity fields config
-      const identityFieldsConfig: Record<string, { required: boolean; label: string; type?: string }> = {};
-      identityFields.forEach(field => {
-        identityFieldsConfig[field.key] = {
-          required: field.required,
-          label: field.label,
-          type: field.type,
-        };
-      });
-
+      const identityFieldsConfig: FieldConfig = {};
+      fields.forEach((f, order) => { identityFieldsConfig[f.key] = { required: f.required, label: f.label, type: f.type, order }; });
       const updated = await api.updateOrganization(organization.id, {
-        name: formData.name,
-        slug: formData.slug || undefined,
-        email: formData.email || undefined,
-        phone: formData.phone || undefined,
+        name: general.name,
+        slug: general.slug || undefined,
+        email: general.email || undefined,
+        phone: general.phone || undefined,
+        industry: general.industry,
+        customerLabel: general.customerLabel.trim() || null,
+        customerLabelPlural: general.customerLabel.trim() ? pluralize(general.customerLabel.trim()) : null,
         identityFieldsConfig,
         defaultDisplayMode: displayMode,
-        primaryColor: formData.primaryColor || null,
-        hidePoweredBy: formData.hidePoweredBy,
-      });
+        notificationSettings: notify,
+        // Branding fields are plan-gated server-side; sending them (even as
+        // null) on a plan without customBranding rejects the whole save.
+        ...(hasFeature('customBranding') ? { primaryColor: brand.primaryColor || null, hidePoweredBy: brand.hidePoweredBy } : {}),
+      } as any);
+      if (slugChanged && general.slug) {
+        // Sign-in is tied to the address; take them to the new one rather
+        // than leaving them on an address that no longer resolves.
+        window.location.href = buildTenantUrl(general.slug, '/login');
+        return;
+      }
       setOrganization(updated);
-      setMessage({ type: 'success', text: 'Organization settings saved successfully!' });
+      setSnapshot(current);
+      refreshUser().catch(() => {});
+      setMessage({ type: 'success', text: 'Settings saved.' });
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to save settings' });
+      setMessage({ type: 'error', text: err.response?.data?.error || err.response?.data?.message || 'Couldn’t save. Try again.' });
     } finally {
       setSaving(false);
     }
   };
 
-  const handleLogoUpload = async () => {
-    if (!organization || !logoFile) return;
+  const move = (index: number, delta: number) =>
+    setFields((list) => {
+      const next = [...list];
+      const target = index + delta;
+      if (target < 0 || target >= next.length) return list;
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
 
+  const addField = (field: IdentityField) => setFields((list) => (list.some((f) => f.key === field.key) ? list : [...list, { ...field }]));
+
+  const addCustomField = () => {
+    const key = toKey(newField.label);
+    if (!key) return;
+    if (fields.some((f) => f.key === key)) return setMessage({ type: 'error', text: `There’s already a “${newField.label}” field.` });
+    setFields((list) => [...list, { key, label: newField.label.trim(), type: newField.type, required: false }]);
+    setNewField({ label: '', type: 'text' });
+  };
+
+  const uploadLogo = async () => {
+    if (!organization || !logoFile) return;
     setUploadingLogo(true);
-    setMessage(null);
     try {
       const result = await api.uploadOrganizationLogo(organization.id, logoFile);
       setOrganization({ ...organization, logoUrl: result.logoUrl });
       setLogoFile(null);
-      setMessage({ type: 'success', text: 'Logo uploaded successfully!' });
+      setMessage({ type: 'success', text: 'Logo updated.' });
     } catch (err: any) {
-      setMessage({ type: 'error', text: err.response?.data?.error || 'Failed to upload logo' });
+      setMessage({ type: 'error', text: err.response?.data?.error || 'Couldn’t upload the logo.' });
     } finally {
       setUploadingLogo(false);
     }
   };
 
-  const handleSetCustomDomain = async () => {
-    if (!organization || !domainInput.trim()) return;
-    setDomainSaving(true);
+  const domainAction = async (fn: () => Promise<void>) => {
+    setDomainBusy(true);
     setDomainMessage(null);
-    try {
-      const result = await api.setCustomDomain(organization.id, domainInput.trim());
-      setCustomDomainState(result);
-      setDomainInput('');
-      setDomainMessage({ type: 'success', text: 'Domain saved. Add the CNAME record below, then verify.' });
-    } catch (err: any) {
-      setDomainMessage({ type: 'error', text: err.response?.data?.error || 'Failed to save domain' });
-    } finally {
-      setDomainSaving(false);
-    }
+    try { await fn(); } catch (err: any) {
+      setDomainMessage({ type: 'error', text: err.response?.data?.message || err.response?.data?.error || 'That didn’t work. Try again.' });
+    } finally { setDomainBusy(false); }
   };
-
-  const handleVerifyCustomDomain = async () => {
-    if (!organization) return;
-    setDomainVerifying(true);
-    setDomainMessage(null);
-    try {
-      const result = await api.verifyCustomDomain(organization.id);
-      setCustomDomainState(result);
-      setDomainMessage({ type: 'success', text: 'Domain verified! It now serves your branded login page.' });
-    } catch (err: any) {
-      setDomainMessage({ type: 'error', text: err.response?.data?.message || err.response?.data?.error || 'Verification failed' });
-    } finally {
-      setDomainVerifying(false);
-    }
-  };
-
-  const handleRemoveCustomDomain = async () => {
-    if (!organization) return;
-    setDomainSaving(true);
-    setDomainMessage(null);
-    try {
-      await api.deleteCustomDomain(organization.id);
-      setCustomDomainState(null);
-      setDomainMessage({ type: 'success', text: 'Custom domain removed.' });
-    } catch (err: any) {
-      setDomainMessage({ type: 'error', text: err.response?.data?.error || 'Failed to remove domain' });
-    } finally {
-      setDomainSaving(false);
-    }
-  };
-
-  const toggleFieldRequired = (key: string) => {
-    setIdentityFields(fields => 
-      fields.map(f => f.key === key ? { ...f, required: !f.required } : f)
-    );
-  };
-
-  const addField = (field: IdentityField) => {
-    if (!identityFields.find(f => f.key === field.key)) {
-      setIdentityFields([...identityFields, field]);
-    }
-  };
-
-  const removeField = (key: string) => {
-    // Don't allow removing firstName
-    if (key === 'firstName') return;
-    setIdentityFields(fields => fields.filter(f => f.key !== key));
-  };
-
-  const addCustomField = () => {
-    if (!customField.key || !customField.label) return;
-    const key = customField.key.replace(/\s+/g, '').toLowerCase();
-    if (identityFields.find(f => f.key === key)) {
-      setMessage({ type: 'error', text: 'Field already exists' });
-      return;
-    }
-    setIdentityFields([...identityFields, { ...customField, key, required: false }]);
-    setCustomField({ key: '', label: '', type: 'text' });
-  };
-
-  const generateSlug = () => {
-    const slug = formData.name
-      .toLowerCase()
-      .replace(/[^a-z0-9\s-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-')
-      .trim();
-    setFormData({ ...formData, slug });
-  };
-
-  if (!isAdmin) {
-    return (
-      <Layout>
-        <div style={{ padding: 20 }}>Admins only</div>
-      </Layout>
-    );
-  }
 
   if (loading) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center' }}>
-          <div className="spinner" />
-        </div>
-      </Layout>
-    );
+    return <Layout><div style={{ padding: '3rem', textAlign: 'center' }}><div className="spinner" /></div></Layout>;
+  }
+  if (!organization) {
+    if (!user?.organizationId) return <NoOrganization />;
+    return <Layout><div className="inline-alert inline-alert-error">{message?.text || 'Couldn’t load your settings. Refresh to try again.'}</div></Layout>;
   }
 
-  if (!user?.organizationId && !organization) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
-  }
-
-  // Available fields that haven't been added yet
-  const availableFields = DEFAULT_IDENTITY_FIELDS.filter(
-    f => !identityFields.find(existing => existing.key === f.key)
-  );
+  const standardAvailable = STANDARD_FIELDS.filter((f) => !fields.some((x) => x.key === f.key));
+  const accent = brand.primaryColor || '#0e8f80';
 
   return (
     <Layout>
-      <div>
-        <PageHeader
-          icon={Settings}
-          title="Organization Settings"
-          subtitle="Manage your organization details, customer fields, and display preferences."
-        />
+      <PageHeader title="Settings" subtitle={`How your organization appears to ${terms.people} and staff.`} />
 
-        {/* Message */}
-        {message && (
-          <div style={{
-            padding: '1rem',
-            borderRadius: '0.75rem',
-            marginBottom: '1.5rem',
-            background: message.type === 'success' ? '#dcfce7' : '#fef2f2',
-            color: message.type === 'success' ? '#166534' : '#dc2626',
-            border: `1px solid ${message.type === 'success' ? '#86efac' : '#fecaca'}`,
-          }}>
-            {message.text}
-          </div>
-        )}
+      <div className="settings">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {SECTIONS.map((s) => {
+            const SIcon = s.icon;
+            return (
+              <button key={s.id} type="button" className="settings-nav-item" aria-current={section === s.id ? 'true' : undefined} onClick={() => { setSection(s.id); setMessage(null); }}>
+                <SIcon size={18} aria-hidden="true" />
+                <span>
+                  <strong>{s.label}</strong>
+                  <small>{s.hint}</small>
+                </span>
+              </button>
+            );
+          })}
+        </nav>
 
-        {/* Tabs */}
-        <div style={tabsContainer}>
-          <button
-            type="button"
-            onClick={() => setActiveTab('general')}
-            style={activeTab === 'general' ? activeTabStyle : tabStyle}
-          >
-            General
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('identity')}
-            style={activeTab === 'identity' ? activeTabStyle : tabStyle}
-          >
-            Customer Fields
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('display')}
-            style={activeTab === 'display' ? activeTabStyle : tabStyle}
-          >
-            Display Settings
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('branding')}
-            style={activeTab === 'branding' ? activeTabStyle : tabStyle}
-          >
-            Branding
-          </button>
-          <button
-            type="button"
-            onClick={() => setActiveTab('domain')}
-            style={activeTab === 'domain' ? activeTabStyle : tabStyle}
-          >
-            Domain
-          </button>
-        </div>
+        <div className="settings-panel">
+          {section === 'general' && (
+            <section aria-labelledby="s-general">
+              <h2 id="s-general">Organization</h2>
+              <div className="settings-grid">
+                <label className="settings-field">
+                  <span>Organization name</span>
+                  <input value={general.name} onChange={(e) => setGeneral({ ...general, name: e.target.value })} required />
+                </label>
+                <label className="settings-field">
+                  <span>Contact email</span>
+                  <input type="email" value={general.email} onChange={(e) => setGeneral({ ...general, email: e.target.value })} placeholder="frontdesk@yourclinic.com" />
+                </label>
+                <label className="settings-field">
+                  <span>Phone</span>
+                  <input type="tel" value={general.phone} onChange={(e) => setGeneral({ ...general, phone: e.target.value })} />
+                </label>
+              </div>
 
-        {/* Settings Form */}
-        <div style={formCard}>
-          <form onSubmit={handleSave}>
-            {/* General Tab */}
-            {activeTab === 'general' && (
-              <>
-                <div style={sectionHeader}>
-                  <h2 style={sectionTitle}>Basic Information</h2>
-                </div>
+              <h3>What kind of place is it?</h3>
+              <div className="settings-chips" role="radiogroup" aria-label="Organization type">
+                {INDUSTRIES.map((i) => (
+                  <button
+                    key={i.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={general.industry === i.id}
+                    className="welcome-chip"
+                    onClick={() => setGeneral({ ...general, industry: i.id })}
+                  >
+                    {i.label}
+                  </button>
+                ))}
+              </div>
+              <label className="settings-field settings-narrow-wide">
+                <span>What do you call the people in your queues?</span>
+                <input
+                  value={general.customerLabel}
+                  maxLength={30}
+                  onChange={(e) => setGeneral({ ...general, customerLabel: e.target.value })}
+                  placeholder={defaultPersonFor(general.industry)}
+                />
+                <small>Used on every screen, message and report, e.g. “{terms.People} waiting”. Leave blank for “{defaultPersonFor(general.industry)}”.</small>
+              </label>
 
-                <div style={formGrid}>
-                  <div style={formField}>
-                    <label style={labelStyle}>Organization Name *</label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                      required
-                      style={inputStyle}
-                    />
-                  </div>
+              <h3>Workspace address</h3>
+              <div className="settings-suffix">
+                <input
+                  aria-label="Workspace address"
+                  value={general.slug}
+                  onChange={(e) => setGeneral({ ...general, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
+                />
+                <span>{buildTenantUrl('x').replace(/^https?:\/\/x/, '').replace(/\/$/, '')}</span>
+              </div>
+              {slugProblem ? (
+                <p className="settings-note settings-note-bad">{slugProblem}</p>
+              ) : slugChanged ? (
+                <p className="settings-warn"><AlertTriangle size={16} /> Everyone will sign in at <strong>{general.slug}</strong> after you save, and the old address stops working. You’ll be taken there to sign in again.</p>
+              ) : (
+                <p className="settings-note">Staff sign in here. QR codes keep working if you change it.</p>
+              )}
 
-                  <div style={formField}>
-                    <label style={labelStyle}>Contact Email</label>
-                    <input
-                      type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                      placeholder="contact@yourorg.com"
-                      style={inputStyle}
-                    />
-                  </div>
-
-                  <div style={formField}>
-                    <label style={labelStyle}>Phone Number</label>
-                    <input
-                      type="tel"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      placeholder="+1 (555) 000-0000"
-                      style={inputStyle}
-                    />
-                  </div>
-                </div>
-
-                {/* URL Settings Section */}
-                <div style={{ ...sectionHeader, marginTop: '2rem' }}>
-                  <h2 style={sectionTitle}>URL Settings</h2>
-                </div>
-
-                <div style={formField}>
-                  <label style={labelStyle}>Organization Slug</label>
-                  <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input
-                      type="text"
-                      value={formData.slug}
-                      onChange={(e) => setFormData({ ...formData, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })}
-                      placeholder="your-org-name"
-                      style={{ ...inputStyle, flex: 1 }}
-                    />
-                    <button type="button" onClick={generateSlug} style={generateButton}>
-                      Generate
-                    </button>
-                  </div>
-                  <p style={helpText}>
-                    {formData.slug && isReservedSlug(formData.slug) ? (
-                      <span style={{ color: '#dc2626' }}>This slug is reserved and can&apos;t be used.</span>
-                    ) : formData.slug ? (
-                      <>Your workspace URL will be: <strong>{buildTenantUrl(formData.slug).replace(/^https?:\/\//, '')}</strong></>
-                    ) : (
-                      'Create a memorable URL slug for your organization'
-                    )}
-                  </p>
-                </div>
-              </>
-            )}
-
-            {/* Identity Fields Tab */}
-            {activeTab === 'identity' && (
-              <>
-                <div style={sectionHeader}>
-                  <h2 style={sectionTitle}>Customer Identification Fields</h2>
-                  <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                    Configure what information to collect from customers when they join queues.
-                  </p>
-                </div>
-
-                {/* Active Fields */}
-                <div style={{ marginBottom: '1.5rem' }}>
-                  <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>
-                    Active Fields
-                  </h3>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                    {identityFields.map(field => (
-                      <div key={field.key} style={fieldRow}>
-                        <div style={{ flex: 1 }}>
-                          <span style={{ fontWeight: 500 }}>{field.label}</span>
-                          <span style={{ color: '#9ca3af', fontSize: '0.75rem', marginLeft: '0.5rem' }}>
-                            ({field.key})
-                          </span>
-                        </div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                          <label style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', cursor: 'pointer' }}>
-                            <input
-                              type="checkbox"
-                              checked={field.required}
-                              onChange={() => toggleFieldRequired(field.key)}
-                              disabled={field.key === 'firstName'}
-                            />
-                            <span style={{ fontSize: '0.8125rem', color: '#6b7280' }}>Required</span>
-                          </label>
-                          {field.key !== 'firstName' && (
-                            <button
-                              type="button"
-                              onClick={() => removeField(field.key)}
-                              style={removeButton}
-                            >
-                              ✕
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Add Standard Fields */}
-                {availableFields.length > 0 && (
-                  <div style={{ marginBottom: '1.5rem' }}>
-                    <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>
-                      Add Standard Field
-                    </h3>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem' }}>
-                      {availableFields.map(field => (
-                        <button
-                          key={field.key}
-                          type="button"
-                          onClick={() => addField(field)}
-                          style={addFieldButton}
-                        >
-                          + {field.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Add Custom Field */}
-                <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f9fafb', borderRadius: '0.5rem' }}>
-                  <h3 style={{ fontSize: '0.875rem', fontWeight: 600, color: '#374151', marginBottom: '0.75rem' }}>
-                    Add Custom Field
-                  </h3>
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
-                    <input
-                      type="text"
-                      placeholder="Field Key (e.g., referralSource)"
-                      value={customField.key}
-                      onChange={(e) => setCustomField({ ...customField, key: e.target.value })}
-                      style={{ ...inputStyle, flex: 1, minWidth: '150px' }}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Display Label"
-                      value={customField.label}
-                      onChange={(e) => setCustomField({ ...customField, label: e.target.value })}
-                      style={{ ...inputStyle, flex: 1, minWidth: '150px' }}
-                    />
-                    <select
-                      value={customField.type}
-                      onChange={(e) => setCustomField({ ...customField, type: e.target.value })}
-                      style={{ ...inputStyle, width: '120px' }}
-                    >
-                      <option value="text">Text</option>
-                      <option value="number">Number</option>
-                      <option value="date">Date</option>
-                      <option value="email">Email</option>
-                      <option value="tel">Phone</option>
-                    </select>
-                    <button type="button" onClick={addCustomField} style={addButton}>
-                      Add
-                    </button>
-                  </div>
-                </div>
-              </>
-            )}
-
-            {/* Display Settings Tab */}
-            {activeTab === 'display' && (
-              <>
-                <div style={sectionHeader}>
-                  <h2 style={sectionTitle}>Queue Display Preferences</h2>
-                  <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                    Control how customer information appears on display boards.
-                  </p>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-                  {DISPLAY_MODES.map(mode => (
-                    <label
-                      key={mode.value}
-                      style={{
-                        ...displayModeOption,
-                        borderColor: displayMode === mode.value ? '#14b8a6' : '#e5e7eb',
-                        background: displayMode === mode.value ? 'rgba(20, 184, 166, 0.08)' : 'white',
-                      }}
-                    >
-                      <input
-                        type="radio"
-                        name="displayMode"
-                        value={mode.value}
-                        checked={displayMode === mode.value}
-                        onChange={(e) => setDisplayMode(e.target.value)}
-                        style={{ marginRight: '0.75rem' }}
-                      />
-                      <div>
-                        <div style={{ fontWeight: 500, color: '#111827' }}>{mode.label}</div>
-                        <div style={{ fontSize: '0.8125rem', color: '#6b7280' }}>{mode.description}</div>
-                      </div>
-                    </label>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {/* Branding Tab */}
-            {activeTab === 'branding' && (
-              <>
-                <div style={sectionHeader}>
-                  <h2 style={sectionTitle}>White-Labeling</h2>
-                  <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                    Show your own logo and colors on your login screen, public join page, and status display.
-                  </p>
-                </div>
-
-                {!hasFeature('customBranding') ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1.25rem', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '0.75rem', color: '#92400e' }}>
-                    <Icon icon={Lock} size={20} />
-                    <span>White-labeling isn&apos;t included in your current plan. Upgrade to customize your branding.</span>
-                  </div>
-                ) : (
-                  <>
-                    <div style={formField}>
-                      <label style={labelStyle}>Logo</label>
-                      {organization?.logoUrl && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={organization.logoUrl} alt="Current logo" style={{ height: '48px', marginBottom: '0.75rem', display: 'block' }} />
-                      )}
-                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        <input
-                          type="file"
-                          accept="image/png,image/jpeg,image/svg+xml,image/webp"
-                          onChange={(e) => setLogoFile(e.target.files?.[0] || null)}
-                        />
-                        <Button type="button" variant="secondary" disabled={!logoFile || uploadingLogo} onClick={handleLogoUpload}>
-                          <Icon icon={Upload} size={16} /> {uploadingLogo ? 'Uploading...' : 'Upload'}
-                        </Button>
-                      </div>
-                    </div>
-
-                    <div style={formField}>
-                      <label style={labelStyle}>Primary Color</label>
-                      <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
-                        <input
-                          type="color"
-                          value={formData.primaryColor || '#14b8a6'}
-                          onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
-                          style={{ width: '48px', height: '40px', padding: '0.25rem', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}
-                        />
-                        <input
-                          type="text"
-                          value={formData.primaryColor}
-                          onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
-                          placeholder="#14b8a6"
-                          style={{ ...inputStyle, maxWidth: '160px' }}
-                        />
-                      </div>
-                      <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
-                        {COLOR_PRESETS.map(preset => (
-                          <button
-                            key={preset.value}
-                            type="button"
-                            onClick={() => setFormData({ ...formData, primaryColor: preset.value })}
-                            title={preset.name}
-                            style={{
-                              width: '28px',
-                              height: '28px',
-                              borderRadius: '9999px',
-                              background: preset.value,
-                              cursor: 'pointer',
-                              border: formData.primaryColor?.toLowerCase() === preset.value
-                                ? '2px solid #111827'
-                                : '2px solid transparent',
-                              boxShadow: '0 0 0 1px rgba(0,0,0,0.08)',
-                              padding: 0,
-                            }}
-                          />
-                        ))}
-                      </div>
-                    </div>
-
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.5rem' }}>
-                      <input
-                        type="checkbox"
-                        checked={formData.hidePoweredBy}
-                        onChange={(e) => setFormData({ ...formData, hidePoweredBy: e.target.checked })}
-                        style={{ width: 'auto' }}
-                      />
-                      <span style={{ color: '#374151' }}>Hide &quot;Powered by QueueFlow&quot;</span>
-                    </label>
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Domain Tab */}
-            {activeTab === 'domain' && (
-              <>
-                <div style={sectionHeader}>
-                  <h2 style={sectionTitle}>Custom Domain</h2>
-                  <p style={{ color: '#6b7280', fontSize: '0.875rem', marginTop: '0.25rem' }}>
-                    Point your own domain at your workspace so staff sign in at your address instead of a QueueFlow subdomain.
-                  </p>
-                </div>
-
-                {!hasFeature('customDomain') ? (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1.25rem', background: '#fffbeb', border: '1px solid #fcd34d', borderRadius: '0.75rem', color: '#92400e' }}>
-                    <Icon icon={Lock} size={20} />
-                    <span>Custom domains aren&apos;t included in your current plan. Upgrade to connect your own domain.</span>
-                  </div>
-                ) : domainLoading ? (
-                  <div style={{ padding: '1rem', color: '#6b7280' }}>Loading...</div>
-                ) : (
-                  <>
-                    {domainMessage && (
-                      <div style={{
-                        padding: '0.875rem 1rem',
-                        borderRadius: '0.625rem',
-                        marginBottom: '1.25rem',
-                        background: domainMessage.type === 'success' ? '#dcfce7' : '#fef2f2',
-                        color: domainMessage.type === 'success' ? '#166534' : '#dc2626',
-                        border: `1px solid ${domainMessage.type === 'success' ? '#86efac' : '#fecaca'}`,
-                        fontSize: '0.875rem',
-                      }}>
-                        {domainMessage.text}
-                      </div>
-                    )}
-
-                    {!customDomain ? (
-                      <div style={formField}>
-                        <label style={labelStyle}>Domain</label>
-                        <div style={{ display: 'flex', gap: '0.75rem' }}>
-                          <input
-                            type="text"
-                            value={domainInput}
-                            onChange={(e) => setDomainInput(e.target.value)}
-                            placeholder="queue.yourcompany.com"
-                            style={{ ...inputStyle, flex: 1 }}
-                          />
-                          <Button type="button" variant="primary" disabled={!domainInput.trim() || domainSaving} onClick={handleSetCustomDomain}>
-                            <Icon icon={Globe} size={16} /> {domainSaving ? 'Saving...' : 'Add Domain'}
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
-                          <span style={{ fontWeight: 600, fontSize: '1rem', color: '#111827' }}>{customDomain.domain}</span>
-                          <span style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.25rem',
-                            padding: '0.2rem 0.6rem',
-                            borderRadius: '9999px',
-                            fontSize: '0.75rem',
-                            fontWeight: 600,
-                            background: customDomain.status === 'VERIFIED' ? '#dcfce7' : '#fef3c7',
-                            color: customDomain.status === 'VERIFIED' ? '#166534' : '#854d0e',
-                          }}>
-                            {customDomain.status === 'VERIFIED' && <Icon icon={CheckCircle2} size={12} />}
-                            {customDomain.status === 'VERIFIED' ? 'Verified' : 'Pending verification'}
-                          </span>
-                        </div>
-
-                        {customDomain.status !== 'VERIFIED' && (
-                          <div style={{ padding: '1rem', background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: '0.75rem', marginBottom: '1.25rem' }}>
-                            <p style={{ fontSize: '0.875rem', color: '#374151', marginBottom: '0.75rem' }}>
-                              Add this CNAME record at your DNS provider, then verify:
-                            </p>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', gap: '0.5rem 1rem', fontSize: '0.8125rem', fontFamily: 'monospace' }}>
-                              <span style={{ color: '#6b7280' }}>Type</span>
-                              <span>CNAME</span>
-                              <span style={{ color: '#6b7280' }}>Name</span>
-                              <span>{customDomain.domain}</span>
-                              <span style={{ color: '#6b7280' }}>Value</span>
-                              <span>{customDomain.cnameTarget}</span>
-                            </div>
-                            <p style={{ fontSize: '0.75rem', color: '#9ca3af', marginTop: '0.75rem' }}>
-                              DNS changes can take a few minutes to a few hours to propagate.
-                            </p>
-                          </div>
-                        )}
-
-                        <div style={{ display: 'flex', gap: '0.75rem' }}>
-                          {customDomain.status !== 'VERIFIED' && (
-                            <Button type="button" variant="primary" disabled={domainVerifying} onClick={handleVerifyCustomDomain}>
-                              <Icon icon={RefreshCw} size={16} /> {domainVerifying ? 'Checking...' : 'Verify'}
-                            </Button>
-                          )}
-                          <Button type="button" variant="secondary" disabled={domainSaving} onClick={handleRemoveCustomDomain}>
-                            Remove Domain
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </>
-                )}
-              </>
-            )}
-
-            {/* Save Button */}
-            {activeTab !== 'domain' && (
-              <div style={formActions}>
-                <button type="submit" disabled={saving} style={saveButton}>
-                  {saving ? 'Saving...' : 'Save Changes'}
+              <h3>Organization ID</h3>
+              <p className="settings-note">Needed when connecting other systems.</p>
+              <div className="settings-copy">
+                <code>{organization.id}</code>
+                <button type="button" onClick={() => navigator.clipboard.writeText(organization.id).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500); })}>
+                  <Copy size={15} /> {copied ? 'Copied' : 'Copy'}
                 </button>
               </div>
-            )}
-          </form>
-        </div>
+            </section>
+          )}
 
-        {/* Organization ID Info */}
-        <div style={infoCard}>
-          <div style={{ marginBottom: '0.5rem' }}>
-            <Icon icon={Info} size={20} color="#6b7280" />
-          </div>
-          <div>
-            <p style={{ color: '#374151', fontSize: '0.875rem', marginBottom: '0.25rem' }}>
-              <strong>Organization ID:</strong>
-            </p>
-            <code style={codeStyle}>{organization?.id}</code>
-            <p style={{ color: '#9ca3af', fontSize: '0.75rem', marginTop: '0.5rem' }}>
-              This ID is used for API integrations and advanced configurations.
-            </p>
-          </div>
+          {section === 'patient' && (
+            <section aria-labelledby="s-patient">
+              <h2 id="s-patient">{terms.Person} details</h2>
+              <p className="settings-lede">{terms.People} fill these in, in this order, when they join a queue. Keep it short; every extra field slows the line at the door.</p>
+              <ol className="settings-fields">
+                {fields.map((f, i) => {
+                  const isName = ['firstName', 'name', 'fullName'].includes(f.key);
+                  return (
+                    <li key={f.key}>
+                      <div className="settings-field-order">
+                        <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move ${f.label} up`}><ArrowUp size={15} /></button>
+                        <button type="button" onClick={() => move(i, 1)} disabled={i === fields.length - 1} aria-label={`Move ${f.label} down`}><ArrowDown size={15} /></button>
+                      </div>
+                      <div className="settings-field-name">
+                        <strong>{f.label}</strong>
+                        <small>{TYPE_LABEL[f.type] || f.type}{isName ? ', always asked' : ''}</small>
+                      </div>
+                      <Switch
+                        label="Required"
+                        checked={isName || f.required}
+                        disabled={isName}
+                        onChange={() => setFields((list) => list.map((x) => (x.key === f.key ? { ...x, required: !x.required } : x)))}
+                      />
+                      <button
+                        type="button"
+                        className="settings-remove"
+                        onClick={() => setFields((list) => list.filter((x) => x.key !== f.key))}
+                        disabled={isName}
+                        aria-label={`Remove ${f.label}`}
+                        title={isName ? `${terms.People} are always asked their name` : `Remove ${f.label}`}
+                      >
+                        <X size={16} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ol>
+
+              {standardAvailable.length > 0 && (
+                <>
+                  <h3>Add a field</h3>
+                  <div className="settings-chips">
+                    {standardAvailable.map((f) => (
+                      <button key={f.key} type="button" className="welcome-chip" onClick={() => addField(f)}>
+                        <Plus size={15} /> {f.label}
+                      </button>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              <h3>Your own field</h3>
+              <div className="settings-inline">
+                <input
+                  aria-label="New field name"
+                  placeholder="e.g. Referring doctor"
+                  value={newField.label}
+                  onChange={(e) => setNewField({ ...newField, label: e.target.value })}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomField(); } }}
+                />
+                <select aria-label="Field type" value={newField.type} onChange={(e) => setNewField({ ...newField, type: e.target.value })}>
+                  <option value="text">Text</option>
+                  <option value="number">Number</option>
+                  <option value="date">Date</option>
+                  <option value="email">Email</option>
+                  <option value="tel">Phone</option>
+                </select>
+                <Button type="button" variant="secondary" onClick={addCustomField} disabled={!newField.label.trim()}>Add</Button>
+              </div>
+            </section>
+          )}
+
+          {section === 'screens' && (
+            <section aria-labelledby="s-screens">
+              <h2 id="s-screens">Screen privacy</h2>
+              <p className="settings-lede">Choose what the lobby screen shows when someone is called. Screens are seen by everyone in the room.</p>
+              <div className="mode-cards" role="radiogroup" aria-labelledby="s-screens">
+                {DISPLAY_MODES.map((mode) => (
+                  <label key={mode.value} className="mode-card" data-selected={displayMode === mode.value}>
+                    <input type="radio" name="displayMode" value={mode.value} checked={displayMode === mode.value} onChange={() => setDisplayMode(mode.value)} />
+                    <div className="mode-preview" aria-hidden="true">
+                      <span className="mode-ticket">C014</span>
+                      <span className="mode-who">
+                        {mode.value === 'NAME_AND_TICKET' && 'Kofi B.'}
+                        {mode.value === 'FULL_INFO' && <>Kofi Boateng<small>Consultation</small></>}
+                      </span>
+                      <span className="mode-desk">Room 2</span>
+                    </div>
+                    <strong>{mode.label}</strong>
+                    <small>{mode.note}</small>
+                  </label>
+                ))}
+              </div>
+              <p className="settings-note">Adverts, the ticker and what plays between calls are managed under <a href="/admin/displays">Display screens</a>.</p>
+            </section>
+          )}
+
+          {section === 'notifications' && (
+            <section aria-labelledby="s-notify">
+              <h2 id="s-notify">Notifications</h2>
+              <p className="settings-lede">{terms.People} always see live updates on their ticket page. Email and SMS go out as well, using your plan’s message credits.</p>
+              <label className="settings-field settings-narrow">
+                <span>Tell {terms.people} when they’re this many places from the front</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={notify.turnApproachingAt}
+                  onChange={(e) => setNotify({ ...notify, turnApproachingAt: Math.min(20, Math.max(1, Number(e.target.value) || 1)) })}
+                />
+                <small>Each {terms.person} is told once. 3 works for most places.</small>
+              </label>
+              <div className="settings-switches">
+                <Switch label={`Email ${terms.people} who give an email address`} checked={notify.email} onChange={(e) => setNotify({ ...notify, email: e.target.checked })} />
+                <Switch label={`Text ${terms.people} who give a phone number`} checked={notify.sms} onChange={(e) => setNotify({ ...notify, sms: e.target.checked })} />
+              </div>
+            </section>
+          )}
+
+          {section === 'branding' && (
+            <section aria-labelledby="s-brand">
+              <h2 id="s-brand">Branding</h2>
+              <p className="settings-lede">Your logo and colour on the sign-in page, the ticket pages and the lobby screen.</p>
+              {!hasFeature('customBranding') ? (
+                <p className="settings-locked"><Lock size={18} /> Branding isn’t included in your plan. <a href="/admin/billing">See plans</a></p>
+              ) : (
+                <div className="brand-layout">
+                  <div>
+                    <h3>Logo</h3>
+                    <div className="brand-logo-row">
+                      <div className="brand-logo-box">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        {organization.logoUrl ? <img src={organization.logoUrl} alt="Current logo" /> : <span>No logo yet</span>}
+                      </div>
+                      <label className="brand-upload">
+                        <input type="file" accept="image/png,image/jpeg,image/svg+xml,image/webp" onChange={(e) => setLogoFile(e.target.files?.[0] || null)} />
+                        <span>{logoFile ? logoFile.name : 'Choose a file'}</span>
+                      </label>
+                      <Button type="button" variant="secondary" disabled={!logoFile || uploadingLogo} onClick={uploadLogo}>
+                        <Upload size={16} /> {uploadingLogo ? 'Uploading…' : 'Upload'}
+                      </Button>
+                    </div>
+                    <p className="settings-note">PNG, SVG or JPG. A wide logo on a transparent background works best.</p>
+
+                    <h3>Colour</h3>
+                    <div className="brand-swatches" role="radiogroup" aria-label="Brand colour">
+                      {COLOR_PRESETS.map((c) => (
+                        <button
+                          key={c}
+                          type="button"
+                          role="radio"
+                          aria-checked={accent.toLowerCase() === c}
+                          aria-label={c}
+                          className="brand-swatch"
+                          style={{ background: c }}
+                          onClick={() => setBrand({ ...brand, primaryColor: c })}
+                        />
+                      ))}
+                      <label className="brand-custom">
+                        <input type="color" value={accent} onChange={(e) => setBrand({ ...brand, primaryColor: e.target.value })} aria-label="Custom colour" />
+                        <span>{accent}</span>
+                      </label>
+                    </div>
+                    <div className="settings-switches">
+                      <Switch label={`Hide “Powered by ${APP_NAME}”`} checked={brand.hidePoweredBy} onChange={(e) => setBrand({ ...brand, hidePoweredBy: e.target.checked })} />
+                    </div>
+                  </div>
+                  <figure className="brand-preview" aria-label="Preview">
+                    <div className="brand-preview-card">
+                      <p>Your ticket</p>
+                      <b style={{ color: accent }}>C014</b>
+                      <span className="brand-preview-btn" style={{ background: accent }}>Join queue</span>
+                    </div>
+                    <figcaption>Preview of the ticket page</figcaption>
+                  </figure>
+                </div>
+              )}
+            </section>
+          )}
+
+          {section === 'domain' && (
+            <section aria-labelledby="s-domain">
+              <h2 id="s-domain">Custom domain</h2>
+              <p className="settings-lede">Serve your sign-in and ticket pages from your own address, such as queue.yourclinic.com.</p>
+              {!hasFeature('customDomain') ? (
+                <p className="settings-locked"><Lock size={18} /> Custom domains aren’t included in your plan. <a href="/admin/billing">See plans</a></p>
+              ) : (
+                <>
+                  {domainMessage && <div className={`inline-alert inline-alert-${domainMessage.type === 'success' ? 'success' : 'error'}`} style={{ marginBottom: '1rem' }}>{domainMessage.text}</div>}
+                  {!customDomain ? (
+                    <div className="settings-inline">
+                      <input aria-label="Domain" value={domainInput} onChange={(e) => setDomainInput(e.target.value)} placeholder="queue.yourclinic.com" />
+                      <Button type="button" disabled={!domainInput.trim() || domainBusy} onClick={() => domainAction(async () => {
+                        setCustomDomain(await api.setCustomDomain(organization.id, domainInput.trim()));
+                        setDomainInput('');
+                        setDomainMessage({ type: 'success', text: 'Domain added. Add the DNS record below, then check it.' });
+                      })}>
+                        <Globe size={16} /> {domainBusy ? 'Adding…' : 'Add domain'}
+                      </Button>
+                    </div>
+                  ) : (
+                    <>
+                      <p className="domain-status">
+                        <strong>{customDomain.domain}</strong>
+                        <span data-verified={customDomain.status === 'VERIFIED'}>
+                          {customDomain.status === 'VERIFIED' ? <><CheckCircle2 size={14} /> Connected</> : 'Waiting for DNS'}
+                        </span>
+                      </p>
+                      {customDomain.status !== 'VERIFIED' && (
+                        <div className="domain-dns">
+                          <p>At your domain provider, add this record:</p>
+                          <dl>
+                            <dt>Type</dt><dd>CNAME</dd>
+                            <dt>Name</dt><dd>{customDomain.domain}</dd>
+                            <dt>Points to</dt><dd>{customDomain.cnameTarget}</dd>
+                          </dl>
+                          <p className="settings-note">Changes can take from a few minutes to a few hours to show up.</p>
+                        </div>
+                      )}
+                      <div className="settings-inline" style={{ marginTop: '1rem' }}>
+                        {customDomain.status !== 'VERIFIED' && (
+                          <Button type="button" disabled={domainBusy} onClick={() => domainAction(async () => {
+                            setCustomDomain(await api.verifyCustomDomain(organization.id));
+                            setDomainMessage({ type: 'success', text: 'Connected. Your pages now load at this address.' });
+                          })}>
+                            <RefreshCw size={16} /> {domainBusy ? 'Checking…' : 'Check DNS'}
+                          </Button>
+                        )}
+                        <Button type="button" variant="secondary" disabled={domainBusy} onClick={() => domainAction(async () => {
+                          await api.deleteCustomDomain(organization.id);
+                          setCustomDomain(null);
+                          setDomainMessage({ type: 'success', text: 'Custom domain removed.' });
+                        })}>
+                          Remove domain
+                        </Button>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
+            </section>
+          )}
+
+          {section !== 'domain' && (
+            <div className="settings-savebar" data-dirty={dirty}>
+              <span role="status">
+                {message ? (
+                  <span className={message.type === 'error' ? 'settings-note-bad' : 'settings-note-ok'}>{message.text}</span>
+                ) : dirty ? 'You have unsaved changes.' : 'All changes saved.'}
+              </span>
+              <Button type="button" onClick={save} disabled={saving || !dirty}>
+                {saving ? 'Saving…' : 'Save changes'}
+              </Button>
+            </div>
+          )}
         </div>
       </div>
     </Layout>
   );
 }
-
-// Styles
-const tabsContainer: React.CSSProperties = {
-  display: 'flex',
-  gap: '0.5rem',
-  marginBottom: '1rem',
-  borderBottom: '1px solid #e5e7eb',
-  paddingBottom: '0.5rem',
-};
-
-const tabStyle: React.CSSProperties = {
-  padding: '0.5rem 1rem',
-  border: 'none',
-  background: 'transparent',
-  color: '#6b7280',
-  fontWeight: 500,
-  cursor: 'pointer',
-  borderRadius: '0.375rem',
-  fontSize: '0.875rem',
-};
-
-const activeTabStyle: React.CSSProperties = {
-  ...tabStyle,
-  background: '#14b8a6',
-  color: 'white',
-};
-
-const fieldRow: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  padding: '0.75rem 1rem',
-  background: 'white',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-};
-
-const removeButton: React.CSSProperties = {
-  padding: '0.25rem 0.5rem',
-  border: 'none',
-  background: '#fef2f2',
-  color: '#dc2626',
-  borderRadius: '0.25rem',
-  cursor: 'pointer',
-  fontSize: '0.75rem',
-};
-
-const addFieldButton: React.CSSProperties = {
-  padding: '0.375rem 0.75rem',
-  border: '1px dashed #d1d5db',
-  background: 'white',
-  color: '#6b7280',
-  borderRadius: '0.375rem',
-  cursor: 'pointer',
-  fontSize: '0.8125rem',
-};
-
-const addButton: React.CSSProperties = {
-  padding: '0.75rem 1rem',
-  border: 'none',
-  background: '#14b8a6',
-  color: 'white',
-  borderRadius: '0.5rem',
-  cursor: 'pointer',
-  fontWeight: 500,
-};
-
-const displayModeOption: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'flex-start',
-  padding: '1rem',
-  borderRadius: '0.5rem',
-  border: '2px solid #e5e7eb',
-  cursor: 'pointer',
-  transition: 'all 0.15s',
-};
-
-const formCard: React.CSSProperties = {
-  background: 'white',
-  padding: '2rem',
-  borderRadius: '1rem',
-  boxShadow: '0 1px 3px rgba(0, 0, 0, 0.1)',
-  border: '1px solid #e5e7eb',
-  marginBottom: '1.5rem',
-};
-
-const sectionHeader: React.CSSProperties = {
-  marginBottom: '1rem',
-  display: 'flex',
-  alignItems: 'center',
-  gap: '0.75rem',
-  flexWrap: 'wrap',
-};
-
-const sectionTitle: React.CSSProperties = {
-  fontSize: '1rem',
-  fontWeight: 600,
-  color: '#111827',
-};
-
-const formGrid: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
-  gap: '1rem',
-};
-
-const formField: React.CSSProperties = {
-  display: 'flex',
-  flexDirection: 'column',
-  gap: '0.375rem',
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: '0.875rem',
-  fontWeight: 500,
-  color: '#374151',
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: '0.75rem 1rem',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-  fontSize: '0.9375rem',
-  background: '#f9fafb',
-  color: '#111827',
-};
-
-const helpText: React.CSSProperties = {
-  fontSize: '0.8125rem',
-  color: '#6b7280',
-  marginTop: '0.25rem',
-};
-
-const generateButton: React.CSSProperties = {
-  padding: '0.75rem 1rem',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-  background: 'white',
-  color: '#374151',
-  fontWeight: 500,
-  cursor: 'pointer',
-  fontSize: '0.875rem',
-  whiteSpace: 'nowrap',
-};
-
-const comingSoonBadge: React.CSSProperties = {
-  padding: '0.25rem 0.5rem',
-  background: '#fef3c7',
-  color: '#92400e',
-  borderRadius: '0.375rem',
-  fontSize: '0.75rem',
-  fontWeight: 500,
-};
-
-const infoBox: React.CSSProperties = {
-  padding: '1rem',
-  background: '#f9fafb',
-  borderRadius: '0.5rem',
-  border: '1px solid #e5e7eb',
-};
-
-const formActions: React.CSSProperties = {
-  marginTop: '2rem',
-  display: 'flex',
-  justifyContent: 'flex-end',
-};
-
-const saveButton: React.CSSProperties = {
-  padding: '0.75rem 1.5rem',
-  borderRadius: '0.5rem',
-  border: 'none',
-  background: '#14b8a6',
-  color: 'white',
-  fontWeight: 600,
-  cursor: 'pointer',
-  fontSize: '0.9375rem',
-};
-
-const infoCard: React.CSSProperties = {
-  display: 'flex',
-  gap: '1rem',
-  padding: '1rem',
-  background: '#f0f9ff',
-  borderRadius: '0.75rem',
-  border: '1px solid #bae6fd',
-};
-
-const codeStyle: React.CSSProperties = {
-  display: 'inline-block',
-  padding: '0.25rem 0.5rem',
-  background: '#e0f2fe',
-  borderRadius: '0.25rem',
-  fontSize: '0.8125rem',
-  fontFamily: 'monospace',
-  color: '#0369a1',
-};

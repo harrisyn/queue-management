@@ -585,7 +585,7 @@ const errorContainer: React.CSSProperties = {
 
 const pageContainer: React.CSSProperties = {
   maxWidth: '1200px',
-  margin: '0 auto',
+  margin: 0,
 };
 
 const header: React.CSSProperties = {
@@ -690,7 +690,6 @@ const infoLabel: React.CSSProperties = {
   color: 'var(--gray-400)',
   fontSize: '0.75rem',
   fontWeight: 600,
-  textTransform: 'uppercase' as const,
   letterSpacing: '0.03em',
 };
 

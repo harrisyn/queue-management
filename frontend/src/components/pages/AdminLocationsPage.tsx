@@ -1,5 +1,7 @@
 'use client';
 
+import NoOrganization from '@/components/NoOrganization';
+import { toast, errorMessage } from '@/lib/toast';
 import React, { useEffect, useState } from 'react';
 import { MapPin } from 'lucide-react';
 import api from '@/api/client';
@@ -25,7 +27,7 @@ interface Organization {
 
 export default function AdminLocationsPage() {
   const { user, isAdmin } = useAuthContext();
-  const { canCreate, limits, refresh: refreshSubscription } = useSubscription();
+  const { canCreate, limits, refresh: refreshSubscription, loading: subscriptionLoading } = useSubscription();
   const [orgs, setOrgs] = useState<Organization[]>([]);
   const [orgId, setOrgId] = useState<string | null>(null);
   const [locations, setLocations] = useState<Location[]>([]);
@@ -58,6 +60,9 @@ export default function AdminLocationsPage() {
         const org = await api.getOrganization(user.organizationId);
         setOrgs([org]);
         setOrgId(org.id);
+        // Stay in the loading state until loadLocations finishes, so the
+        // "No locations yet" empty state never flashes before data arrives.
+        return;
       } else {
         // No organization on this account (e.g. a superadmin). Never guess an
         // org - render the empty state instead of leaking another tenant's data.
@@ -66,9 +71,8 @@ export default function AdminLocationsPage() {
       }
     } catch (err) {
       console.error(err);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -110,7 +114,7 @@ export default function AdminLocationsPage() {
       await refreshSubscription(); // Refresh subscription to update limits
       resetForm();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to create location');
+      toast.error(errorMessage(err, 'Couldn’t add the location.'));
     }
   };
 
@@ -129,7 +133,7 @@ export default function AdminLocationsPage() {
       await loadLocations(orgId!);
       resetForm();
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to update location');
+      toast.error(errorMessage(err, 'Couldn’t save the location.'));
     }
   };
 
@@ -144,7 +148,7 @@ export default function AdminLocationsPage() {
       setShowDetails(false);
       setSelectedLocation(null);
     } catch (err: any) {
-      alert(err.response?.data?.error || 'Failed to delete location');
+      toast.error(errorMessage(err, 'Couldn’t delete the location.'));
     }
   };
 
@@ -204,13 +208,7 @@ export default function AdminLocationsPage() {
   }
 
   if (!loading && !user?.organizationId) {
-    return (
-      <Layout>
-        <div style={{ padding: '3rem', textAlign: 'center', color: '#6b7280' }}>
-          No organization is associated with this account.
-        </div>
-      </Layout>
-    );
+    return <NoOrganization />;
   }
 
   return (
@@ -219,7 +217,7 @@ export default function AdminLocationsPage() {
         <PageHeader
           icon={MapPin}
           title="Locations"
-          subtitle={`Manage your physical locations and their public access codes (${limits.locations.current}/${limits.locations.limit} used)`}
+          subtitle="Each place people come to. Every location gets its own join code, QR poster and lobby screen."
           actions={
             <button
               onClick={() => { resetForm(); setShowForm(true); }}
@@ -560,7 +558,7 @@ export default function AdminLocationsPage() {
             {locations.length === 0 && !showForm && (
               <div style={emptyState}>
                 <div style={{ marginBottom: '1rem', display: 'flex', justifyContent: 'center' }}>
-                  <Icon icon={MapPin} size={48} color="#14b8a6" strokeWidth={1.5} />
+                  <Icon icon={MapPin} size={48} color="#0e8f80" strokeWidth={1.5} />
                 </div>
                 <h3 style={{ fontSize: '1.125rem', fontWeight: 600, color: '#111827', marginBottom: '0.5rem' }}>No locations yet</h3>
                 <p style={{ color: '#6b7280', marginBottom: '1rem' }}>Create your first location to start managing queues.</p>
@@ -592,7 +590,7 @@ export default function AdminLocationsPage() {
                 </div>
                 
                 <h3 style={cardTitle}>{loc.name}</h3>
-                <p style={cardAddress}>{loc.address || 'No address set'}</p>
+                {loc.address && <p style={cardAddress}>{loc.address}</p>}
                 
                 <div style={cardMeta}>
                   <span style={metaItem}>
@@ -608,7 +606,7 @@ export default function AdminLocationsPage() {
                       <polyline points="2 17 12 22 22 17" />
                       <polyline points="2 12 12 17 22 12" />
                     </svg>
-                    {loc.services?.length || 0} services
+                    {loc.services?.length || 0} {(loc.services?.length || 0) === 1 ? 'service' : 'services'}
                   </span>
                 </div>
 
@@ -618,7 +616,7 @@ export default function AdminLocationsPage() {
                       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
                       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
                     </svg>
-                    Click to view URL
+                    Show the join link
                   </div>
                 )}
 
@@ -674,7 +672,7 @@ const filterLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -734,7 +732,7 @@ const detailLabel: React.CSSProperties = {
   fontSize: '0.8rem',
   fontWeight: 600,
   color: '#6b7280',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.5px',
 };
 
@@ -778,7 +776,7 @@ const urlRowLabel: React.CSSProperties = {
   fontWeight: 600,
   color: '#166534',
   marginBottom: '0.375rem',
-  textTransform: 'uppercase',
+  
   letterSpacing: '0.025em',
 };
 
@@ -862,7 +860,7 @@ const editButtonLarge: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.5rem',
   padding: '0.75rem 1.5rem',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   border: 'none',
   borderRadius: '8px',
@@ -977,7 +975,7 @@ const submitButton: React.CSSProperties = {
   padding: '0.75rem 1.5rem',
   borderRadius: '8px',
   border: 'none',
-  background: '#14b8a6',
+  background: '#0e8f80',
   color: 'white',
   fontWeight: 600,
   cursor: 'pointer',
@@ -1012,8 +1010,8 @@ const locationCard: React.CSSProperties = {
 };
 
 const locationCardActive: React.CSSProperties = {
-  borderColor: '#14b8a6',
-  boxShadow: '0 8px 30px rgba(20, 184, 166, 0.2)',
+  borderColor: '#0e8f80',
+  boxShadow: '0 8px 30px rgba(14, 143, 128, 0.2)',
 };
 
 const cardHeader: React.CSSProperties = {
@@ -1026,12 +1024,12 @@ const cardHeader: React.CSSProperties = {
 const cardIcon: React.CSSProperties = {
   width: '48px',
   height: '48px',
-  background: 'rgba(20, 184, 166, 0.1)',
+  background: 'rgba(14, 143, 128, 0.1)',
   borderRadius: '12px',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  color: '#14b8a6',
+  color: '#0e8f80',
 };
 
 const publicCodeBadge: React.CSSProperties = {
@@ -1076,7 +1074,7 @@ const cardUrlPreview: React.CSSProperties = {
   alignItems: 'center',
   gap: '0.375rem',
   fontSize: '0.75rem',
-  color: '#0d9488',
+  color: '#0b7a6d',
   marginBottom: '1rem',
 };
 
